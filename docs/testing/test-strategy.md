@@ -1,0 +1,129 @@
+# Test Strategy
+
+| Field | Value |
+|---|---|
+| Status | Draft |
+| Owner | [TODO: name] |
+| Contributors | [TODO: names] |
+| Deliverable | Sprint 2 · #10 Automated unit, integration, and relevant end-to-end tests; Final submission · #7 Test and quality evidence |
+| Sources | Assignment §8.3, §9, §11, §12; Deck (Analysis → Design → Test plan → Code → Test execution; Definition of Ready; Definition of Done) |
+| Confluence page | — (linked from **Definition of Done (DoD)** and **07 · Technical Design**) |
+| Last updated | YYYY-MM-DD |
+
+> **ℹ️ About this document.** How Escala is tested: which risks drive the tests, which test types run where, how test cases are named and traced, and where the evidence lives. It is the "Test strategy and evidence" of assignment §9 and answers §8.3; developers, reviewers and the teaching staff read it next to the [Technical Design](../architecture/technical-design.md) and [Deployment and Operations](../operations/deployment-and-operations.md).
+
+## Approach
+
+> **ℹ️ Guidance.** Assignment §8.3: "The test strategy should be proportional to the system's risks and architecture." List the top 5–7 product and technical risks, most severe first, and name the test type that covers each; a risk with no test goes to [What remains untested and why](#what-remains-untested-and-why). Test cases are planned before code, following the deck's *Analysis → Design → Test plan → Code → Test execution*; the **Definition of Ready (DoR)** already requires `TC-` IDs.
+
+```mermaid
+flowchart LR
+  A["Analysis: story and RN IDs"] --> D["Design: technical design and ADRs"]
+  D --> T["Test plan: TC IDs in Jira (DoR)"]
+  T --> C["Code: tests written with the code"]
+  C --> E["Test execution: CI and recorded functional tests (DoD)"]
+```
+
+| # | Risk | Test type(s) that cover it | Requirement / rule |
+|---|---|---|---|
+| 1 | [TODO: risk] | [TODO: test type] | [TODO: RN / RF / RNF ID] |
+
+> **✏️ Example (illustrative — replace).**
+> | # | Risk | Test type(s) that cover it | Requirement / rule |
+> |---|---|---|---|
+> | 1 | Someone with an expired TAS is confirmed on a slot | Unit (eligibility rules), end-to-end (confirmation blocked) | RN02, RF24, RNF04 |
+> | 2 | A duplicate event creates a second evaluation or assignment | Integration (real RabbitMQ and PostgreSQL), contract | RNF05 |
+> | 3 | IPMA is down or returns invalid data and the risk shown is wrong | Resilience (IPMA simulator modes), unit (response parser) | RF25, RF29, RNF03 |
+> | 4 | `escala-api` and `elegibilidade-worker` disagree on an event schema | Contract | `contracts/events/` |
+> | 5 | The AI extraction reads the wrong dates and the user does not notice | AI evaluation, end-to-end (editable fields, "read automatically" label) | RF31–RF33 |
+
+## Test types
+
+> **ℹ️ Guidance.** One row per §8.3 test type; in *What it covers*, name the risk or requirement it protects, because §8.3 asks teams to "justify the types of tests selected". Tools marked "e.g." are suggestions: confirm or replace them. If you drop a type, move it to *What remains untested and why* with the reason.
+
+| Type | What it covers | Tool | CI stage | Owner |
+|---|---|---|---|---|
+| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | e.g. JUnit 5 (`escala-api`), pytest (`elegibilidade-worker`), [TODO: tool] (`apps/web`) | tests | [TODO: name] |
+| Integration | Each service with its real PostgreSQL and RabbitMQ: transactional outbox, idempotency key, retries 5 s / 30 s / 2 min then DLQ, free text deleted after confirmation (RNF09) | e.g. Testcontainers | tests | [TODO: name] |
+| Contract | API ↔ worker event schemas (`AvaliacaoPedida`, `AvaliacaoConcluida`, `ExtracaoPedida`, `ExtracaoConcluida`, `RiscoAtualizado`) against `contracts/events/`; REST endpoints against `contracts/openapi.yaml` | [TODO: schema validator used in both test suites] | tests | [TODO: name] |
+| End-to-end | Principal journey J1 on the Docker Compose stack: declared unavailability → gap → eligible candidates → confirmation; confirmation blocked without a valid evaluation (RF24) | [TODO: browser test tool] | image (runs against the built images) [TODO: confirm] | [TODO: name] |
+| Security | Static analysis; dependency check; secret scanning (RNF07); role checks on every endpoint, e.g. nobody confirms their own application | [TODO: static analysis tool]; [TODO: dependency checker]; [TODO: secret scanner] | static analysis; dependency check | [TODO: name] |
+| Performance | Eligibility evaluation p95 < 5 s (RNF01); unavailability accepted with 202 in < 500 ms (RNF02) | [TODO: load-test tool] | [TODO: scheduled, or manual before the Sprint 3 review] | [TODO: name] |
+| Resilience | IPMA simulator modes (unavailable, delayed, incomplete, invalid); worker stopped → evaluations "pending", confirmation blocked; AI off → form fallback | IPMA simulator (`tools/ipma-sim`), Docker Compose | [TODO: stage, e.g. nightly] | [TODO: name] |
+| AI evaluation | Extraction on the 60-case synthetic dataset, compared with the `dateparser` + rules baseline, against the acceptance criteria on **06 · Responsible AI Opportunity Assessment** (start/end exact ≥ 95%, type ≥ 90%, adverse handled 100%, p95 latency < 4 s) | Dataset runner [TODO: path] | [TODO: when the prompt, model or dataset changes] | [TODO: name] |
+
+## Test case convention
+
+- **ID:** `TC-<story>-<n>`, e.g. `TC-ESC-31-01`, `TC-ESC-31-02`.
+- **Format:** Given/When/Then, written in the Jira story's acceptance criteria before coding (DoR: "a test plan and test cases are outlined").
+- **Coverage:** every business rule (`RN`) gets at least one positive, one negative and one **boundary** test case.
+- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story (e.g. `@DisplayName("TC-ESC-31-03 …")`, `def test_tc_esc_31_03_…`).
+- **Manual functional tests** (DoD: "functional tests performed and recorded"): record TC ID, date, version, who and result [TODO: where, e.g. a comment on the Jira story].
+
+> **✏️ Example (illustrative — replace).** Story `ESC-31`, reject assigning someone whose TAS has expired (RN02):
+> - `TC-ESC-31-01` (negative): **Given** Member B's TAS expired before the slot date, **When** the duty chief assigns Member B, **Then** the evaluation is ineligible with rule code `RN02` and confirmation is blocked.
+> - `TC-ESC-31-02` (boundary): **Given** Member C's TAS expires on the slot date, **When** the duty chief assigns Member C, **Then** [TODO: eligible or ineligible, once the team confirms how RN02 treats the expiry day].
+> - `TC-ESC-31-03` (positive): **Given** Member A holds a TAS valid beyond the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the evaluation is eligible and the assignment can be confirmed.
+
+## Boundary cases catalogue
+
+> **ℹ️ Guidance.** Boundaries are where eligibility bugs hide. Keep one row per boundary and add one whenever a rule is refined. When the expected behaviour depends on a rule that is not confirmed yet, write `[TODO: …]` naming the rule (e.g. `[TODO: RN07 — internal regulation still to obtain]`); never guess the rule in a test.
+
+| Boundary case | Rule / requirement | Expected behaviour | Test case(s) |
+|---|---|---|---|
+| Certification expiring on the slot date | RN02 | [TODO: eligible or ineligible — decide how RN02 treats the expiry day] | `TC-ESC-31-02` |
+| Rest period ending exactly at the next start | RN07 | [TODO: internal regulation still to obtain; the minimum rest is configurable] | [TODO: TC ID] |
+| Duty period crossing midnight | RN05, RN09 | Overlap is checked on start/end instants, not calendar dates; hours count on [TODO: which day] | [TODO: TC ID] |
+| Daylight-saving change | RN07, RN09, ADR 0012 (UTC instants with explicit time zone) | A slot spanning the clock change is one hour longer or shorter than its wall-clock times suggest; rest and hours use real duration [TODO: confirm] | [TODO: TC ID] |
+| Duplicate event delivered twice | RNF05 | The idempotency key makes the second delivery a no-op: one evaluation, one assignment | [TODO: TC ID] |
+| [TODO: next boundary] | [TODO: rule] | [TODO: behaviour] | [TODO: TC ID] |
+
+## Test data
+
+> **ℹ️ Guidance.** Assignment §11: "Real personal or sensitive data should not be used when synthetic or anonymized data is sufficient." For Escala synthetic data is always sufficient, so every test uses it. Say where each data set lives and how it is produced; never copy real rosters, certifications or messages, even anonymised.
+
+- **Seed data:** placeholder members (Member A, Member B…), synthetic certifications and licences, one fictional corps. Path: [TODO: path].
+- **IPMA fixtures:** simulator responses for RCM levels 1–5 and for the four §6.5 cases (unavailable, delayed, incomplete, invalid). Path: `tools/ipma-sim` [TODO: fixture folder].
+- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path [TODO: path]; origin and limitations on **06 · Responsible AI Opportunity Assessment**.
+- **Clock:** tests use a fixed clock [TODO: how], so boundary cases do not depend on the day the pipeline runs.
+
+> **✏️ Example (illustrative — replace).** One synthetic seed member: `{"code": "M-A", "name": "Member A", "roster": "ACTIVE", "certifications": [{"type": "TAS", "expiresOn": "YYYY-MM-DD"}], "licenceClass": "[TODO: class]"}`. No contacts, no date of birth.
+
+## Evidence
+
+> **ℹ️ Guidance.** Assignment §12 asks for "Test and quality evidence". Every row must end in a link a reviewer can open, not "ask us". Attach the final reports to the release so they outlive CI artefact retention [TODO: check the retention period].
+
+| Evidence | Produced by | Where to find it |
+|---|---|---|
+| Unit, integration and contract test reports | CI `tests` stage | GitHub Actions run → artefacts [TODO: link] |
+| Coverage report | CI `tests` stage | [TODO: link] |
+| Static analysis and dependency check reports | CI `static analysis` and `dependency check` stages | [TODO: link] |
+| End-to-end report (screenshots on failure) | CI `image` stage [TODO: confirm] | [TODO: link] |
+| Recorded manual functional tests | Team members | [TODO: where, e.g. Jira story comments] |
+| Performance results | [TODO: stage or person] | [TODO: link] |
+| Resilience and degraded-mode demonstration | Runbook in [Deployment and Operations](../operations/deployment-and-operations.md) | [TODO: recording or CI run link] |
+| AI evaluation results | Dataset runner | **06 · Responsible AI Opportunity Assessment** [TODO: link to the report] |
+
+## What remains untested and why
+
+> **ℹ️ Guidance.** Required by §8.3: "Teams must justify the types of tests selected and identify important areas that remain untested." Name each untested area, why it is untested, what could go wrong and what reduces the risk. An honest gap is worth more than a claimed coverage number; review this list at every sprint review.
+
+| Area | Why it is untested | What could go wrong | Mitigation / when |
+|---|---|---|---|
+| [TODO: area] | [TODO: reason] | [TODO: consequence] | [TODO: mitigation or planned sprint] |
+
+> **✏️ Example (illustrative — replace).**
+> | Area | Why it is untested | What could go wrong | Mitigation / when |
+> |---|---|---|---|
+> | Real authentication | Mocked in the MVP (§6.6 footnote); roles are tested, login is not | Integration problems with a future identity provider | [TODO: when real authentication is planned] |
+> | Live IPMA API failures | The live API cannot be forced to fail; failure modes are reproduced with the simulator only | A real response differs from the simulator's format | One check against the live endpoints [TODO: when]; unknown formats are treated as invalid data |
+> | PWA on many phone models | No device lab | Layout or offline problems on some phones | Manual check on [TODO: number] team phones; accessibility review in Sprint 3 |
+
+## Done when
+- [ ] Every top risk in *Approach* maps to at least one test type, or is listed under *What remains untested and why*
+- [ ] Every business rule (RN) has positive, negative and boundary test cases, with `TC-` IDs linked in Jira
+- [ ] Every link under *Evidence* opens the latest green run or report
+- [ ] *What remains untested and why* is filled and reviewed at the last sprint review
+- [ ] Reviewed by another team member
+- [ ] Guidance and example blocks removed
+- [ ] Status set to Done
