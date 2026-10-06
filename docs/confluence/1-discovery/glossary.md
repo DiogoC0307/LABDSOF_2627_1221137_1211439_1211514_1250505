@@ -9,7 +9,7 @@
 | Sources | Assignment §3, §5.1, §5.3; Deck M5 (business rules); research notes |
 | Confluence parent | 1 · Discovery |
 | Labels | `discovery`, `glossary` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The shared vocabulary of Escala: every Portuguese domain term and acronym used in this space, Jira and the code, with its English equivalent and what it means in the product. Other pages keep Portuguese terms in italics on first use and rely on this page for the definition; the team, reviewers and investors read it to speak the same language as the fire corps.

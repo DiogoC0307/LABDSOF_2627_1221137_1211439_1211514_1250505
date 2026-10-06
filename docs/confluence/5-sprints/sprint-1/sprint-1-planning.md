@@ -10,7 +10,7 @@
 | Sources | Assignment §7.1, §8.2; Deck M5 (Definition of Ready), M6, M7, M8 |
 | Confluence parent | Sprint 1 |
 | Labels | `sprint-1`, `planning` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The output of Sprint 1 Planning (Deck M8): dates, sprint goal, capacity, committed items and weekly gates. The team checks it at every weekly sync. It is also the evidence that the sprint was planned and its goal documented in Jira (Assignment §8.2).
@@ -21,7 +21,7 @@
 - Sprint end: [TODO: YYYY-MM-DD]
 - Sprint review with the investors: [TODO: YYYY-MM-DD, time]
 
-> **ℹ️ Guidance.** Use the dates of `"ESC Sprint 1"` in Jira and the review date agreed with the teaching staff. Put the same dates on **Escala — Home**.
+> **ℹ️ Guidance.** Use the dates of `"Sprint 1"` in Jira and the review date agreed with the teaching staff. Put the same dates on **Escala — Home**.
 
 ## Sprint goal
 
@@ -50,7 +50,7 @@
 
 ## Committed items
 
-[JIRA: project = ESC AND sprint = "ESC Sprint 1" ORDER BY Rank]
+[JIRA: project = SCRUM AND sprint = "Sprint 1" ORDER BY Rank]
 
 > **ℹ️ Guidance.** Embed the Jira macro and never copy the items into this page. Commit only items that meet the **Definition of Ready (DoR)**, and make sure their task hours fit the capacity above.
 
@@ -86,14 +86,14 @@
 
 | Date | Items estimated | Participants |
 |---|---|---|
-| [TODO: YYYY-MM-DD] | [TODO: ESC-xx (points)] | [TODO: builders only] |
+| [TODO: YYYY-MM-DD] | [TODO: SCRUM-xx (points)] | [TODO: builders only] |
 
 > **ℹ️ Guidance.** Record every estimation session: the items, their final story points (Fibonacci 1–21) and who estimated. Only the people who build the increment estimate. The Product Owner and Scrum Master do not estimate and do not influence estimates (Deck M7). Any item above 8 points is split (DoR).
 
 > **✏️ Example (illustrative — replace).**
 > | Date | Items estimated | Participants |
 > |---|---|---|
-> | YYYY-MM-DD | ESC-23 create *piquete* with one slot (3); ESC-31 reject assigning someone whose TAS has expired (5) | Member B, Member C, Member D (Member A, the Product Owner, did not estimate) |
+> | YYYY-MM-DD | SCRUM-45 create *piquete* with one slot (3); SCRUM-999 reject assigning someone whose TAS has expired (5) | Member B, Member C, Member D (Member A, the Product Owner, did not estimate) |
 
 ## Done when
 - [ ] Dates, sprint goal and capacity filled, and identical to Jira

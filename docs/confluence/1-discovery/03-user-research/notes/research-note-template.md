@@ -9,7 +9,7 @@
 | Sources | Assignment §5.3, §7.1.2 #3, §11 |
 | Confluence parent | 03 · User Research |
 | Labels | `template`, `user-research`, `research-note` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The template for one research note: what one participant told us, or what we saw, in a single session about how the *piquete* is composed. Notes are the raw evidence behind deliverable #3 (Assignment §5.3, §7.1.2 #3); the team cites them by ID on **Research Synthesis and Decisions**, **01 · Problem and Opportunity** and **Personas**.
@@ -109,7 +109,7 @@
 
 > **ℹ️ Guidance.** Questions to ask next, people to talk to (by role) and documents to request (e.g. the internal regulation), each with an owner. Anything that needs doing becomes a Jira task.
 
-- [ ] [TODO: follow-up — owner — ESC-xx]
+- [ ] [TODO: follow-up — owner — SCRUM-xx]
 
 ## Done when
 - [ ] Title follows `<Code> · YYYY-MM-DD · <Method>` and consent is recorded as Y

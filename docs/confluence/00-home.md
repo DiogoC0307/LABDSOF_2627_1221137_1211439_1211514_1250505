@@ -9,7 +9,7 @@
 | Sources | Assignment §3, §7, §9, §12 |
 | Confluence parent | — (space home page) |
 | Labels | `home` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The front door of the Escala space: what the product is, who builds it, where everything lives and what the current sprint is about. Teaching staff, investors and the team land here first, so it must stay short and current.
@@ -39,7 +39,7 @@ Portuguese terms are defined in the **Glossary**.
 
 | Resource | Link |
 |---|---|
-| Jira board | [TODO: link to the `ESC` board] |
+| Jira board | [TODO: link to the `SCRUM` board] |
 | GitHub repository | [TODO: link] |
 | Deployed environment | [TODO: URL] |
 | Operational dashboard | [TODO: link to the Grafana dashboard] |

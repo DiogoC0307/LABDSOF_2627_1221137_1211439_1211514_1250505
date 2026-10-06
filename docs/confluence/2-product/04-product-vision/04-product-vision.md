@@ -9,7 +9,7 @@
 | Sources | Assignment §5.4, §7.1.2 #4 |
 | Confluence parent | 2 · Product |
 | Labels | `sprint-1`, `deliverable-04`, `product` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Entry page for Sprint 1 deliverable #4 (Assignment §5.4, §7.1.2 #4): a one-screen summary of where Escala is going, for whom, and how we will know it works. Investors (the teaching staff) read it at the Sprint 1 review; the team reads it before refining the backlog. The detail lives in the child pages.

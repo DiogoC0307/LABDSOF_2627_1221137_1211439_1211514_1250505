@@ -9,7 +9,7 @@
 | Sources | Assignment §7.1.2 #10; Deck (walking skeleton) |
 | Confluence parent | 4 · Architecture and Security |
 | Labels | `sprint-1`, `deliverable-10`, `architecture`, `walking-skeleton` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Proof that Escala's main components are linked end to end, built, tested and deployed from the first sprint. The teaching staff read it at the Sprint 1 review; the team uses it to agree what the skeleton does and which vertical slices come next.
@@ -36,7 +36,7 @@ It creates one *piquete* with one slot, and the worker returns a trivial evaluat
 
 > **ℹ️ Guidance.** Describe what actually runs, not the target design. If a component or step is still missing, say which one and when it arrives. `web` never reads the worker's database: the result comes back through `escala-api`, as on **07 · Technical Design**.
 
-> **✏️ Example (illustrative — replace).** The duty chief presses *Create piquete*. The slot appears as "pending"; a moment later it shows "evaluated". The worker's stored result is fixed: `{"result": "ELIGIBLE", "violatedRules": [], "engineVersion": "0.0.0"}`. The same trace ID appears in the `escala-api` and `elegibilidade-worker` logs (RF37). Story: ESC-23 "create *piquete* with one slot".
+> **✏️ Example (illustrative — replace).** The duty chief presses *Create piquete*. The slot appears as "pending"; a moment later it shows "evaluated". The worker's stored result is fixed: `{"result": "ELIGIBLE", "violatedRules": [], "engineVersion": "0.0.0"}`. The same trace ID appears in the `escala-api` and `elegibilidade-worker` logs (RF37). Story: SCRUM-45 "create *piquete* with one slot".
 
 ## What it deliberately does not do
 
@@ -46,7 +46,7 @@ It creates one *piquete* with one slot, and the worker returns a trivial evaluat
 
 > **ℹ️ Guidance.** Follow the deck's Scenario A: one button that sends a DTO with one attribute to the backend; "The backend persists the data without any business logic validation." Later slices add attributes, child objects and business rules one at a time. Listing what is left out stops the skeleton from growing into a half-built feature.
 
-> **✏️ Example (illustrative — replace).** The *Create piquete* button sends `{"date": "YYYY-MM-DD"}` and nothing else. The *piquete* gets one slot with no role, vehicle or required certification. The next slice adds the slot's role, vehicle and required certification (RF07); the one after that rejects someone whose TAS has expired (ESC-31, RN02).
+> **✏️ Example (illustrative — replace).** The *Create piquete* button sends `{"date": "YYYY-MM-DD"}` and nothing else. The *piquete* gets one slot with no role, vehicle or required certification. The next slice adds the slot's role, vehicle and required certification (RF07); the one after that rejects someone whose TAS has expired (SCRUM-999, RN02).
 
 ## Proof
 
@@ -60,7 +60,7 @@ It creates one *piquete* with one slot, and the worker returns a trivial evaluat
 
 > **ℹ️ Guidance.** Each *Link* must open something a reviewer can check without asking the team: a run, a URL, a file. Replace a link when a newer green run exists; a red pipeline on review day is not proof.
 
-> **✏️ Example (illustrative — replace).** *Initial test:* `TC-ESC-23-01` — **Given** the stack is running, **When** a *piquete* with one slot is created through `escala-api`, **Then** the slot's evaluation state becomes "evaluated" within [TODO: s]. Link: the test file and the pipeline run that passed it.
+> **✏️ Example (illustrative — replace).** *Initial test:* `TC-SCRUM-45-01` — **Given** the stack is running, **When** a *piquete* with one slot is created through `escala-api`, **Then** the slot's evaluation state becomes "evaluated" within [TODO: s]. Link: the test file and the pipeline run that passed it.
 
 ## How to run
 
@@ -81,7 +81,7 @@ It creates one *piquete* with one slot, and the worker returns a trivial evaluat
 
 > **✏️ Example (illustrative — replace).** Sprint 2 goal: "The principal journey, from a declared unavailability to a confirmed verified-qualified replacement, works deployed, observed, and with one degraded mode demonstrated."
 > 1. Declare unavailability by form (RF12), which opens a gap on the *piquete* (RF14).
-> 2. Real eligibility rules returning the violated rule codes (RF21), starting with TAS expiry (ESC-31, RN02).
+> 2. Real eligibility rules returning the violated rule codes (RF21), starting with TAS expiry (SCRUM-999, RN02).
 > 3. List eligible and ineligible candidates with reasons (RF16), apply (RF17) and confirm (RF18); confirmation blocked without a valid evaluation (RF24).
 > 4. Reliable messaging: outbox, idempotency key, retries 5 s / 30 s / 2 min, then the DLQ (ADR 0005, ADR 0009).
 > 5. Today's fire risk from IPMA through the simulator (RF25), with the age of cached data (RF29).

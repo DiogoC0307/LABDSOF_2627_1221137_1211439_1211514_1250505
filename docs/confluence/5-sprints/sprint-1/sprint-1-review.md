@@ -9,7 +9,7 @@
 | Sources | Assignment §5.7, §7.1.3; §10 (sprint-review participation) |
 | Confluence parent | Sprint 1 |
 | Labels | `sprint-1`, `review`, `investor` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Plan and record of the Sprint 1 investor review (Assignment §7.1.3): agenda, demo script, the decisions put to the investors, the feedback received and what changed as a result. It is where investor engagement starts (§5.7). The team and the investors read it.
@@ -60,9 +60,9 @@
 > **ℹ️ Guidance.** Write down every step and who does it. The demo runs on the deployed environment with no hidden manual steps. Prepare and test plan B beforehand.
 
 > **✏️ Example (illustrative — replace).**
-> 1. Member C opens the deployed PWA ([TODO: URL]) and creates a *piquete* for today with one slot (`ESC-23`).
+> 1. Member C opens the deployed PWA ([TODO: URL]) and creates a *piquete* for today with one slot (`SCRUM-45`).
 > 2. Member D shows the request travelling through the queue: the worker log carries the same trace ID, and the trivial evaluation comes back to the UI.
-> 3. Member B opens the last green pipeline run and the PR linked to `ESC-23` in Jira.
+> 3. Member B opens the last green pipeline run and the PR linked to `SCRUM-45` in Jira.
 >
 > Plan B: if the deployed environment fails, play a recording of the same run and show the pipeline. If the network fails, run the skeleton from a clean clone on a laptop with `[TODO: one command]`.
 
@@ -80,15 +80,15 @@
 
 | # | From | Feedback | Our response | Jira *Feedback* issue | Action |
 |---|---|---|---|---|---|
-| 1 | [TODO: investor] | [TODO: feedback] | [TODO: response] | [TODO: ESC-xx] | [TODO: action] |
-| 2 | [TODO: investor] | [TODO: feedback] | [TODO: response] | [TODO: ESC-xx] | [TODO: action] |
+| 1 | [TODO: investor] | [TODO: feedback] | [TODO: response] | [TODO: SCRUM-xx] | [TODO: action] |
+| 2 | [TODO: investor] | [TODO: feedback] | [TODO: response] | [TODO: SCRUM-xx] | [TODO: action] |
 
 > **ℹ️ Guidance.** Record every item on the same day, as close to the investor's words as you can. Each item becomes a Jira *Feedback* issue (§5.7, §8.2). *Action* is the concrete next step, such as a story, a decision or a page change, or "none, because …".
 
 > **✏️ Example (illustrative — replace).**
 > | # | From | Feedback | Our response | Jira *Feedback* issue | Action |
 > |---|---|---|---|---|---|
-> | 1 | Investor 1 (teaching staff) | "Showing ineligible colleagues with the reason may expose their data." | We will compare showing only the rule code with hiding ineligible candidates | ESC-xx | Revisit D-01; update **09 · Security and Privacy Assessment** |
+> | 1 | Investor 1 (teaching staff) | "Showing ineligible colleagues with the reason may expose their data." | We will compare showing only the rule code with hiding ineligible candidates | SCRUM-xx | Revisit D-01; update **09 · Security and Privacy Assessment** |
 
 ## What changed as a result
 
@@ -96,7 +96,7 @@
 
 > **ℹ️ Guidance.** §5.7: *"At least one product or technical decision must be revised in response to investor feedback. The change and its rationale must be documented."* For each change, record what changed, why (feedback #), and where (page, ADR or Jira issue). If nothing changed, say so and name the decision that is still open.
 
-> **✏️ Example (illustrative — replace).** "D-01 revised after feedback #1: the duty chief sees ineligible candidates with the rule code only. Changed RF16 on **Requirements and Quality Attributes** and the access-control matrix on **09 · Security and Privacy Assessment** (ESC-xx)."
+> **✏️ Example (illustrative — replace).** "D-01 revised after feedback #1: the duty chief sees ineligible candidates with the rule code only. Changed RF16 on **Requirements and Quality Attributes** and the access-control matrix on **09 · Security and Privacy Assessment** (SCRUM-xx)."
 
 ## Done when
 - [ ] Review minutes recorded on the same day

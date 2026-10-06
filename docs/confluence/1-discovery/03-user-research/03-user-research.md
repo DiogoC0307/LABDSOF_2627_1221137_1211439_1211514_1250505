@@ -9,7 +9,7 @@
 | Sources | Assignment §5.3, §7.1.2 #3, §11 |
 | Confluence parent | 1 · Discovery |
 | Labels | `sprint-1`, `deliverable-03`, `discovery`, `user-research` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Entry page of Sprint 1 deliverable #3: what we asked members of the *Corpo de Bombeiros Voluntários*, how, what we found and what changed in the product. It covers the §7.1.2 content "Research method; Findings; Limitations; Resulting product decisions", lets investors judge whether the *piquete* problem is real, and is the parent of **Interview Guides and Consent**, **Observation Grid**, **Research Synthesis and Decisions** and every research note created from **Research Note — Template**.
@@ -94,12 +94,12 @@
 
 | Finding | Decision | Where it changed |
 |---|---|---|
-| [TODO: F-ID — finding] | [TODO: decision] | [TODO: page title / ESC-xx] |
+| [TODO: F-ID — finding] | [TODO: decision] | [TODO: page title / SCRUM-xx] |
 
 > **✏️ Example (illustrative — replace). Fictional example to show the format. Never copy into real notes.**
 > | Finding | Decision | Where it changed |
 > |---|---|---|
-> | F2 — TAS validity is checked from memory | The eligibility check at the moment of assignment is in the MVP, and confirmation is blocked without a valid evaluation (RF16, RF24) | **MVP, Success Criteria and Ethical Engagement**; ESC-31 |
+> | F2 — TAS validity is checked from memory | The eligibility check at the moment of assignment is in the MVP, and confirmation is blocked without a valid evaluation (RF16, RF24) | **MVP, Success Criteria and Ethical Engagement**; SCRUM-999 |
 > | F4 — the composition per risk level is not written down | RN10 stays "to obtain" and is configurable by the commander instead of hard-coded | **Requirements and Quality Attributes** (RN10) |
 
 ## Ethics

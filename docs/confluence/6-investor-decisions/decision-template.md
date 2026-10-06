@@ -9,7 +9,7 @@
 | Sources | Assignment §5.7, §8.2; Deck M1 |
 | Confluence parent | 6 · Investor Decisions |
 | Labels | `template`, `investor`, `decision` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The template for one decision taken to the investors: its context and options, the question asked, the feedback received, and what was decided and why. Each filled page is the detailed record behind one row of **Investor Decision Log** and the evidence for Assignment §5.7; the team and the investors read it.
@@ -67,13 +67,13 @@
 
 ## Feedback received
 
-- [TODO: who] — [TODO: YYYY-MM-DD] — [TODO: what was said, close to their words] — Jira *Feedback* issue [TODO: ESC-xx]
+- [TODO: who] — [TODO: YYYY-MM-DD] — [TODO: what was said, close to their words] — Jira *Feedback* issue [TODO: SCRUM-xx]
 
 > **ℹ️ Guidance.** Who, when and what, one line per item, recorded the same day and as close to the investor's words as you can. Each item is a Jira *Feedback* issue (§8.2) and also appears under *Feedback received* on the sprint's review page. If there was no feedback, say so and keep the status Open.
 
 > **✏️ Example (illustrative — replace).**
 >
-> - Investor 1 (teaching staff) — YYYY-MM-DD (Sprint 1 review) — "Showing ineligible colleagues with the reason may expose their data." — ESC-xx
+> - Investor 1 (teaching staff) — YYYY-MM-DD (Sprint 1 review) — "Showing ineligible colleagues with the reason may expose their data." — SCRUM-xx
 
 ## Decision
 
@@ -89,7 +89,7 @@
 
 > **ℹ️ Guidance.** §5.7 requires the rationale of a revised decision to be documented. Name the feedback items and evidence that tipped it, and give one reason for rejecting each other option.
 
-> **✏️ Example (illustrative — replace).** The feedback from Investor 1 (ESC-xx) showed that A exposes more of colleagues' data than the duty chief needs to fill a gap. C keeps the reason and follows data minimisation. B was rejected because, when nobody is eligible, the duty chief would not know why.
+> **✏️ Example (illustrative — replace).** The feedback from Investor 1 (SCRUM-xx) showed that A exposes more of colleagues' data than the duty chief needs to fill a gap. C keeps the reason and follows data minimisation. B was rejected because, when nobody is eligible, the duty chief would not know why.
 
 ## Consequences
 
@@ -97,19 +97,19 @@
 
 > **ℹ️ Guidance.** List every change, so that the *What changed* cell on **Investor Decision Log** can be filled from here. Include what it costs: new stories, tests or risks.
 
-> **✏️ Example (illustrative — replace).** RF16 changes on **Requirements and Quality Attributes**, and the duty chief's row in the access-control matrix on **09 · Security and Privacy Assessment**. New story to update the candidate list (ESC-xx). New obligation: the explanation of a rule code (RF22) reveals no more than the code itself.
+> **✏️ Example (illustrative — replace).** RF16 changes on **Requirements and Quality Attributes**, and the duty chief's row in the access-control matrix on **09 · Security and Privacy Assessment**. New story to update the candidate list (SCRUM-xx). New obligation: the explanation of a rule code (RF22) reveals no more than the code itself.
 
 ## Links
 
-- Jira *Decision* issue: [TODO: ESC-xx]
-- Jira *Feedback* issues: [TODO: ESC-xx, ESC-xx]
+- Jira *Decision* issue: [TODO: SCRUM-xx]
+- Jira *Feedback* issues: [TODO: SCRUM-xx, SCRUM-xx]
 - Affected pages: [TODO: bold page titles]
 - ADR (if technical): [TODO: NNNN · <decision>, or —]
 - Row on **Investor Decision Log**: [TODO: D-NN]
 
 > **ℹ️ Guidance.** A technical decision also gets an ADR in `docs/adr/`, listed on **08 · Architecture Decision Records** and written as described in **Architecture Decision Records (README)** (`docs/adr/README.md`); the ADR links back to this page. A product decision needs no ADR.
 
-> **✏️ Example (illustrative — replace).** Jira: ESC-xx (*Decision*), ESC-xx (*Feedback*). Affected pages: **Requirements and Quality Attributes**, **09 · Security and Privacy Assessment**, **Sprint 1 · Review**. ADR: — (product decision). Row: D-01.
+> **✏️ Example (illustrative — replace).** Jira: SCRUM-xx (*Decision*), SCRUM-xx (*Feedback*). Affected pages: **Requirements and Quality Attributes**, **09 · Security and Privacy Assessment**, **Sprint 1 · Review**. ADR: — (product decision). Row: D-01.
 
 ## Done when
 - [ ] Status, decision owner, context, at least two options and the question are filled before the review

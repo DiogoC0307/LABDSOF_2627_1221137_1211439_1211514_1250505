@@ -9,7 +9,7 @@
 | Sources | Assignment §5.4, §5.5, §7.1.2 #4, §7.1.3 |
 | Confluence parent | 04 · Product Vision |
 | Labels | `sprint-1`, `deliverable-04`, `product`, `mvp`, `ethics` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** What the MVP includes and excludes, how its success is measured, and the ethical engagement mechanism. It covers the "MVP definition" and "Success criteria" items of Sprint 1 deliverable #4 Product Vision (§7.1.2), the MVP boundary and measurable success criteria of §5.4, and the five explanations required by §5.5; investors read it to judge whether the MVP is the smallest credible experiment.
@@ -78,7 +78,7 @@
 > |---|---|---|---|---|
 > | Median minutes from gap detection to qualified confirmation | [TODO: from observation sessions] | [TODO: target] | Timestamps of gap detection and confirmation (in-product: Y) | [TODO: e.g. Sprint 3, simulated scenario] |
 > | % of days the *piquete* met the required composition | [TODO: to measure] | [TODO: target] | Daily planned composition vs the composition required for the RCM level (in-product: Y) | [TODO: sprint] |
-> | Confirmed assignments with an expired certification | [TODO: to measure] | 0 — impossible by construction | Proven by automated test, e.g. `TC-ESC-31-01` (in-product: N) | Every CI run |
+> | Confirmed assignments with an expired certification | [TODO: to measure] | 0 — impossible by construction | Proven by automated test, e.g. `TC-SCRUM-999-01` (in-product: N) | Every CI run |
 > | % of AI extractions accepted without correction | [TODO: `dateparser` + rules result] | ≥ 85% | Extractions confirmed without edits / all extractions (in-product: Y) | [TODO: Sprint 3 AI evaluation] |
 
 ## Counter-metric

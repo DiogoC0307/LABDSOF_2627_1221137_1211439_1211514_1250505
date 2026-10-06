@@ -9,7 +9,7 @@
 | Sources | Deck M4; Assignment §7.1.2 #5, §7.3.2 #13, §12 #11 |
 | Confluence parent | 05 · Product Backlog |
 | Labels | `sprint-1`, `deliverable-05`, `product`, `roadmap` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Escala's outcome-based release plan in Roman Pichler's GO Product Roadmap format (deck M4): one column per release, from the walking skeleton to post-project. It is the *Initial release plan* of deliverable #5 (§7.1.2) and becomes the *Product roadmap* required in Sprint 3 (§7.3.2 #13) and in the final submission (§12 #11); read by the team and the investors.
@@ -32,7 +32,7 @@
 > | **Date** | YYYY-MM-DD (Sprint 1 review) | YYYY-MM-DD (Sprint 2 review) | YYYY-MM-DD (Sprint 3 review) | After the project |
 > | **Name** | Walking skeleton | Gap to confirmed | Trustworthy readiness | Beyond one corps |
 > | **Goal** | The chain PWA → API → queue → worker → DB runs deployed | Principal journey works: a declared unavailability becomes a confirmed, verified-qualified replacement | Hardened and evaluated: the duty chief can trust what Escala shows, even when a dependency fails | Less effort to build the *piquete*, for more than one corps (hypothesis) |
-> | **Features** | Create a *piquete* with one slot (ESC-23); trivial evaluation by the worker; automated build and initial test; containerised deployment | Unavailability; eligibility rules; application and confirmation with hours counted (RF04); IPMA RCM; AI extraction with fallback | Explanations of ineligibility; weather warnings; operational dashboard; degraded modes; AI evaluation | Automatic roster generation; multi-corps; integration with existing tools (❓ feasibility unverified) |
+> | **Features** | Create a *piquete* with one slot (SCRUM-45); trivial evaluation by the worker; automated build and initial test; containerised deployment | Unavailability; eligibility rules; application and confirmation with hours counted (RF04); IPMA RCM; AI extraction with fallback | Explanations of ineligibility; weather warnings; operational dashboard; degraded modes; AI evaluation | Automatic roster generation; multi-corps; integration with existing tools (❓ feasibility unverified) |
 > | **Metrics** | Pipeline green; one-command run | Median minutes to fill a gap in a simulated scenario | AI extractions accepted without correction (target ≥ 85%); SLIs: eligibility evaluation p95 latency, % of requests evaluated without manual intervention | [TODO: metric] |
 
 ## Guidance

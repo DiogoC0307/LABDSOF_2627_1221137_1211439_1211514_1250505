@@ -9,7 +9,7 @@
 | Sources | Assignment §9 ("Requirements and quality attributes"), §5.1–§5.7, §6.1–§6.8; Deck M5 (DoR: business rules) |
 | Confluence parent | 2 · Product |
 | Labels | `product`, `requirements` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The single register of Escala's business rules, functional requirements, quality attributes and use cases, plus a check that every assignment requirement (§5, §6) is covered and a light trace to stories, tests and design. It is the §9 documentation item "Requirements and quality attributes"; the team reads it when refining the backlog, reviewers read it to check coverage.
@@ -139,7 +139,7 @@
 | §5.4 | Product Vision and Success Criteria: vision, target users, value proposition, journeys, community benefit, MVP boundary, risks, measurable success criteria | Primary user: the duty chief; outcome metrics: median time from gap detection to a verified-qualified fill, and % of days the *piquete* met the required composition | **04 · Product Vision**; **MVP, Success Criteria and Ethical Engagement** |
 | §5.5 | Ethical Engagement Design: at least one mechanism for constructive participation, with the five questions answered | Individual statutory-hours progress, visible to the person and the command, never compared between peers; no leaderboard (RF04) | **MVP, Success Criteria and Ethical Engagement** |
 | §5.6 (§5.6.1–§5.6.3) | Responsible AI: a meaningful AI-assisted workflow, with evaluation, baseline or fallback, and safety and trust | Extraction of structured unavailability from free text with human confirmation (RF31–RF33); `dateparser` + rules baseline; form fallback behind a feature flag (RF35) | **06 · Responsible AI Opportunity Assessment**; epic E6 |
-| §5.7 | Investor Engagement: at least one decision revised after investor feedback, with change and rationale documented | Open decisions (D-01, D-02) taken to each review; feedback recorded as Jira *Feedback* issues | **Investor Decision Log**; [TODO: ESC-xx] |
+| §5.7 | Investor Engagement: at least one decision revised after investor feedback, with change and rationale documented | Open decisions (D-01, D-02) taken to each review; feedback recorded as Jira *Feedback* issues | **Investor Decision Log**; [TODO: SCRUM-xx] |
 | §6.1 | Client Application: supports the principal journeys; accessibility and usability | Angular PWA, installable, roster readable offline (RNF06, RNF10) | **07 · Technical Design** |
 | §6.2 | Backend Architecture: at least two independently deployable backend components, justified | `escala-api` (Spring Boot) and `elegibilidade-worker` (Python), one PostgreSQL each | **07 · Technical Design**; **08 · Architecture Decision Records** (ADR 0002) |
 | §6.3 | Asynchronous Workflow: retries, duplicate events, failures, eventual consistency | Eligibility evaluation over RabbitMQ (`AvaliacaoPedida` → `AvaliacaoConcluida`) with outbox, idempotency keys, retries and a dead-letter queue (RNF05) | **07 · Technical Design** |
@@ -153,18 +153,18 @@
 
 > **ℹ️ Guidance.** Keep it light: one row per MVP requirement with its stories, test cases and design section. Jira links are the source of truth — fill the *Requirement* field on each story and embed the macro below rather than maintaining a long table by hand.
 
-[JIRA: project = ESC AND Requirement is not EMPTY ORDER BY Requirement ASC]
+[JIRA: project = SCRUM AND Requirement is not EMPTY ORDER BY Requirement ASC]
 
 | Requirement | Stories (Jira) | Test cases | Design section |
 |---|---|---|---|
-| [TODO: RF/RNF ID] | [TODO: ESC-xx] | [TODO: TC-ESC-xx-01] | [TODO: page — section] |
+| [TODO: RF/RNF ID] | [TODO: SCRUM-xx] | [TODO: TC-SCRUM-xx-01] | [TODO: page — section] |
 
 > **✏️ Example (illustrative — replace).**
 > | Requirement | Stories (Jira) | Test cases | Design section |
 > |---|---|---|---|
-> | RF08, RN02 | ESC-31 | TC-ESC-31-01, TC-ESC-31-02 | **07 · Technical Design** — Components and data ownership |
-> | RF06 | ESC-23 | TC-ESC-23-01 | **10 · Walking Skeleton** |
-> | RNF05 | ESC-xx | TC-ESC-xx-01 | **07 · Technical Design** — Reliability of messaging |
+> | RF08, RN02 | SCRUM-999 | TC-SCRUM-999-01, TC-SCRUM-999-02 | **07 · Technical Design** — Components and data ownership |
+> | RF06 | SCRUM-45 | TC-SCRUM-45-01 | **10 · Walking Skeleton** |
+> | RNF05 | SCRUM-xx | TC-SCRUM-xx-01 | **07 · Technical Design** — Reliability of messaging |
 
 ## Done when
 - [ ] Every business rule has a source type and a status, and none is marked `confirmed` without its source read and cited

@@ -9,7 +9,7 @@
 | Sources | Assignment §5.3, §7.1.2 #3, §11 |
 | Confluence parent | 03 · User Research |
 | Labels | `sprint-1`, `deliverable-03`, `user-research` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** A structured grid for watching, event by event, how a *piquete* gap is actually detected and filled at the station. It covers the observation method of Assignment §5.3, provides evidence for deliverable #3 on **03 · User Research** and for the claims on **01 · Problem and Opportunity**, and is read by the team when writing **Research Synthesis and Decisions**.

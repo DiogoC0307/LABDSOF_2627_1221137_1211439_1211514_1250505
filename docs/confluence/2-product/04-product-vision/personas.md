@@ -9,7 +9,7 @@
 | Sources | Assignment §5.4, §7.1.2 #4; Deck M3 (Pichler Persona Template) |
 | Confluence parent | 04 · Product Vision |
 | Labels | `sprint-1`, `deliverable-04`, `product`, `personas` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The three personas Escala is designed for: a firefighter, the duty chief who composes the *piquete* (the primary user) and the commander. It covers the "Personas" item of Sprint 1 deliverable #4 Product Vision (§7.1.2) and the target users of §5.4. The team uses it when writing stories; investors read it at the review.

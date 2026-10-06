@@ -9,7 +9,7 @@
 | Sources | Assignment §7.1.2 #8; §7.3.2 #10, #11 |
 | Confluence parent | 4 · Architecture and Security |
 | Labels | `sprint-1`, `deliverable-08`, `architecture`, `adr` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The index of Escala's architecture decision records (ADRs): one row per decision, with its status, date and a link to the file. The ADRs themselves live in Git, next to the code (**Architecture Decision Records (README)**, `docs/adr/README.md`); reviewers and investors start here to see which choices were made and why.

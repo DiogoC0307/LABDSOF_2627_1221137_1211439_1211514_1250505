@@ -9,7 +9,7 @@
 | Sources | Assignment §7, §8.2; Deck M5–M9 |
 | Confluence parent | 0 · Team and Process |
 | Labels | `team-process`, `scrum` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** How the team runs Scrum on Escala: sprints, events, artifacts, the Jira board, estimation, prioritisation, progress tracking and the evidence that the software engineering process was followed. Read it before the first Sprint Planning; reviewers use it to check that Jira is used as §8.2 requires.
@@ -65,7 +65,7 @@ Jira workflow: `Backlog → Ready → In Progress → In Review → Done`, mappe
 | In Review | Testing | PR open; code review, CI and functional tests under way |
 | Done | Done | Meets the DoD |
 
-Current sprint: [JIRA: project = ESC AND sprint in openSprints() ORDER BY Rank ASC]
+Current sprint: [JIRA: project = SCRUM AND sprint in openSprints() ORDER BY Rank ASC]
 
 ## Estimation
 
@@ -76,7 +76,7 @@ Current sprint: [JIRA: project = ESC AND sprint in openSprints() ORDER BY Rank A
 - **Planning Poker:** builders reveal their cards at the same time; the highest and lowest explain their reasoning; vote again until the estimates converge.
 - **Size limit:** an item above 8 points is split before it can be *Ready* (see **Definition of Ready (DoR)**).
 
-> **✏️ Example (illustrative — replace).** For ESC-31 (reject assigning someone whose TAS has expired), the developers reveal 3 and 13 at the same time while the PO only answers questions. The member who voted 13 explains that certifications have no expiry date in the data model yet; the one who voted 3 had assumed they did. Once the story is agreed to include the expiry date, a second round converges on 5 and the value is recorded in Jira.
+> **✏️ Example (illustrative — replace).** For SCRUM-999 (reject assigning someone whose TAS has expired), the developers reveal 3 and 13 at the same time while the PO only answers questions. The member who voted 13 explains that certifications have no expiry date in the data model yet; the one who voted 3 had assumed they did. Once the story is agreed to include the expiry date, a second round converges on 5 and the value is recorded in Jira.
 
 ## Prioritisation
 
@@ -87,7 +87,7 @@ Current sprint: [JIRA: project = ESC AND sprint in openSprints() ORDER BY Rank A
 3. **Releasability** — "Each release should provide useful functionality and generate feedback."
 4. **Dependencies** — "Resolve them where possible; combine or re-split dependent stories."
 
-> **✏️ Example (illustrative — replace).** The IPMA risk-fetching spike [TODO: ESC-xx] goes before the statutory-hours screen: it depends on an external service, it is the most uncertain item, and the reinforcement journey depends on it.
+> **✏️ Example (illustrative — replace).** The IPMA risk-fetching spike [TODO: SCRUM-xx] goes before the statutory-hours screen: it depends on an external service, it is the most uncertain item, and the reinforcement journey depends on it.
 
 ## Tracking progress
 
@@ -111,7 +111,7 @@ Current sprint: [JIRA: project = ESC AND sprint in openSprints() ORDER BY Rank A
 4. **Code** — the PR references the Jira key and its template has an "Analysis and design updated" checkbox (see **Git, Pull Request and Jira Rules**).
 5. **Test execution** — CI results and the recorded functional tests are linked from the Jira item before it moves to Done.
 
-> **✏️ Example (illustrative — replace).** ESC-31 → RF08, RN02 → **07 · Technical Design**, section Components and data ownership → TC-ESC-31-01, TC-ESC-31-02 → PR [TODO: link] with the checkbox ticked → CI run [TODO: link].
+> **✏️ Example (illustrative — replace).** SCRUM-999 → RF08, RN02 → **07 · Technical Design**, section Components and data ownership → TC-SCRUM-999-01, TC-SCRUM-999-02 → PR [TODO: link] with the checkbox ticked → CI run [TODO: link].
 
 ## Done when
 - [ ] Sprint dates filled in

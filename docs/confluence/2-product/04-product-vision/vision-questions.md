@@ -9,7 +9,7 @@
 | Sources | Deck M2; Assignment §5.4 |
 | Confluence parent | 04 · Product Vision |
 | Labels | `sprint-1`, `deliverable-04`, `product`, `vision` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Answers the six questions an effective product vision answers (deck M2), each backed by evidence or a link. It feeds **Product Vision Board** and **04 · Product Vision**, and is read by the team and by the investors (teaching staff).
@@ -86,7 +86,7 @@
 
 [TODO: stakeholder conversation note ID or investor feedback (Jira *Feedback* issue)]
 
-> **✏️ Example (illustrative — replace).** **Answer (hypothesis, not validated):** the options are (a) a subscription per corps paid by the association, (b) municipal funding, since the municipality benefits from the corps' readiness, or (c) open-source with paid hosting. Current preference: [TODO: option and why]. No price is stated until there is evidence. **Evidence / link:** [TODO: CMD-01 note; investor feedback ESC-xx].
+> **✏️ Example (illustrative — replace).** **Answer (hypothesis, not validated):** the options are (a) a subscription per corps paid by the association, (b) municipal funding, since the municipality benefits from the corps' readiness, or (c) open-source with paid hosting. Current preference: [TODO: option and why]. No price is stated until there is evidence. **Evidence / link:** [TODO: CMD-01 note; investor feedback SCRUM-xx].
 
 ## Feasibility
 

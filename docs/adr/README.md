@@ -41,7 +41,7 @@ The planned first ADRs (0001–0014, all *Proposed*) are listed on **08 · Archi
 - **Written the day the decision is taken.** The Date field is that day, not the day the ADR was tidied up. Each ADR has its own date.
 - **Never edit an accepted ADR's decision; supersede it.** Write a new ADR that says "Supersedes NNNN" under *Related*. In the old ADR, change only the status line to "Superseded by NNNN". Superseding this way keeps the history.
 - **One decision per file.** Split a decision that covers two separate questions.
-- **Reviewed like code.** Each ADR goes through a pull request whose branch or title carries the Jira key (`ESC-xx`), and another member approves it. The *Deciders* field and the PR author are individual contribution evidence ("Architecture decisions", §10).
+- **Reviewed like code.** Each ADR goes through a pull request whose branch or title carries the Jira key (`SCRUM-xx`), and another member approves it. The *Deciders* field and the PR author are individual contribution evidence ("Architecture decisions", §10).
 - **Keep both indexes in sync.** When you add or change an ADR, update the table below and **08 · Architecture Decision Records** at the same time.
 
 ## How to add an ADR

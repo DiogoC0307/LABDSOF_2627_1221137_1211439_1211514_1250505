@@ -9,7 +9,7 @@
 | Sources | Assignment §6, §7.1.2 #7 |
 | Confluence parent | 4 · Architecture and Security |
 | Labels | `sprint-1`, `deliverable-07`, `architecture` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** A one-page summary of how Escala is built to check who can crew today's *piquete*; the full design lives in Git as **Technical Design** (`docs/architecture/technical-design.md`). Investors read it at the Sprint 1 review, and every team member must be able to explain it (§10).
@@ -150,7 +150,7 @@
 - Event schemas: `contracts/events/` — [TODO: GitHub link]
 
 > **✏️ Example (illustrative — replace).**
-> - `POST /piquetes` — create a piquete with its slots (ESC-23)
+> - `POST /piquetes` — create a piquete with its slots (SCRUM-45)
 > - `POST /unavailabilities` — declare unavailability; answers 202 without waiting for evaluation (RNF02)
 > - `GET /slots/{id}/candidates` — eligible and ineligible candidates with reasons (RF16)
 > - `POST /assignments/{id}/confirm` — refused while no valid evaluation exists (RF24)

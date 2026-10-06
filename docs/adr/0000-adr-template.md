@@ -44,7 +44,7 @@
 
 ## Related
 
-- Jira: [TODO: ESC-xx]
+- Jira: [TODO: SCRUM-xx]
 - Requirements: [TODO: RF / RNF / RN IDs]
 - Supersedes: [TODO: NNNN, or —]
 - Other ADRs or pages: [TODO: e.g. 0009, or **Investor Decision Log** entry D-xx]
@@ -101,7 +101,7 @@
 >
 > ## Related
 >
-> - Jira: ESC-xx
+> - Jira: SCRUM-xx
 > - Requirements: RF24, RNF02, RNF04, RNF05
 > - Supersedes: —
 > - Other ADRs or pages: 0002, 0008, 0009

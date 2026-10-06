@@ -9,7 +9,7 @@
 | Sources | Assignment §11 (also §5.6.1, §5.6.2, §6.5); Deck M2–M4, M8 (attributed templates) |
 | Confluence parent | 0 · Team and Process |
 | Labels | `team-process`, `ethics`, `attribution` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The single record of every AI tool the team used, who reviewed its output, and every third-party dataset, API, template, method and library Escala relies on. The teaching staff read it to check §11; team members update it whenever they use a new tool or source.

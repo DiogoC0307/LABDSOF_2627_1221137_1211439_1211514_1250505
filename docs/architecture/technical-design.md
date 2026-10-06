@@ -305,7 +305,7 @@ erDiagram
 >
 > | Endpoint | Purpose | Roles | Requirement |
 > |---|---|---|---|
-> | `POST /piquetes` | Create a piquete for a date and period with its slots | Duty chief, Commander [TODO: confirm] | RF06, ESC-23 |
+> | `POST /piquetes` | Create a piquete for a date and period with its slots | Duty chief, Commander [TODO: confirm] | RF06, SCRUM-45 |
 > | `POST /assignments` | Propose a member for a slot; answers 202 and publishes `AvaliacaoPedida` | Duty chief, Commander | RF08 |
 > | `GET /slots/{id}/candidates` | Eligible and ineligible candidates with reasons | Duty chief, Commander | RF16 |
 > | `POST /assignments/{id}/confirm` | Confirm; refused while no valid evaluation exists | Duty chief, Commander | RF18, RF24 |
