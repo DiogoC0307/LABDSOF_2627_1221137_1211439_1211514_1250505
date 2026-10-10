@@ -1,0 +1,124 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide methods
+
+package "Personnel & Qualifications" {
+    class Member {
+        + id: String
+        + fullName: String
+        + rank: Rank
+        + rosterStatus: RosterStatus
+        + dateOfBirth: Date
+        + contactPhone: String
+        + accumulatedStatutoryHours: Integer
+        --
+        RN01, RN08, RN09
+    }
+
+    enum RosterStatus {
+        ACTIVE_ROSTER
+        HONORARY_ROSTER
+        RESERVES
+    }
+
+    enum Rank {
+        PROFESSIONAL_FIREFIGHTER
+        CADETE
+        VOLUNTEER_FIREFIGHTER
+        SUB_CHIEF
+        CHIEF
+        SUPERVISOR
+    }
+
+    class Certification {
+        + code: String
+        + name: String
+        + issueDate: Date
+        + expiryDate: Date
+        --
+        RN02
+    }
+}
+
+package "Availability & Duty Shifts (Piquetes)" {
+    class Unavailability {
+        + id: String
+        + startDateTime: DateTime
+        + endDateTime: DateTime
+        + reason: String
+        + confirmed: Boolean
+        --
+        RN06, RNF09
+    }
+
+    class ShiftDuty {
+        + id: String
+        + date: Date
+        + shiftPeriod: ShiftPeriod
+        + assignedRiskLevel: RiskLevel
+        + rosterStatus: RosterStatus
+        --
+        RN10, RF06
+    }
+
+    class ShiftSlot {
+        + id: String
+        + role: SlotRole
+        + status: SlotStatus
+        --
+        RN04, RF07
+    }
+
+    enum SlotStatus {
+        OPEN
+        FILLED
+        EMERGENCY_GAP
+    }
+
+    class CoverRequest {
+        + id: String
+        + createdAt: DateTime
+        + status: RequestStatus
+    }
+
+    class SlotApplication {
+        + id: String
+        + submittedAt: DateTime
+        + status: ApplicationStatus
+    }
+
+    enum RiskLevel {
+        LOW
+        MEDIUM
+        HIGH
+    }
+}
+
+package "Eligibility Engine" {
+    class EligibilityEvaluation {
+        + id: String
+        + evaluatedAt: DateTime
+        + eligible: Boolean
+        + violatedRuleCodes: List<String>
+        + plainLanguageExplanation: String
+        + engineVersion: String
+        --
+        RF21, RF23, RF24, RNF04
+    }
+}
+
+' Relationships & Multiplicities
+Member "1" -- "0..*" Certification : holds >
+Member "1" -- "0..*" Unavailability : declares >
+Member "1" -- "0..*" SlotApplication : submits >
+Member "0..1" -- "0..*" ShiftSlot : assigned to >
+
+ShiftDuty "1" *-- "1..*" ShiftSlot : composed of >
+
+ShiftSlot "1" -- "0..*" CoverRequest : triggers >
+CoverRequest "1" -- "0..*" SlotApplication : receives >
+
+SlotApplication "1" -- "1" EligibilityEvaluation : evaluated by >
+
+@enduml
