@@ -1,0 +1,36 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide methods
+
+package "UI Interface" {
+
+    class MobileApp
+}
+
+package "Application Layer" {
+    package "Personal" {
+
+        class PersonalManagementSystem
+
+        class Authentication
+    }
+
+    package "Duty Shifts & Availability" {
+
+        class SlotsManagement
+
+        class UnavailabilityManagement
+
+        class EligibilityVerification
+    }
+}
+
+package "Data Layer & Persistence" {
+    class Database
+}
+
+"UI Interface" -- "Application Layer" : interacts with
+"Application Layer" -- "Data Layer & Persistence" : interacts with
+
+@enduml
