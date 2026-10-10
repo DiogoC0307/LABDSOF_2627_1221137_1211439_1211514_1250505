@@ -1,0 +1,24 @@
+@startuml
+autonumber
+skinparam actorStyle awesome
+
+actor "Duty Chief\n" as Chief
+participant "Escala App" as System
+actor "Firefighter\n" as Firefighter
+
+== 1. Slot Creation & Gap Identification ==
+Chief -> System: 1. Publishes roster schedule (Piquete)
+System -> System: 2. Detects open slots (Gaps)
+Chief -> System: 3. Opens cover request for open slot
+
+== 2. Application & Eligibility Evaluation ==
+Firefighter -> System: 4. Views open slots on mobile
+Firefighter -> System: 5. Applies for open slot
+System -> System: 6. Evaluates eligibility rules\n(Driving licence, certifications & availability)
+
+== 3. Shift Confirmation ==
+Chief -> System: 7. Views eligible candidates and selects one
+System -> System: 8. Confirms assignment and updates roster schedule
+System -> Firefighter: 9. Sends confirmation notification to Firefighter
+
+@enduml

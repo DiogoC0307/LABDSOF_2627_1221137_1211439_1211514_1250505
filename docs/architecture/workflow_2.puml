@@ -1,0 +1,21 @@
+@startuml
+start
+
+:Firefighter submits unavailability for a date/time range;
+
+:System registers and stores unavailability period;
+
+:Duty Chief attempts to assign firefighter to a shift in that interval;
+
+:System executes automatic eligibility check;
+
+if (Is unavailability declared in that period? (RN06)) then (Yes)
+  :System **blocks** assignment;
+  :Displays error message to Duty Chief:
+  "Cannot assign: Unavailability declared by user";
+else (No)
+  :System allows assignment to shift;
+endif
+
+stop
+@enduml
