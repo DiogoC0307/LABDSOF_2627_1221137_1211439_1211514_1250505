@@ -9,7 +9,7 @@
 | Sources | Assignment §3, §5.1, §7.1.2 #1 |
 | Confluence parent | 1 · Discovery |
 | Labels | `sprint-1`, `deliverable-01`, `discovery` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The Problem and Opportunity Report: which community we serve, what problem it has, who is affected, what evidence we hold and which assumptions we still have to test. It satisfies Sprint 1 deliverable #1 — §7.1.2 asks for Target community; Problem statement; Stakeholder map; Problem evidence; Assumptions and risks — plus the §3 scope choices and the §5.1 problem-discovery items; the team and the investors (teaching staff) read it.

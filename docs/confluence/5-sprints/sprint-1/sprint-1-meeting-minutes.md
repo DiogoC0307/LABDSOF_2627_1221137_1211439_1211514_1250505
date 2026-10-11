@@ -9,7 +9,7 @@
 | Sources | Assignment §5.7, §8.2, §10; Deck M8 |
 | Confluence parent | Sprint 1 |
 | Labels | `sprint-1`, `meeting-minutes` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Parent page for the minutes of every Sprint 1 meeting: planning, weekly syncs, review, retrospective, and stakeholder and investor meetings. The minutes are the written record of decisions and investor feedback (Assignment §5.7, §8.2) and the evidence of sprint-review participation (§10).

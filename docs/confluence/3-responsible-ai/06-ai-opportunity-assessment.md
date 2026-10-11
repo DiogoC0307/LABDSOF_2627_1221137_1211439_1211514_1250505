@@ -9,7 +9,7 @@
 | Sources | Assignment §5.6, §5.6.1–§5.6.3, §7.1.2 #6 |
 | Confluence parent | 3 · Responsible AI |
 | Labels | `sprint-1`, `deliverable-06`, `responsible-ai` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Sprint 1 deliverable #6: what Escala uses AI for, why users need it, how it will be evaluated, what happens when it is wrong or unavailable, and how people stay in control. The investors read it to judge whether the AI is justified; the team uses it as the contract for the AI work in Sprints 2 and 3.
@@ -182,14 +182,14 @@ Targets fixed on: YYYY-MM-DD
 
 | Risk (§5.6.3) | How addressed | Test |
 |---|---|---|
-| Inaccurate or fabricated outputs | Output validated against the schema; shown as "read automatically" in editable fields; nothing saved until the user confirms | [TODO: TC-ESC-xx-nn] |
-| Prompt injection | Message treated as data, never as instructions; output limited to the schema; the model cannot change any record; adverse cases in the dataset | [TODO: TC-ESC-xx-nn] |
-| Inappropriate disclosure of information | The model receives only the message and the reference date (no names, contacts or other members' data); explanations built from rule codes only; free text deleted after confirmation (RNF09) | [TODO: TC-ESC-xx-nn] |
-| Harmful or unsuitable content | Extraction returns structured fields only; explanations generated from rule codes only; [TODO: check before display, else template text] | [TODO: TC-ESC-xx-nn] |
-| Bias and unfair treatment | The AI never decides eligibility (ADR 0007); dataset covers [TODO: writing styles, dictation]; error rates reported per category | [TODO: TC-ESC-xx-nn] |
-| Provenance of retrieved information | No retrieval: the model sees only the user's own message. Explanations show the rule code and engine version they came from (RF23) | [TODO: TC-ESC-xx-nn] |
-| User correction of AI-generated content | Every extracted field is editable before confirmation; corrections are counted against the ≥ 85% success criterion | [TODO: TC-ESC-xx-nn] |
-| Human approval for consequential actions | The user confirms extractions; the duty chief confirms assignments; see the section Human approval points | [TODO: TC-ESC-xx-nn] |
+| Inaccurate or fabricated outputs | Output validated against the schema; shown as "read automatically" in editable fields; nothing saved until the user confirms | [TODO: TC-SCRUM-xx-nn] |
+| Prompt injection | Message treated as data, never as instructions; output limited to the schema; the model cannot change any record; adverse cases in the dataset | [TODO: TC-SCRUM-xx-nn] |
+| Inappropriate disclosure of information | The model receives only the message and the reference date (no names, contacts or other members' data); explanations built from rule codes only; free text deleted after confirmation (RNF09) | [TODO: TC-SCRUM-xx-nn] |
+| Harmful or unsuitable content | Extraction returns structured fields only; explanations generated from rule codes only; [TODO: check before display, else template text] | [TODO: TC-SCRUM-xx-nn] |
+| Bias and unfair treatment | The AI never decides eligibility (ADR 0007); dataset covers [TODO: writing styles, dictation]; error rates reported per category | [TODO: TC-SCRUM-xx-nn] |
+| Provenance of retrieved information | No retrieval: the model sees only the user's own message. Explanations show the rule code and engine version they came from (RF23) | [TODO: TC-SCRUM-xx-nn] |
+| User correction of AI-generated content | Every extracted field is editable before confirmation; corrections are counted against the ≥ 85% success criterion | [TODO: TC-SCRUM-xx-nn] |
+| Human approval for consequential actions | The user confirms extractions; the duty chief confirms assignments; see the section Human approval points | [TODO: TC-SCRUM-xx-nn] |
 
 ## Human approval points
 
@@ -211,7 +211,7 @@ Targets fixed on: YYYY-MM-DD
 | Evaluation environment | [TODO: runs offline?] | [TODO: needs network; fallback used offline?] |
 | Quality | [TODO: results on the dataset] | [TODO: results on the dataset] |
 
-- Spike: [TODO: ESC-xx] · Results: [TODO: summary] · Decision: ADR 0011 (status [TODO: Proposed / Accepted])
+- Spike: [TODO: SCRUM-xx] · Results: [TODO: summary] · Decision: ADR 0011 (status [TODO: Proposed / Accepted])
 
 ## How limitations are communicated to users
 

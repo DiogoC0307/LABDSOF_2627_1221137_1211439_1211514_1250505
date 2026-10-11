@@ -9,7 +9,7 @@
 | Sources | Assignment §5.2, §7.1.2 #2 |
 | Confluence parent | 1 · Discovery |
 | Labels | `sprint-1`, `deliverable-02`, `discovery` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Compares Escala with the alternatives a volunteer fire corps has today — software tools and the informal whiteboard + WhatsApp + phone practice — and turns the verified gaps into a value proposition. It satisfies Sprint 1 deliverable #2 — §7.1.2 asks for Relevant alternatives; Strengths and weaknesses; Opportunity for differentiation — and §5.2; the team and the investors read it, and **04 · Product Vision** reuses its value proposition.

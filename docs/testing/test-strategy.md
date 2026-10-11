@@ -54,16 +54,16 @@ flowchart LR
 
 ## Test case convention
 
-- **ID:** `TC-<story>-<n>`, e.g. `TC-ESC-31-01`, `TC-ESC-31-02`.
+- **ID:** `TC-<story>-<n>`, e.g. `TC-SCRUM-999-01`, `TC-SCRUM-999-02`.
 - **Format:** Given/When/Then, written in the Jira story's acceptance criteria before coding (DoR: "a test plan and test cases are outlined").
 - **Coverage:** every business rule (`RN`) gets at least one positive, one negative and one **boundary** test case.
-- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story (e.g. `@DisplayName("TC-ESC-31-03 …")`, `def test_tc_esc_31_03_…`).
+- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story (e.g. `@DisplayName("TC-SCRUM-999-03 …")`, `def test_tc_esc_31_03_…`).
 - **Manual functional tests** (DoD: "functional tests performed and recorded"): record TC ID, date, version, who and result [TODO: where, e.g. a comment on the Jira story].
 
-> **✏️ Example (illustrative — replace).** Story `ESC-31`, reject assigning someone whose TAS has expired (RN02):
-> - `TC-ESC-31-01` (negative): **Given** Member B's TAS expired before the slot date, **When** the duty chief assigns Member B, **Then** the evaluation is ineligible with rule code `RN02` and confirmation is blocked.
-> - `TC-ESC-31-02` (boundary): **Given** Member C's TAS expires on the slot date, **When** the duty chief assigns Member C, **Then** [TODO: eligible or ineligible, once the team confirms how RN02 treats the expiry day].
-> - `TC-ESC-31-03` (positive): **Given** Member A holds a TAS valid beyond the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the evaluation is eligible and the assignment can be confirmed.
+> **✏️ Example (illustrative — replace).** Story `SCRUM-999`, reject assigning someone whose TAS has expired (RN02):
+> - `TC-SCRUM-999-01` (negative): **Given** Member B's TAS expired before the slot date, **When** the duty chief assigns Member B, **Then** the evaluation is ineligible with rule code `RN02` and confirmation is blocked.
+> - `TC-SCRUM-999-02` (boundary): **Given** Member C's TAS expires on the slot date, **When** the duty chief assigns Member C, **Then** [TODO: eligible or ineligible, once the team confirms how RN02 treats the expiry day].
+> - `TC-SCRUM-999-03` (positive): **Given** Member A holds a TAS valid beyond the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the evaluation is eligible and the assignment can be confirmed.
 
 ## Boundary cases catalogue
 
@@ -71,7 +71,7 @@ flowchart LR
 
 | Boundary case | Rule / requirement | Expected behaviour | Test case(s) |
 |---|---|---|---|
-| Certification expiring on the slot date | RN02 | [TODO: eligible or ineligible — decide how RN02 treats the expiry day] | `TC-ESC-31-02` |
+| Certification expiring on the slot date | RN02 | [TODO: eligible or ineligible — decide how RN02 treats the expiry day] | `TC-SCRUM-999-02` |
 | Rest period ending exactly at the next start | RN07 | [TODO: internal regulation still to obtain; the minimum rest is configurable] | [TODO: TC ID] |
 | Duty period crossing midnight | RN05, RN09 | Overlap is checked on start/end instants, not calendar dates; hours count on [TODO: which day] | [TODO: TC ID] |
 | Daylight-saving change | RN07, RN09, ADR 0012 (UTC instants with explicit time zone) | A slot spanning the clock change is one hour longer or shorter than its wall-clock times suggest; rest and hours use real duration [TODO: confirm] | [TODO: TC ID] |

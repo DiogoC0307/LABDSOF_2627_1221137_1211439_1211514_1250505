@@ -5,7 +5,7 @@ Documentation templates for **Escala**, the LABDSOF 2026/27 product (MSc in Comp
 ## What this folder is
 
 - Templates for all project documentation. Each template states what the page is for and which assignment requirement it satisfies. It also lists the sections, says what to write in each, gives an illustrative example, and ends with a *Done when* checklist.
-- **`confluence/`**: one file = one Confluence page. They are copied into the Confluence space linked to Jira project `ESC` (see [Moving a page to Confluence](#moving-a-page-to-confluence)).
+- **`confluence/`**: one file = one Confluence page. They are copied into the Confluence space linked to Jira project `SCRUM` (see [Moving a page to Confluence](#moving-a-page-to-confluence)).
 - **Everything else** (`adr/`, `architecture/`, `testing/`, `operations/` and this file) stays in Git next to the code (see [What stays in Git and why](#what-stays-in-git-and-why)).
 - Every template starts as `Draft`. Nothing here is final until a human has reviewed it.
 

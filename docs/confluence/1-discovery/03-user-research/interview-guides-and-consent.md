@@ -9,7 +9,7 @@
 | Sources | Assignment §5.3, §11 |
 | Confluence parent | 03 · User Research |
 | Labels | `sprint-1`, `deliverable-03`, `user-research` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The consent script and the interview guides for the firefighters, duty chiefs and commander of a *Corpo de Bombeiros Voluntários*, used to understand how the *piquete* is composed today (Assignment §5.3 interviews; §11 informed participants). The interviewer and the note-taker read it before every session; answers go into one research note per session, created from **Research Note — Template**, never into this page.

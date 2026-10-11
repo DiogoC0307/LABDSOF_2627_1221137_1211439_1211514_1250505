@@ -9,7 +9,7 @@
 | Sources | Deck M2 (Roman Pichler's Product Vision Board, CC BY-SA 4.0); Assignment §5.4 |
 | Confluence parent | 04 · Product Vision |
 | Labels | `sprint-1`, `deliverable-04`, `product`, `vision` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Escala's vision, target group, needs, product and business goals on one board, using Roman Pichler's Product Vision Board (deck M2). The team uses it to check that the backlog serves the vision; investors (teaching staff) read it as the one-page summary of the product idea.

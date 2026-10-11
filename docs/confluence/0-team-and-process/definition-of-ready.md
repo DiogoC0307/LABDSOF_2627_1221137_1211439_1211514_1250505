@@ -9,7 +9,7 @@
 | Sources | Deck M5 (Definition of Ready, INVEST); Deck M7 (Planning Poker) |
 | Confluence parent | 0 · Team and Process |
 | Labels | `team-process`, `scrum` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The checklist every backlog item must pass before the team pulls it into a sprint, and how the team enforces it (deck M5). The whole team reads it before backlog refinement and Sprint Planning; the Product Owner applies it.
@@ -30,7 +30,7 @@ The deck gives the reason: "A shared Definition of Ready prevents the team from 
 - [ ] **2.** All business rules are known and referenced by ID (`RNxx`, e.g. `RN02`, as listed on **Requirements and Quality Attributes**)
 - [ ] **3.** Dependencies are cleared
 - [ ] **4.** Acceptance criteria are written in Given/When/Then, including at least one boundary case
-- [ ] **5.** A test plan and test cases are outlined (`TC-` IDs, e.g. `TC-ESC-31-01`)
+- [ ] **5.** A test plan and test cases are outlined (`TC-` IDs, e.g. `TC-SCRUM-999-01`)
 - [ ] **6.** INVEST check passed
 - [ ] **7.** Estimated through Planning Poker
 - [ ] **8.** Linked to its requirement(s) (`RF`/`RNF`)
@@ -47,30 +47,30 @@ The deck gives the reason: "A shared Definition of Ready prevents the team from 
 
 > **ℹ️ Guidance.** Name the Product Owner (see **Team and Roles**) and say whether the *Ready* transition is restricted in the Jira workflow or is a working agreement. Keep the returned-item comments short and specific: item numbers plus the missing piece.
 
-> **✏️ Example (illustrative — replace).** Comment by the PO when returning ESC-xx to *Backlog*: "Fails DoR 2 and 4. The minimum rest between duty periods (RN07) is still 'to obtain' from the internal regulation, and there is no boundary case for a rest period ending exactly at the next start. Back to Backlog."
+> **✏️ Example (illustrative — replace).** Comment by the PO when returning SCRUM-xx to *Backlog*: "Fails DoR 2 and 4. The minimum rest between duty periods (RN07) is still 'to obtain' from the internal regulation, and there is no boundary case for a rest period ending exactly at the next start. Back to Backlog."
 
 ## Example
 
-> **ℹ️ Guidance.** Keep one story that passes and one item that fails, each with the reason. Replace them with real ESC backlog items as soon as you have them; the passing story shows the level of detail the team expects before Sprint Planning.
+> **ℹ️ Guidance.** Keep one story that passes and one item that fails, each with the reason. Replace them with real SCRUM backlog items as soon as you have them; the passing story shows the level of detail the team expects before Sprint Planning.
 
-### Passes — ESC-31
+### Passes — SCRUM-999
 
 > **✏️ Example (illustrative — replace).**
 >
 > | Part | Content |
 > |---|---|
-> | Story (ESC-31) | "As a duty chief, I want the system to reject assigning someone whose TAS certification has expired, so that no ambulance leaves with an unqualified crew." |
+> | Story (SCRUM-999) | "As a duty chief, I want the system to reject assigning someone whose TAS certification has expired, so that no ambulance leaves with an unqualified crew." |
 > | Business rule | RN02 — an expired certification (e.g. TAS) doesn't count |
 > | Requirements | RF08 (assign a member to a slot with an eligibility check); RF21 (evaluate eligibility against the business rules and return the violated rule codes) |
-> | Dependencies | Certifications can be recorded with issue and expiry dates (RF02, ESC-xx) — Done |
+> | Dependencies | Certifications can be recorded with issue and expiry dates (RF02, SCRUM-xx) — Done |
 > | Estimate | 5 points, Planning Poker |
 >
 > **Acceptance criteria**
-> - **Scenario 1 — expired.** **Given** Member A's TAS expired before the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the assignment is rejected with rule code RN02 and the reason is shown. (`TC-ESC-31-01`)
-> - **Scenario 2 — boundary: certification expires on the slot date.** **Given** Member A's TAS expires on the slot date, **When** the duty chief assigns Member A to that slot, **Then** the assignment is rejected with rule code RN02. (`TC-ESC-31-02`) *Illustrative reading of RN02: a certification does not count on its expiry date. Confirm the expiry-day rule before the real story is Ready.*
-> - **Scenario 3 — valid.** **Given** Member A's TAS expires after the slot date, **When** the duty chief assigns Member A to that slot, **Then** RN02 does not block the assignment. (`TC-ESC-31-03`)
+> - **Scenario 1 — expired.** **Given** Member A's TAS expired before the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the assignment is rejected with rule code RN02 and the reason is shown. (`TC-SCRUM-999-01`)
+> - **Scenario 2 — boundary: certification expires on the slot date.** **Given** Member A's TAS expires on the slot date, **When** the duty chief assigns Member A to that slot, **Then** the assignment is rejected with rule code RN02. (`TC-SCRUM-999-02`) *Illustrative reading of RN02: a certification does not count on its expiry date. Confirm the expiry-day rule before the real story is Ready.*
+> - **Scenario 3 — valid.** **Given** Member A's TAS expires after the slot date, **When** the duty chief assigns Member A to that slot, **Then** RN02 does not block the assignment. (`TC-SCRUM-999-03`)
 >
-> **Why it passes.** 1 ✅ actor, goal and value · 2 ✅ RN02 referenced · 3 ✅ the certification story is Done · 4 ✅ three scenarios including the boundary · 5 ✅ `TC-ESC-31-01` to `-03` · 6 ✅ INVEST · 7 ✅ estimated · 8 ✅ RF08, RF21 · 9 ✅ 5 ≤ 8 points.
+> **Why it passes.** 1 ✅ actor, goal and value · 2 ✅ RN02 referenced · 3 ✅ the certification story is Done · 4 ✅ three scenarios including the boundary · 5 ✅ `TC-SCRUM-999-01` to `-03` · 6 ✅ INVEST · 7 ✅ estimated · 8 ✅ RF08, RF21 · 9 ✅ 5 ≤ 8 points.
 
 ### Fails — "Improve notifications"
 
@@ -82,8 +82,8 @@ The deck gives the reason: "A shared Definition of Ready prevents the team from 
 
 ## Done when
 - [ ] Every team member has agreed the checklist (recorded in meeting minutes or as a page comment)
-- [ ] The Jira *Ready* status exists in the ESC workflow and the Product Owner is named as the only person who moves items to it
-- [ ] The `## Example` section shows one real passing story and one real failing item from the ESC backlog
+- [ ] The Jira *Ready* status exists in the SCRUM workflow and the Product Owner is named as the only person who moves items to it
+- [ ] The `## Example` section shows one real passing story and one real failing item from the SCRUM backlog
 - [ ] Merged into the existing Confluence page; no duplicate page created
 - [ ] Reviewed by another team member
 - [ ] Guidance and example blocks removed

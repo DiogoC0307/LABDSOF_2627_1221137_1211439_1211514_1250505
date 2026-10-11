@@ -9,7 +9,7 @@
 | Sources | Assignment §10; Deck M1, M8 |
 | Confluence parent | 0 · Team and Process |
 | Labels | `team-process` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Who is on the team, who is accountable for what, when we meet, the working agreements we all signed, and where each member's contribution evidence is recorded. Teaching staff read it to know whom to ask; evaluation is individual (§10), so every member relies on it.
@@ -57,7 +57,7 @@
 | Retrospective | [TODO: after each Sprint Review] | [TODO: duration] | **Sprint 1 · Retrospective** |
 | Knowledge-sharing (each member explains their work to the others, §10) | [TODO: e.g. once per sprint] | [TODO: duration] | Minutes under **Sprint 1 · Meeting Minutes** |
 
-> **✏️ Example (illustrative — replace).** Weekly sync: Wednesdays 18:00, 45 min, minutes created from the template under **Sprint 1 · Meeting Minutes**. Daily post: "Done: outbox table in `escala-api` (ESC-xx). Next: publish `AvaliacaoPedida`. Blocker: none."
+> **✏️ Example (illustrative — replace).** Weekly sync: Wednesdays 18:00, 45 min, minutes created from the template under **Sprint 1 · Meeting Minutes**. Daily post: "Done: outbox table in `escala-api` (SCRUM-xx). Next: publish `AvaliacaoPedida`. Blocker: none."
 
 ## Working agreements
 

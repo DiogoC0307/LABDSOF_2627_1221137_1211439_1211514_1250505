@@ -9,7 +9,7 @@
 | Sources | Assignment §5.4, §7.1.2 #4; Deck M3 (user journeys as BPMN with swimlanes) |
 | Confluence parent | 04 · Product Vision |
 | Labels | `sprint-1`, `deliverable-04`, `product`, `user-journeys` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Escala's principal user journeys, as they happen today (as-is) and with the product (to-be), drawn as BPMN diagrams with swimlanes. It covers the "Principal user journeys" item of Sprint 1 deliverable #4 Product Vision (§5.4, §7.1.2). The team derives stories and requirements from it; investors see the product's value in the to-be journey.

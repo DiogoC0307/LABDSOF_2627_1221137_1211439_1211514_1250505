@@ -9,7 +9,7 @@
 | Sources | Assignment §7.1.2 #5, §8.2; Deck M5–M7 |
 | Confluence parent | 2 · Product |
 | Labels | `sprint-1`, `deliverable-05`, `product`, `backlog` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Deliverable #5 (§7.1.2): the Product Goal, the rules for writing, slicing, ordering and estimating backlog items, and the sprint goals; the items themselves live in Jira (§8.2). It covers the four required items — *Prioritized user stories or backlog items* (Live backlog), *Acceptance criteria* (Story format, Example story), *Sprint objectives* (Sprint goals) and *Initial release plan* (Release plan) — and is read by the team, the Product Owner and the investors.
@@ -26,7 +26,7 @@
 
 ## Live backlog
 
-[JIRA: project = ESC AND issuetype in (Story, Task, Spike, Bug) AND statusCategory != Done ORDER BY Rank ASC]
+[JIRA: project = SCRUM AND issuetype in ("História", "Tarefa", Spike, "Problema") AND statusCategory != Done ORDER BY Rank ASC]
 
 > **ℹ️ Guidance.** Never copy stories into this page; embed the Jira macro so the order shown is always the order in Jira. The Product Owner orders the backlog by Rank, and only items that pass **Definition of Ready (DoR)** move to *Ready*.
 
@@ -49,13 +49,13 @@
 ## Story format
 
 ```
-ESC-xx · <short title: verb + object>
+SCRUM-xx · <short title: verb + object>
 As a <persona>, I want <capability>, so that <benefit>.
 Business rules: RNxx          Requirements: RFxx / RNFxx
 Acceptance criteria:
   AC1  Given <context>, when <action>, then <observable result>.
   AC2  (boundary) Given <edge context>, when <action>, then <result>.
-Test cases: TC-ESC-xx-01, TC-ESC-xx-02
+Test cases: TC-SCRUM-xx-01, TC-SCRUM-xx-02
 ```
 
 > **ℹ️ Guidance.** Write every story as *"As a <persona>, I want <capability>, so that <benefit>."*, using a persona or role from **Personas**. Acceptance criteria use Given/When/Then and include at least one boundary case; each criterion maps to a test case ID `TC-<story>-<n>`. In Jira, put RN IDs in the *Business rule* field and RF/RNF IDs in the *Requirement* field.
@@ -75,7 +75,7 @@ Test cases: TC-ESC-xx-01, TC-ESC-xx-02
 
 > **ℹ️ Guidance.** Slice vertically: each story goes through UI, logic and persistence and can be demonstrated on its own. Never slice by horizontal layer (database, then API, then screen). Useful splits: one business rule per story; happy path first, exceptions next; form first, free text later (RF12 before RF13).
 
-> **✏️ Example (illustrative — replace).** Horizontal (don't): "Create the slots table" → "Create the slots API" → "Create the slots screen"; nothing works for a user until all three are done. Vertical (do): ESC-23 "Create a *piquete* with one slot" (PWA → API → DB, no rules) → "Add the required certification to a slot" (RF07) → ESC-31 "Reject assigning someone whose TAS has expired" (RN02). Each slice runs end to end.
+> **✏️ Example (illustrative — replace).** Horizontal (don't): "Create the slots table" → "Create the slots API" → "Create the slots screen"; nothing works for a user until all three are done. Vertical (do): SCRUM-45 "Create a *piquete* with one slot" (PWA → API → DB, no rules) → "Add the required certification to a slot" (RF07) → SCRUM-999 "Reject assigning someone whose TAS has expired" (RN02). Each slice runs end to end.
 
 ## Prioritisation
 
@@ -88,12 +88,12 @@ The Product Owner orders the backlog using the four factors of deck M6:
 
 ### Current risk items that go first
 
-[JIRA: project = ESC AND labels = risk AND statusCategory != Done ORDER BY Rank ASC]
+[JIRA: project = SCRUM AND labels = risk AND statusCategory != Done ORDER BY Rank ASC]
 
 > **ℹ️ Guidance.** List the items that carry the most uncertainty and give the reason each goes first. Tag them in Jira with the `risk` label so the macro above stays current.
 
 > **✏️ Example (illustrative — replace).**
-> - ESC-23 walking skeleton: the chain PWA → API → queue → worker → DB runs deployed (technical risk).
+> - SCRUM-45 walking skeleton: the chain PWA → API → queue → worker → DB runs deployed (technical risk).
 > - Spike: where the AI model runs, local model vs hosted API (ADR 0011, pending the spike).
 > - IPMA RCM integration against the simulator, including unavailable, delayed, incomplete and invalid data (tests assumption A4).
 > - Obtain the corps' internal regulation for minimum rest (RN07) and risk → composition (RN10) (tests assumption A5).
@@ -102,14 +102,14 @@ The Product Owner orders the backlog using the four factors of deck M6:
 
 | Date | Items estimated | Participants |
 |---|---|---|
-| [TODO: YYYY-MM-DD] | [TODO: ESC keys and points] | [TODO: builders who voted] |
+| [TODO: YYYY-MM-DD] | [TODO: SCRUM keys and points] | [TODO: builders who voted] |
 
 > **ℹ️ Guidance.** Backlog items get story points on the Fibonacci scale 1, 2, 3, 5, 8, 13, 21 through Planning Poker; sprint tasks are estimated in hours. Deck M7: "only the people who build the increment estimate. The Product Owner and Scrum Master do not estimate, and do not influence estimates." Anything above 8 points does not fit one sprint (see **Definition of Ready (DoR)**) and must be split.
 
 > **✏️ Example (illustrative — replace).**
 > | Date | Items estimated | Participants |
 > |---|---|---|
-> | YYYY-MM-DD | ESC-23 (3), ESC-31 (5) | Member B, Member C, Member D (Member A, the Product Owner, did not estimate) |
+> | YYYY-MM-DD | SCRUM-45 (3), SCRUM-999 (5) | Member B, Member C, Member D (Member A, the Product Owner, did not estimate) |
 
 ## Sprint goals
 
@@ -139,14 +139,14 @@ The initial release plan is **Product Roadmap (GO)**.
 > **ℹ️ Guidance.** Use this as the quality bar for every story that reaches *Ready*: story sentence, business rules, requirements, Given/When/Then with a boundary case, test case IDs, estimate and cleared dependencies.
 
 > **✏️ Example (illustrative — replace).**
-> **ESC-31 · Reject assigning someone whose TAS has expired** — Epic E4 Eligibility · 5 points · Business rules RN01, RN02 · Requirements RF08, RF21, RNF04
+> **SCRUM-999 · Reject assigning someone whose TAS has expired** — Epic E4 Eligibility · 5 points · Business rules RN01, RN02 · Requirements RF08, RF21, RNF04
 >
 > *"As a duty chief, I want the system to reject assigning someone whose TAS certification has expired, so that no ambulance leaves with an unqualified crew."*
 >
 > **Acceptance criteria**
-> - **AC1 — expired.** Given Member B's TAS expired before the slot date, when the duty chief tries to assign Member B, then the assignment is rejected and the reason shows rule code RN02. → `TC-ESC-31-01`
-> - **AC2 — boundary.** Given Member C's TAS expires on the slot date, when the duty chief assigns Member C to that slot, then the assignment is rejected with RN02 (illustrative reading: a certification does not count on its expiry date). [TODO: confirm with the commander how the expiry date is interpreted] → `TC-ESC-31-02`
-> - **AC3 — valid.** Given Member A is on the *quadro ativo* (RN01) and holds a TAS valid beyond the slot, when the duty chief assigns Member A to an ambulance slot that requires TAS, then the assignment is accepted and goes to confirmation. → `TC-ESC-31-03`
+> - **AC1 — expired.** Given Member B's TAS expired before the slot date, when the duty chief tries to assign Member B, then the assignment is rejected and the reason shows rule code RN02. → `TC-SCRUM-999-01`
+> - **AC2 — boundary.** Given Member C's TAS expires on the slot date, when the duty chief assigns Member C to that slot, then the assignment is rejected with RN02 (illustrative reading: a certification does not count on its expiry date). [TODO: confirm with the commander how the expiry date is interpreted] → `TC-SCRUM-999-02`
+> - **AC3 — valid.** Given Member A is on the *quadro ativo* (RN01) and holds a TAS valid beyond the slot, when the duty chief assigns Member A to an ambulance slot that requires TAS, then the assignment is accepted and goes to confirmation. → `TC-SCRUM-999-03`
 >
 > **Dependencies:** RF02 (certifications with expiry dates, E1) and RF07 (slot with a required certification, E2) are done. **DoR:** passed on YYYY-MM-DD.
 

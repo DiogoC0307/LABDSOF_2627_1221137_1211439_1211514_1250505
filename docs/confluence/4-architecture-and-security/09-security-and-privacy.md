@@ -9,7 +9,7 @@
 | Sources | Assignment §6.4, §6.6, §7.1.2 #9, §11 |
 | Confluence parent | 4 · Architecture and Security |
 | Labels | `sprint-1`, `deliverable-09`, `security`, `privacy` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The initial security and privacy assessment of Escala: which data it holds and why, who may do what, and which threats the design mitigates. The team uses it when designing and reviewing code; the teaching staff read it as Sprint 1 deliverable #9.
@@ -76,7 +76,7 @@
 - [TODO: measure — where implemented / test ID]
 
 > **✏️ Example (illustrative — replace).**
-> - The free text of an unavailability is deleted after confirmation; only the confirmed period is kept (RNF09, [TODO: TC-ESC-xx-01]).
+> - The free text of an unavailability is deleted after confirmation; only the confirmed period is kept (RNF09, [TODO: TC-SCRUM-xx-01]).
 > - Events carry only the state the consumer needs (ADR 0008), e.g. "within age limit" instead of a date of birth.
 > - The explanation of ineligibility is generated from rule codes only, so no personal data reaches the language model on that path.
 > - Logs carry trace IDs and member IDs, never contacts or free text.
@@ -154,8 +154,8 @@
 >
 > | ID | Category | Threat | Component | Impact | Likelihood | Mitigation | Where implemented | Status |
 > |---|---|---|---|---|---|---|---|---|
-> | T-01 | Spoofing | Applying on behalf of someone else | `escala-api` | H | M | The applicant is taken from the authenticated token, never from the request body | `apps/escala-api` · [TODO: TC-ESC-xx-01] | Open |
-> | T-02 | Tampering | Editing a certification's validity to look eligible | `escala-api` | H | M | Only the Commander edits certifications; every change audited with old/new value | `apps/escala-api` · [TODO: TC-ESC-xx-02] | Open |
+> | T-01 | Spoofing | Applying on behalf of someone else | `escala-api` | H | M | The applicant is taken from the authenticated token, never from the request body | `apps/escala-api` · [TODO: TC-SCRUM-xx-01] | Open |
+> | T-02 | Tampering | Editing a certification's validity to look eligible | `escala-api` | H | M | Only the Commander edits certifications; every change audited with old/new value | `apps/escala-api` · [TODO: TC-SCRUM-xx-02] | Open |
 > | T-03 | Tampering | A forged or corrupted IPMA response | `elegibilidade-worker` | H | L | HTTPS only; schema and range validation (RCM 1–5); invalid data rejected and the last valid value kept with its age; when in doubt, assume the higher risk (ADR 0013) | `apps/elegibilidade-worker` · test with `tools/ipma-sim` | Open |
 > | T-04 | Repudiation | "I never confirmed that exceptional assignment" | `escala-api` | M | M | Append-only audit record with author, time, reason and engine version | `apps/escala-api` · [TODO: test ID] | Open |
 > | T-05 | Information disclosure | Reading colleagues' contacts and hours | `escala-api`, `web` | M | M | Access-control matrix enforced server-side; responses carry only the fields the role may see | `apps/escala-api` · [TODO: test ID] | Open |
@@ -190,15 +190,15 @@
 
 > **ℹ️ Guidance.** List the security and privacy risks not yet mitigated, or consciously accepted, each with an owner and a Jira issue labelled `risk` under epic E9 Architecture, security & privacy. An accepted risk states why and until when.
 
-[JIRA: project = ESC AND labels = risk AND statusCategory != Done ORDER BY priority DESC]
+[JIRA: project = SCRUM AND labels = risk AND statusCategory != Done ORDER BY priority DESC]
 
-- [TODO: risk — owner — ESC-xx — mitigate / accept]
+- [TODO: risk — owner — SCRUM-xx — mitigate / accept]
 
 > **✏️ Example (illustrative — replace).**
-> - Authentication is mocked (accepted for the MVP, §6.6 footnote): no real member data until it is replaced. Owner [TODO: name], [TODO: ESC-xx].
-> - The legal bases in the inventory are unconfirmed suggestions: confirm them before any real data is used. [TODO: ESC-xx]
-> - The internal regulation has not been obtained, so minimum rest (RN07) and the risk-based composition (RN10) are unknown. [TODO: ESC-xx]
-> - Model hosting is undecided (ADR 0011, pending the spike), so the privacy impact of sending free text is still open. [TODO: ESC-xx]
+> - Authentication is mocked (accepted for the MVP, §6.6 footnote): no real member data until it is replaced. Owner [TODO: name], [TODO: SCRUM-xx].
+> - The legal bases in the inventory are unconfirmed suggestions: confirm them before any real data is used. [TODO: SCRUM-xx]
+> - The internal regulation has not been obtained, so minimum rest (RN07) and the risk-based composition (RN10) are unknown. [TODO: SCRUM-xx]
+> - Model hosting is undecided (ADR 0011, pending the spike), so the privacy impact of sending free text is still open. [TODO: SCRUM-xx]
 
 ## Done when
 - [ ] The five §7.1.2 #9 items are covered: "Initial threat model", "Sensitive data", "Access-control requirements", "Data-minimization measures", "Retention considerations"

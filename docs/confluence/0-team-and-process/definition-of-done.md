@@ -9,7 +9,7 @@
 | Sources | Deck (Definition of Done; Software engineering process); Assignment §8, §11 |
 | Confluence parent | 0 · Team and Process |
 | Labels | `team-process`, `scrum` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** The two checklists an item must meet before it moves to *Done* in Jira: one for code, one for documentation and research. Every member reads it; the PR reviewer and whoever closes an issue apply it, so each closed issue is evidence that the process in Assignment §8 and §11 was followed.
@@ -41,11 +41,11 @@
 
 > **ℹ️ Guidance.** The first four items are the deck's DoD; the others come from Assignment §8 (pull requests, code reviews, a CI pipeline with static analysis and dependency checks) and §11: "Security controls must not be disabled solely to simplify the demonstration." The PR template on **Git, Pull Request and Jira Rules** repeats this list word for word, so change both together. Record functional tests by their `TC-` IDs as described in **Test Strategy** (`docs/testing/test-strategy.md`).
 
-> **✏️ Example (illustrative — replace).** Closing comment on ESC-31 ("reject assigning someone whose TAS has expired"):
+> **✏️ Example (illustrative — replace).** Closing comment on SCRUM-999 ("reject assigning someone whose TAS has expired"):
 > - Analysis and design: RN02, RF08 and RF21 linked in Jira; no design change needed, stated in the PR
-> - Commit: `feat(eligibility): reject expired TAS certification (ESC-31)`
-> - Unit tests: `TC-ESC-31-01` to `-03` passing in CI run [TODO: link]
-> - Functional test: `TC-ESC-31-02` (TAS expiring on the slot date) run on the deployed environment; result recorded as a Jira comment
+> - Commit: `feat(eligibility): reject expired TAS certification (SCRUM-999)`
+> - Unit tests: `TC-SCRUM-999-01` to `-03` passing in CI run [TODO: link]
+> - Functional test: `TC-SCRUM-999-02` (TAS expiring on the slot date) run on the deployed environment; result recorded as a Jira comment
 > - Acceptance criteria verified; PR [TODO: #] approved by Member B; CI green; no ADR change; no secrets; demo needs no manual steps
 
 ## DoD for documentation and research items
@@ -60,7 +60,7 @@
 
 > **ℹ️ Guidance.** "Required sections" means every H2 of the page's template plus its own "Done when" list; research pages also need participant codes, recorded consent and no invented answers (§11: "Research results must not be fabricated or misrepresented."). Record AI assistance and its human reviewer on **AI Usage and Third-Party Attribution** (§11: "AI-generated content must be reviewed before being treated as authoritative."). The sprint deliverables page is **Sprint 1 · Deliverables**, **Sprint 2 · Deliverables** or **Sprint 3 · Deliverables**.
 
-> **✏️ Example (illustrative — replace).** Closing comment on ESC-xx (**01 · Problem and Opportunity**): all template sections and its "Done when" items met; every pain claim sourced or listed as an assumption; reviewed by Member C; AI-assisted wording recorded on **AI Usage and Third-Party Attribution**; guidance and examples removed; Status Done; linked from **Sprint 1 · Deliverables**.
+> **✏️ Example (illustrative — replace).** Closing comment on SCRUM-xx (**01 · Problem and Opportunity**): all template sections and its "Done when" items met; every pain claim sourced or listed as an assumption; reviewed by Member C; AI-assisted wording recorded on **AI Usage and Third-Party Attribution**; guidance and examples removed; Status Done; linked from **Sprint 1 · Deliverables**.
 
 ## Why two lists
 

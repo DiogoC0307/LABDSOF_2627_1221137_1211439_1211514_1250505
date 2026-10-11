@@ -9,7 +9,7 @@
 | Sources | Assignment §5.3, §7.1.2 #3, §11 |
 | Confluence parent | 03 · User Research |
 | Labels | `sprint-1`, `deliverable-03`, `user-research` |
-| Jira | [TODO: ESC-xx] |
+| Jira | [TODO: SCRUM-xx] |
 | Last updated | YYYY-MM-DD |
 
 > **ℹ️ About this page.** Where research notes and observations about the *piquete* become findings, assumption statuses and product decisions. It holds the *Findings* and *Resulting product decisions* of deliverable #3 (Assignment §7.1.2 #3); **03 · User Research** summarises it, and investors read it to see that research changed the product.
@@ -60,14 +60,14 @@
 
 | Finding | Decision | What changed (page / Jira) | Date |
 |---|---|---|---|
-| [TODO: Fx] | [TODO: decision] | [TODO: page section / requirement ID / ESC-xx] | [TODO: YYYY-MM-DD] |
+| [TODO: Fx] | [TODO: decision] | [TODO: page section / requirement ID / SCRUM-xx] | [TODO: YYYY-MM-DD] |
 
 > **✏️ Example (illustrative — replace). Fictional example to show the format. Never copy into real notes.**
 >
 > | Finding | Decision | What changed (page / Jira) | Date |
 > |---|---|---|---|
-> | F2 | Check eligibility at the moment of assignment and block expired certifications (RN02); moved into the MVP | **Requirements and Quality Attributes** RF08, RF24; **MVP, Success Criteria and Ethical Engagement** In scope; ESC-31 | YYYY-MM-DD |
-> | F3 | Keep free-text unavailability with assisted extraction (RF13) as the primary AI use, with the form as fallback | **06 · Responsible AI Opportunity Assessment** Demonstrated need; ESC-xx | YYYY-MM-DD |
+> | F2 | Check eligibility at the moment of assignment and block expired certifications (RN02); moved into the MVP | **Requirements and Quality Attributes** RF08, RF24; **MVP, Success Criteria and Ethical Engagement** In scope; SCRUM-999 | YYYY-MM-DD |
+> | F3 | Keep free-text unavailability with assisted extraction (RF13) as the primary AI use, with the form as fallback | **06 · Responsible AI Opportunity Assessment** Demonstrated need; SCRUM-xx | YYYY-MM-DD |
 
 ## Open questions
 
