@@ -1,124 +1,457 @@
 @startuml
+' Escala domain model.
+' Packages are bounded contexts; the colour shows the service that owns the data.
+' Associations that cross from escala-api data into elegibilidade-worker data are ID references
+' carried by events, never foreign keys: they are drawn dashed.
+' Technical tables (outbox, processed events) are infrastructure and are not shown here.
+
 skinparam classAttributeIconSize 0
 skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam maxClassWidth 280
+skinparam dpi 100
+scale 0.85
 hide methods
+hide empty members
 
-package "Personnel & Qualifications" {
+title Escala — Domain model
+
+legend bottom left
+  |= Colour |= Owned by |
+  |<#E3F2FD> | escala-api / escala-db |
+  |<#FFF3E0> | elegibilidade-worker / elegibilidade-db |
+  Dashed line: reference by ID through an event, no foreign key.
+endlegend
+
+' =====================================================================
+' escala-api — what the piquete needs
+' =====================================================================
+
+package "Personnel & Qualifications" #E3F2FD {
     class Member {
-        + id: String
+        + id: UUID
         + fullName: String
         + rank: Rank
         + rosterStatus: RosterStatus
-        + dateOfBirth: Date
-        + contactPhone: String
-        + accumulatedStatutoryHours: Integer
+        + accessRole: AccessRole
+        + withinAgeLimit: Boolean
+        + contact: String
+        + active: Boolean
         --
-        RN01, RN08, RN09
+        only ACTIVE_ROSTER can be scheduled
+        age limit stored as yes/no, no date of birth
+        contact shown only to roles that need it
     }
 
     enum RosterStatus {
+        COMMAND_ROSTER
         ACTIVE_ROSTER
+        RESERVE_ROSTER
         HONORARY_ROSTER
-        RESERVES
     }
 
     enum Rank {
-        PROFESSIONAL_FIREFIGHTER
-        CADETE
-        VOLUNTEER_FIREFIGHTER
+        CADET
+        TRAINEE
+        FIREFIGHTER_3RD_CLASS
+        FIREFIGHTER_2ND_CLASS
+        FIREFIGHTER_1ST_CLASS
         SUB_CHIEF
         CHIEF
-        SUPERVISOR
+        OFFICER
+        COMMANDER
+        --
+        career category,
+        does not grant permissions
+    }
+
+    enum AccessRole {
+        FIREFIGHTER
+        DUTY_CHIEF
+        COMMANDER
+    }
+
+    class CertificationType {
+        + code: String
+        + name: String
+        --
+        e.g. TAS, TAT
     }
 
     class Certification {
-        + code: String
-        + name: String
-        + issueDate: Date
-        + expiryDate: Date
+        + id: UUID
+        + issuedOn: Date
+        + expiresOn: Date
         --
-        RN02
+        expired at slot start = does not count
+    }
+
+    class DrivingLicence {
+        + id: UUID
+        + licenceClass: String
+        + expiresOn: Date
+        --
+        must match the vehicle class
+    }
+
+    class ServiceHoursEntry {
+        + id: UUID
+        + date: Date
+        + hours: Decimal
+        + category: HoursCategory
+        --
+        created from confirmed
+        assignments, never self-declared
+    }
+
+    enum HoursCategory {
+        EMERGENCY_STANDBY
+        TRAINING
+        OTHER
     }
 }
 
-package "Availability & Duty Shifts (Piquetes)" {
-    class Unavailability {
-        + id: String
-        + startDateTime: DateTime
-        + endDateTime: DateTime
-        + reason: String
-        + confirmed: Boolean
-        --
-        RN06, RNF09
+package "Roster & Slots" #E3F2FD {
+    class Vehicle {
+        + id: UUID
+        + code: String
+        + type: VehicleType
+        + requiredLicenceClass: String
     }
 
-    class ShiftDuty {
-        + id: String
-        + date: Date
-        + shiftPeriod: ShiftPeriod
-        + assignedRiskLevel: RiskLevel
-        + rosterStatus: RosterStatus
+    class VehicleType {
+        + code: String
+        + name: String
         --
-        RN10, RF06
+        e.g. ambulance, fire engine
     }
 
-    class ShiftSlot {
-        + id: String
+    class CompositionRule {
+        + id: UUID
+        + riskLevel: RiskLevel
+        + role: SlotRole
+        + minimumCount: Integer
+        + version: String
+        --
+        configuration, not code
+    }
+
+    class Piquete {
+        + id: UUID
+        + dutyDate: Date
+        + period: ShiftPeriod
+        + start: Instant
+        + end: Instant
+        --
+        instants in UTC
+    }
+
+    enum ShiftPeriod {
+        DAY
+        NIGHT
+    }
+
+    class Slot {
+        + id: UUID
         + role: SlotRole
         + status: SlotStatus
         --
-        RN04, RF07
+        open when no confirmed assignment
+    }
+
+    enum SlotRole {
+        CREW_CHIEF
+        DRIVER
+        CREW_MEMBER
     }
 
     enum SlotStatus {
         OPEN
+        PROPOSED
         FILLED
-        EMERGENCY_GAP
+    }
+
+    class Assignment {
+        + id: UUID
+        + status: AssignmentStatus
+        + evaluationState: EvaluationState
+        + evaluationId: UUID
+        + result: EligibilityResult
+        + violatedRuleCodes: List<String>
+        + engineVersion: String
+        + exceptionalReason: String
+        + proposedAt: Instant
+        + confirmedAt: Instant
+        --
+        no overlap for the same member
+        never inside a confirmed unavailability
+        confirm only when EVALUATED + ELIGIBLE
+    }
+
+    enum AssignmentStatus {
+        PROPOSED
+        CONFIRMED
+        EXCEPTIONAL
+        CANCELLED
+    }
+
+    enum EvaluationState {
+        PENDING
+        EVALUATED
+        FAILED
+        OUTDATED
+    }
+
+    class DailyRisk {
+        + date: Date
+        + rcm: RiskLevel
+        + fetchedAt: Instant
+        + assumedHigher: Boolean
+        --
+        read model fed by RiscoAtualizado
+        stale = higher level
+    }
+}
+
+package "Unavailability & Coverage" #E3F2FD {
+    class Unavailability {
+        + id: UUID
+        + type: UnavailabilityType
+        + start: Instant
+        + end: Instant
+        + dailyWindowFrom: LocalTime
+        + dailyWindowTo: LocalTime
+        + source: DeclarationSource
+        + readAutomatically: Boolean
+        + confirmed: Boolean
+        --
+        no reason stored (may be health data)
+    }
+
+    class FreeTextMessage {
+        + id: UUID
+        + text: String
+        + referenceDate: Date
+        + receivedAt: Instant
+        --
+        transient; deleted after
+        confirmation or discard
+    }
+
+    enum UnavailabilityType {
+        UNAVAILABLE
+        PARTIAL
+    }
+
+    enum DeclarationSource {
+        FORM
+        FREE_TEXT
     }
 
     class CoverRequest {
-        + id: String
-        + createdAt: DateTime
-        + status: RequestStatus
+        + id: UUID
+        + status: CoverRequestStatus
+        + gapDetectedAt: Instant
+        + filledAt: Instant
     }
 
-    class SlotApplication {
-        + id: String
-        + submittedAt: DateTime
+    enum CoverRequestStatus {
+        OPEN
+        FILLED
+        CANCELLED
+        EXPIRED
+    }
+
+    class Application {
+        + id: UUID
+        + appliedAt: Instant
         + status: ApplicationStatus
+        --
+        never confirmed by the applicant
+    }
+
+    enum ApplicationStatus {
+        SUBMITTED
+        SELECTED
+        NOT_SELECTED
+        WITHDRAWN
+    }
+
+    class Notification {
+        + id: UUID
+        + type: NotificationType
+        + createdAt: Instant
+        + readAt: Instant
+    }
+
+    enum NotificationType {
+        COVER_REQUEST_OPENED
+        ASSIGNMENT_CONFIRMED
+        ASSIGNMENT_CANCELLED
+        COMPOSITION_BELOW_REQUIRED
+        CERTIFICATION_EXPIRING
+    }
+}
+
+package "Audit" #E3F2FD {
+    class AuditRecord {
+        + id: UUID
+        + action: AuditAction
+        + occurredAt: Instant
+        + entityType: String
+        + entityId: UUID
+        + oldValue: JSON
+        + newValue: JSON
+        + engineVersion: String
+        + reason: String
+        --
+        append-only
+    }
+
+    enum AuditAction {
+        ASSIGNMENT_CONFIRMED
+        EXCEPTIONAL_ASSIGNMENT
+        CERTIFICATION_CHANGED
+        UNAVAILABILITY_CONFIRMED
+        ROLE_CHANGED
+    }
+}
+
+' =====================================================================
+' elegibilidade-worker — who can fill it
+' =====================================================================
+
+package "Eligibility" #FFF3E0 {
+    class EligibilityEvaluation {
+        + id: UUID
+        + requestEventId: UUID
+        + assignmentId: UUID
+        + memberId: UUID
+        + result: EligibilityResult
+        + engineVersion: String
+        + evaluatedAt: Instant
+        --
+        deterministic rules, no AI
+        requestEventId unique = idempotency
+    }
+
+    class ViolatedRule {
+        + ruleCode: String
+        + explanation: String
+    }
+
+    enum EligibilityResult {
+        ELIGIBLE
+        INELIGIBLE
+    }
+}
+
+package "AI Extraction" #FFF3E0 {
+    class UnavailabilityExtraction {
+        + id: UUID
+        + requestEventId: UUID
+        + unavailabilityRequestId: UUID
+        + proposedType: ExtractionType
+        + proposedStart: Instant
+        + proposedEnd: Instant
+        + method: ExtractionMethod
+        + latencyMs: Integer
+        + extractedAt: Instant
+        --
+        only a proposal, confirmed by the member
+    }
+
+    enum ExtractionType {
+        UNAVAILABLE
+        PARTIAL
+        NOT_AN_UNAVAILABILITY
+    }
+
+    enum ExtractionMethod {
+        MODEL
+        BASELINE
+        FALLBACK
+    }
+}
+
+package "Fire Risk" #FFF3E0 {
+    class RiskObservation {
+        + id: UUID
+        + dico: String
+        + forecastDate: Date
+        + rcm: RiskLevel
+        + fetchedAt: Instant
+        + source: RiskSource
+        --
+        hourly poll, last valid value cached
+    }
+
+    class WeatherWarning {
+        + id: UUID
+        + areaCode: String
+        + type: String
+        + level: String
+        + start: Instant
+        + end: Instant
     }
 
     enum RiskLevel {
-        LOW
-        MEDIUM
-        HIGH
+        REDUCED = 1
+        MODERATE = 2
+        HIGH = 3
+        VERY_HIGH = 4
+        MAXIMUM = 5
+    }
+
+    enum RiskSource {
+        IPMA
+        SIMULATOR
     }
 }
 
-package "Eligibility Engine" {
-    class EligibilityEvaluation {
-        + id: String
-        + evaluatedAt: DateTime
-        + eligible: Boolean
-        + violatedRuleCodes: List<String>
-        + plainLanguageExplanation: String
-        + engineVersion: String
-        --
-        RF21, RF23, RF24, RNF04
-    }
-}
+' =====================================================================
+' Relationships — escala-api (foreign keys inside escala-db)
+' =====================================================================
 
-' Relationships & Multiplicities
-Member "1" -- "0..*" Certification : holds >
-Member "1" -- "0..*" Unavailability : declares >
-Member "1" -- "0..*" SlotApplication : submits >
-Member "0..1" -- "0..*" ShiftSlot : assigned to >
+Member "1" *-- "0..*" Certification : holds >
+Certification "0..*" --> "1" CertificationType : of type >
+Member "1" *-- "0..*" DrivingLicence : holds >
+Member "1" *-- "0..*" ServiceHoursEntry : accumulates >
+Member "1" *-- "0..*" Unavailability : declares >
+Member "1" -- "0..*" Application : submits >
+Member "1" -- "0..*" Assignment : receives >
+Member "1" -- "0..*" Notification : receives >
+Member "1" -- "0..*" AuditRecord : authors >
 
-ShiftDuty "1" *-- "1..*" ShiftSlot : composed of >
+Vehicle "0..*" --> "1" VehicleType : of type >
+CompositionRule "0..*" --> "1" VehicleType : for >
 
-ShiftSlot "1" -- "0..*" CoverRequest : triggers >
-CoverRequest "1" -- "0..*" SlotApplication : receives >
+Piquete "1" *-- "1..*" Slot : composed of >
+Piquete "0..*" --> "0..1" DailyRisk : planned for risk of >
+Slot "0..*" --> "1" Vehicle : crews >
+Slot "0..*" --> "0..1" CertificationType : requires >
+Slot "1" -- "0..*" Assignment : filled by >
+Slot "1" -- "0..*" CoverRequest : opened for >
 
-SlotApplication "1" -- "1" EligibilityEvaluation : evaluated by >
+CoverRequest "1" -- "0..*" Application : receives >
+Application "0..1" -- "0..1" Assignment : leads to >
+Assignment "0..1" -- "0..*" ServiceHoursEntry : counts as >
+
+Unavailability "1" *-- "0..1" FreeTextMessage : declared through >
+
+' =====================================================================
+' Relationships — elegibilidade-worker (foreign keys inside elegibilidade-db)
+' =====================================================================
+
+EligibilityEvaluation "1" *-- "0..*" ViolatedRule : lists >
+
+' =====================================================================
+' Cross-service references (IDs carried by events, no foreign keys)
+' =====================================================================
+
+Assignment "1" ..> "0..*" EligibilityEvaluation : AvaliacaoPedida / AvaliacaoConcluida >
+FreeTextMessage "1" ..> "0..1" UnavailabilityExtraction : ExtracaoPedida / ExtracaoConcluida >
+RiskObservation "0..*" ..> "0..1" DailyRisk : RiscoAtualizado >
 
 @enduml
+
