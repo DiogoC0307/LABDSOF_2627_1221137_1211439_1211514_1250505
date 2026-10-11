@@ -1,0 +1,82 @@
+@startuml
+' Escala — high-level system architecture.
+' One Angular client, two Java (Spring Boot) services, one PostgreSQL database per service.
+' The services talk asynchronously through RabbitMQ; no service reads another service's database.
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+skinparam linetype polyline
+skinparam nodesep 90
+skinparam ranksep 120
+
+<style>
+arrow {
+  FontSize 11
+}
+</style>
+
+left to right direction
+
+title Escala — High-level system architecture
+
+legend top right
+  |= Colour |= Element |
+  |<#E8F5E9> | Client (Angular) |
+  |<#E3F2FD> | escala-api (Java) |
+  |<#FFF3E0> | elegibilidade-worker (Java) |
+  |<#EEEEEE> | Messaging / external |
+  Solid line: synchronous. Dashed line: asynchronous.
+endlegend
+
+actor "Firefighter" as FF
+actor "Duty chief" as DC
+actor "Commander" as CMD
+
+package "Client" #E8F5E9 {
+    component "web\nAngular PWA" as WEB
+}
+
+package "escala-api" #E3F2FD {
+    component "escala-api\nSpring Boot\nREST API" as API
+    database "escala-db\nPostgreSQL" as ADB
+}
+
+package "Messaging" #EEEEEE {
+    queue "RabbitMQ" as MQ
+}
+
+package "elegibilidade-worker" #FFF3E0 {
+    component "elegibilidade-worker\nSpring Boot" as WK
+    database "elegibilidade-db\nPostgreSQL" as WDB
+}
+
+package "External systems" #EEEEEE {
+    component "IPMA\nfire risk data" as IPMA
+    component "Language model" as LLM
+}
+
+' Users
+FF --> WEB
+DC --> WEB
+CMD --> WEB
+
+' Client -> escala-api
+WEB --> API : REST/JSON\n(HTTPS)
+
+' Each service owns its database
+API --> ADB : SQL
+WK --> WDB : SQL
+
+' Asynchronous messaging: one line per service, both directions
+API <..> MQ : requests out\nresults in
+MQ <..> WK : requests in\nresults out
+
+' External systems
+WK --> IPMA : HTTPS
+WK --> LLM : HTTPS
+
+@enduml
+
+
+
+
