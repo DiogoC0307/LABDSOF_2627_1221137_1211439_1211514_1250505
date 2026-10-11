@@ -28,7 +28,7 @@ We will implement `apps/elegibilidade-worker` in Java with Spring Boot, the same
 - **Negative:**
   - The non-AI baseline planned for the AI evaluation, `dateparser` + rules, is a Python library and has to be replaced by a baseline in Java [TODO: decision pending].
   - The client for the language model becomes a Java library [TODO: which].
-  - The Confluence pages that still describe the worker as Python or name `dateparser` have to be updated by their owners: **Requirements and Quality Attributes**, **07 · Technical Design**, **06 · Responsible AI Opportunity Assessment**, **Sprint 2 · Deliverables** and **Sprint 3 · Deliverables**.
+  - The Confluence pages that described the worker as Python or named `dateparser` were updated on 2026-10-11 and now carry the same pending-decision marker for the baseline: **Requirements and Quality Attributes**, **07 · Technical Design**, **06 · Responsible AI Opportunity Assessment**, **Sprint 2 · Deliverables** and **Sprint 3 · Deliverables**.
 - **Trade-offs:** [TODO: what we give up, and why that is acceptable]
 
 ## Assignment requirement served
@@ -40,4 +40,4 @@ We will implement `apps/elegibilidade-worker` in Java with Spring Boot, the same
 - Jira: SCRUM-54
 - Requirements: [TODO: RF / RNF IDs]
 - Supersedes: — (no earlier ADR recorded the worker's language)
-- Other ADRs or pages: 0002 (planned, not yet written); **Git, Pull Request and Jira Rules** (repository layout, updated for this decision); **08 · Architecture Decision Records** (index to update with this ADR)
+- Other ADRs or pages: 0002 (planned, not yet written); **Git, Pull Request and Jira Rules** (repository layout, updated for this decision); **08 · Architecture Decision Records** (index, lists this ADR)
