@@ -46,7 +46,7 @@ The two backend services are deployed independently. The full design is in [docs
 
 ## Repository layout
 
-One monorepo, one folder per deployable component. A folder is created by the first pull request that needs it; today only `docs/` and `.github/` exist.
+One monorepo, one folder per deployable component. The top-level folders exist from the start; `apps/`, `contracts/`, `tools/` and `infra/` are still empty, and each sub-folder marked *(planned)* is created by the first pull request that needs it.
 
 ```
 .
@@ -54,10 +54,10 @@ One monorepo, one folder per deployable component. A folder is created by the fi
 │   ├── escala-api/             Spring Boot (Java)                          (planned)
 │   ├── elegibilidade-worker/   Spring Boot (Java)                          (planned)
 │   └── web/                    Angular PWA                                 (planned)
-├── contracts/                  openapi.yaml and events/                    (planned)
+├── contracts/                  openapi.yaml and events/                    (empty)
 ├── tools/
 │   └── ipma-sim/               IPMA simulator container                    (planned)
-├── infra/                      Docker Compose, Prometheus, Grafana         (planned)
+├── infra/                      Docker Compose, Prometheus, Grafana         (empty)
 ├── docs/                       ADRs, technical design, test strategy, operations, reports
 ├── .github/                    CODEOWNERS, pull request template, workflows
 └── README.md
