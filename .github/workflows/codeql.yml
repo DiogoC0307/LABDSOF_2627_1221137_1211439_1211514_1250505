@@ -1,0 +1,71 @@
+name: CodeQL
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  languages:
+    name: CodeQL Languages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+    steps:
+      - name: Detect CodeQL languages from repository languages
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          langs=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                    "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/languages" | jq -r 'keys[]')
+          out='"actions"'
+          add() { case ",$out," in ",\"$1\",") ;; *) out="$out,\"$1\"";; esac; }
+          for l in $langs; do
+            case "$l" in
+              Java|Kotlin)            add java-kotlin ;;
+              JavaScript|TypeScript)  add javascript-typescript ;;
+              C#)                     add csharp ;;
+              Python)                 add python ;;
+              Ruby)                   add ruby ;;
+            esac
+          done
+          echo "matrix=[$out]" | tee -a "$GITHUB_OUTPUT"
+
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    needs: languages
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.languages.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@1c5b675653bb5c22dbe9b12b556ec555138e09fd
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          queries: security-extended,security-and-quality
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@1c5b675653bb5c22dbe9b12b556ec555138e09fd
+        with:
+          category: /language:${{ matrix.language }}
