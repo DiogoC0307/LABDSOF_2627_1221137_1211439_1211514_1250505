@@ -20,7 +20,7 @@
 
 [TODO: one paragraph]
 
-> **✏️ Example (illustrative — replace).** Escala tells a volunteer fire corps whether the people on today's *piquete* can actually crew the vehicles, given today's fire risk. It is an Angular PWA backed by two independently deployable components (ADR 0002). `escala-api` (Spring Boot) owns what the piquete needs: people, rosters, slots, unavailability, requests and audit. `elegibilidade-worker` (Python) works out who can fill it: it runs the deterministic eligibility rules (ADR 0007), polls IPMA fire risk hourly (ADR 0010) and runs the AI extraction, but the AI never decides eligibility. The two exchange events through RabbitMQ with a transactional outbox, idempotency keys, retries and a dead-letter queue (ADR 0005, ADR 0009), and each owns its own PostgreSQL database (ADR 0003). Everything runs in Docker Compose, is built and deployed by GitHub Actions, and is observed with Prometheus and Grafana. Escala is about readiness, never dispatch.
+> **✏️ Example (illustrative — replace).** Escala tells a volunteer fire corps whether the people on today's *piquete* can actually crew the vehicles, given today's fire risk. It is an Angular PWA backed by two independently deployable components (ADR 0002). `escala-api` (Spring Boot) owns what the piquete needs: people, rosters, slots, unavailability, requests and audit. `elegibilidade-worker` (Spring Boot, Java) works out who can fill it: it runs the deterministic eligibility rules (ADR 0007), polls IPMA fire risk hourly (ADR 0010) and runs the AI extraction, but the AI never decides eligibility. The two exchange events through RabbitMQ with a transactional outbox, idempotency keys, retries and a dead-letter queue (ADR 0005, ADR 0009), and each owns its own PostgreSQL database (ADR 0003). Everything runs in Docker Compose, is built and deployed by GitHub Actions, and is observed with Prometheus and Grafana. Escala is about readiness, never dispatch.
 
 ## System context
 
@@ -60,7 +60,7 @@ flowchart LR
     api["escala-api: Spring Boot"]
     apidb[("escala-db: PostgreSQL")]
     mq{{"RabbitMQ"}}
-    worker["elegibilidade-worker: Python"]
+    worker["elegibilidade-worker: Spring Boot (Java)"]
     wdb[("elegibilidade-db: PostgreSQL")]
     sim["ipma-sim: IPMA simulator"]
   end
@@ -92,7 +92,7 @@ flowchart LR
 > | Component | Responsibility | Owns data | Talks to | Sync / async |
 > |---|---|---|---|---|
 > | `escala-api` (Spring Boot) | What the piquete needs: people, rosters, slots, unavailability, requests, audit; required composition for the day's risk (RF27, RF28) | `escala-db` | `web`; RabbitMQ | Sync REST with `web`; async events with the worker |
-> | `elegibilidade-worker` (Python) | Who can fill it: eligibility evaluations (versioned engine, RF23), AI extraction with `dateparser` + rules baseline, explanations from rule codes only, observed risk | `elegibilidade-db` | RabbitMQ; IPMA; language model | Async events; sync HTTP to IPMA and the model |
+> | `elegibilidade-worker` (Spring Boot, Java) | Who can fill it: eligibility evaluations (versioned engine, RF23), AI extraction with its non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], explanations from rule codes only, observed risk | `elegibilidade-db` | RabbitMQ; IPMA; language model | Async events; sync HTTP to IPMA and the model |
 > | `web` (Angular PWA) | Screens for firefighters, duty chiefs and commanders; roster readable offline (RNF06) | None (browser cache only) | `escala-api` | Sync REST |
 > | `ipma-sim` | Imitates the IPMA endpoints and their failures for tests and the `evaluation` profile | None | `elegibilidade-worker` | Sync HTTP |
 

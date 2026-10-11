@@ -57,3 +57,4 @@ One row per ADR, newest last. Link each file, e.g. `[0005](0005-use-rabbitmq-as-
 
 | ADR | Title | Status | Date | Supersedes / superseded by |
 |---|---|---|---|---|
+| [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Proposed | 2026-10-11 | — |

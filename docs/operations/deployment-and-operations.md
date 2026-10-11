@@ -25,13 +25,13 @@
 
 ## Prerequisites
 
-> **ℹ️ Guidance.** List only what a clean machine needs, with minimum versions. Aim for the evaluation environment to need nothing but Docker and Git: build every image with a multi-stage Dockerfile so no JDK, Python or Node.js is needed on the host (§8.4 "Reproducible builds") [TODO: confirm].
+> **ℹ️ Guidance.** List only what a clean machine needs, with minimum versions. Aim for the evaluation environment to need nothing but Docker and Git: build every image with a multi-stage Dockerfile so no JDK or Node.js is needed on the host (§8.4 "Reproducible builds") [TODO: confirm].
 
 - Docker [TODO: minimum version] with Docker Compose v2 [TODO: minimum version]
 - Git
 - Free ports: [TODO: list, e.g. web, `escala-api`, RabbitMQ management, Grafana]
 - Memory and disk for the whole stack: [TODO: measured, e.g. after `docker stats`]
-- Development only: JDK [TODO: version] (`escala-api`), Python [TODO: version] (`elegibilidade-worker`), Node.js [TODO: version] (`apps/web`)
+- Development only: JDK [TODO: Java version] (`escala-api`, `elegibilidade-worker`), Node.js [TODO: version] (`apps/web`)
 
 ## Run locally
 
@@ -113,7 +113,7 @@ flowchart LR
 
 | Stage | What it does | Tool | Report |
 |---|---|---|---|
-| build | Compiles and packages `escala-api`, `elegibilidade-worker` and `apps/web` | [TODO: e.g. Maven / Gradle, pip, npm] | Build log |
+| build | Compiles and packages `escala-api`, `elegibilidade-worker` and `apps/web` | [TODO: e.g. Maven / Gradle, npm] | Build log |
 | tests | Unit, integration and contract tests ([Test Strategy](../testing/test-strategy.md)) | [TODO: tools] | Test and coverage reports [TODO: link] |
 | static analysis | Static analysis and secret scanning (RNF07) | [TODO: tools] | [TODO: link] |
 | dependency check | Known vulnerabilities in dependencies and base images | [TODO: tool] | [TODO: link] |

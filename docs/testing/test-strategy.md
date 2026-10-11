@@ -43,14 +43,14 @@ flowchart LR
 
 | Type | What it covers | Tool | CI stage | Owner |
 |---|---|---|---|---|
-| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | e.g. JUnit 5 (`escala-api`), pytest (`elegibilidade-worker`), [TODO: tool] (`apps/web`) | tests | [TODO: name] |
+| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | e.g. JUnit 5 (`escala-api`, `elegibilidade-worker`), [TODO: tool] (`apps/web`) | tests | [TODO: name] |
 | Integration | Each service with its real PostgreSQL and RabbitMQ: transactional outbox, idempotency key, retries 5 s / 30 s / 2 min then DLQ, free text deleted after confirmation (RNF09) | e.g. Testcontainers | tests | [TODO: name] |
 | Contract | API ↔ worker event schemas (`AvaliacaoPedida`, `AvaliacaoConcluida`, `ExtracaoPedida`, `ExtracaoConcluida`, `RiscoAtualizado`) against `contracts/events/`; REST endpoints against `contracts/openapi.yaml` | [TODO: schema validator used in both test suites] | tests | [TODO: name] |
 | End-to-end | Principal journey J1 on the Docker Compose stack: declared unavailability → gap → eligible candidates → confirmation; confirmation blocked without a valid evaluation (RF24) | [TODO: browser test tool] | image (runs against the built images) [TODO: confirm] | [TODO: name] |
 | Security | Static analysis; dependency check; secret scanning (RNF07); role checks on every endpoint, e.g. nobody confirms their own application | [TODO: static analysis tool]; [TODO: dependency checker]; [TODO: secret scanner] | static analysis; dependency check | [TODO: name] |
 | Performance | Eligibility evaluation p95 < 5 s (RNF01); unavailability accepted with 202 in < 500 ms (RNF02) | [TODO: load-test tool] | [TODO: scheduled, or manual before the Sprint 3 review] | [TODO: name] |
 | Resilience | IPMA simulator modes (unavailable, delayed, incomplete, invalid); worker stopped → evaluations "pending", confirmation blocked; AI off → form fallback | IPMA simulator (`tools/ipma-sim`), Docker Compose | [TODO: stage, e.g. nightly] | [TODO: name] |
-| AI evaluation | Extraction on the 60-case synthetic dataset, compared with the `dateparser` + rules baseline, against the acceptance criteria on **06 · Responsible AI Opportunity Assessment** (start/end exact ≥ 95%, type ≥ 90%, adverse handled 100%, p95 latency < 4 s) | Dataset runner [TODO: path] | [TODO: when the prompt, model or dataset changes] | [TODO: name] |
+| AI evaluation | Extraction on the 60-case synthetic dataset, compared with the non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], against the acceptance criteria on **06 · Responsible AI Opportunity Assessment** (start/end exact ≥ 95%, type ≥ 90%, adverse handled 100%, p95 latency < 4 s) | Dataset runner [TODO: path] | [TODO: when the prompt, model or dataset changes] | [TODO: name] |
 
 ## Test case convention
 
