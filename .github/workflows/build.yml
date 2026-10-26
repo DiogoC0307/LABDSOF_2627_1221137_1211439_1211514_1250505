@@ -1,0 +1,111 @@
+name: Build
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: ${{ matrix.service }} (build, test, sonarqube)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [escala-api, elegibilidade-worker]
+    defaults:
+      run:
+        working-directory: apps/${{ matrix.service }}
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history for SonarQube blame information
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: apps/${{ matrix.service }}/pom.xml
+
+      - name: Build
+        run: chmod +x ./mvnw && ./mvnw -B -ntp package
+
+      - name: Test (with JaCoCo coverage)
+        run: ./mvnw -B -ntp verify
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.service }}-reports
+          path: |
+            apps/${{ matrix.service }}/target/surefire-reports/
+            apps/${{ matrix.service }}/target/site/jacoco/
+          if-no-files-found: ignore
+
+      - name: SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        run: >
+          ./mvnw -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Dsonar.host.url="$SONAR_HOST_URL"
+          -Dsonar.token="$SONAR_TOKEN"
+          -Dsonar.projectKey=DiogoC0307_LABDSOF_2627_1221137_1211439_1211514_1250505
+
+  web:
+    name: web (build, test, sonarqube)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test (with coverage)
+        run: npm run test:ci
+
+      - name: Upload test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-reports
+          path: apps/web/coverage/
+          if-no-files-found: ignore
+
+      - name: SonarQube analysis
+        if: env.SONAR_TOKEN != ''
+        uses: SonarSource/sonarqube-scan-action@v8
+        with:
+          projectBaseDir: apps/web
+          args: >
+            -Dsonar.projectKey=DiogoC0307_LABDSOF_2627_1221137_1211439_1211514_1250505
+            -Dsonar.organization=diogoc0307

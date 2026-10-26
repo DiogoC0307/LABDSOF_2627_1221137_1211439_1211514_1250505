@@ -30,30 +30,30 @@ The user journeys, personas and the rest of the product documentation are in the
 
 ## Architecture
 
-This is the planned architecture; none of it is built yet.
+This is the planned architecture; only the empty skeletons of the components exist so far.
 
 ![Escala high-level system architecture](docs/architecture/high_level_system_architecture.png)
 
-| Component | Technology | Responsibility |
-|---|---|---|
-| `apps/web` | Angular PWA | The client, on members' phones and on the station computers |
-| `apps/escala-api` | Spring Boot (Java) | People, rosters, slots, unavailability, requests and audit |
-| `apps/elegibilidade-worker` | Spring Boot (Java) | Evaluations, extractions and observed risk; talks to IPMA and the language model |
-| RabbitMQ | Message broker | Asynchronous events between the two services |
-| PostgreSQL | One database per service | No service reads another service's database |
+| Component                   | Technology               | Responsibility                                                                   |
+|-----------------------------|--------------------------|----------------------------------------------------------------------------------|
+| `apps/web`                  | Angular PWA              | The client, on members' phones and on the station computers                      |
+| `apps/escala-api`           | Spring Boot (Java)       | People, rosters, slots, unavailability, requests and audit                       |
+| `apps/elegibilidade-worker` | Spring Boot (Java)       | Evaluations, extractions and observed risk; talks to IPMA and the language model |
+| RabbitMQ                    | Message broker           | Asynchronous events between the two services                                     |
+| PostgreSQL                  | One database per service | No service reads another service's database                                      |
 
 The two backend services are deployed independently. The full design is in [docs/architecture/technical-design.md](docs/architecture/technical-design.md) and the decisions behind it are in [docs/adr/](docs/adr/README.md).
 
 ## Repository layout
 
-One monorepo, one folder per deployable component. The top-level folders exist from the start; `apps/`, `contracts/`, `tools/` and `infra/` are still empty, and each sub-folder marked *(planned)* is created by the first pull request that needs it.
+One monorepo, one folder per deployable component. The top-level folders exist from the start; `contracts/`, `tools/` and `infra/` are still empty, and each sub-folder marked *(planned)* is created by the first pull request that needs it.
 
 ```
 .
 ├── apps/
-│   ├── escala-api/             Spring Boot (Java)                          (planned)
-│   ├── elegibilidade-worker/   Spring Boot (Java)                          (planned)
-│   └── web/                    Angular PWA                                 (planned)
+│   ├── escala-api/             Spring Boot 4 (Java 21, Maven), port 8080   (skeleton)
+│   ├── elegibilidade-worker/   Spring Boot 4 (Java 21, Maven), port 8081   (skeleton)
+│   └── web/                    Angular 21 PWA, port 4200                   (skeleton)
 ├── contracts/                  openapi.yaml and events/                    (empty)
 ├── tools/
 │   └── ipma-sim/               IPMA simulator container                    (planned)
@@ -79,22 +79,34 @@ Planned prerequisites: Git and Docker with Docker Compose v2. Environments, conf
 
 ## How to build and test
 
-[TODO: build and test commands, once the first component exists]
+Prerequisites for development: JDK 21 and Node.js 22.12+ or 24+.
 
-The continuous integration pipeline does not exist yet (SCRUM-20); its planned stages are in [.github/workflows/README.md](.github/workflows/README.md). Test types, tools and the test-case convention are in [docs/testing/test-strategy.md](docs/testing/test-strategy.md).
+```bash
+# Backend services (run in apps/escala-api or apps/elegibilidade-worker)
+./mvnw verify            # build, tests and JaCoCo coverage report (target/site/jacoco)
+./mvnw spring-boot:run   # escala-api on :8080, elegibilidade-worker on :8081 (health: /actuator/health)
+
+# Frontend (run in apps/web)
+npm ci
+npm run build            # production build in dist/web
+npm run test:ci          # unit tests (Vitest) with coverage in coverage/web
+npm start                # dev server on :4200
+```
+
+The continuous integration pipeline is [.github/workflows/ci.yml](.github/workflows/build.yml): it builds, tests and analyses the three components with SonarQube on every pull request and push to `main`. Its stages are described in [.github/workflows/README.md](.github/workflows/README.md). Test types, tools and the test-case convention are in [docs/testing/test-strategy.md](docs/testing/test-strategy.md).
 
 ## Documentation
 
-| Where | What |
-|---|---|
-| [docs/README.md](docs/README.md) | How the documentation is organised |
-| [docs/architecture/](docs/architecture/) | Technical design, domain model and architecture diagrams (PlantUML sources and images) |
-| [docs/adr/](docs/adr/README.md) | Architecture decision records and their index |
-| [docs/testing/test-strategy.md](docs/testing/test-strategy.md) | Test strategy |
-| [docs/operations/deployment-and-operations.md](docs/operations/deployment-and-operations.md) | Deployment and operations |
-| [docs/reports/](docs/reports/) | Sprint reports |
-| [Confluence space](https://isep-team-apn94608.atlassian.net/wiki/spaces/L) (team access) | Problem, research, vision, personas, user journeys, requirements, backlog and sprint pages |
-| [Jira project `SCRUM`](https://isep-team-apn94608.atlassian.net/jira/software/projects/SCRUM) (team access) | Backlog, sprints, decisions and feedback |
+| Where                                                                                                       | What                                                                                       |
+|-------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| [docs/README.md](docs/README.md)                                                                            | How the documentation is organised                                                         |
+| [docs/architecture/](docs/architecture/)                                                                    | Technical design, domain model and architecture diagrams (PlantUML sources and images)     |
+| [docs/adr/](docs/adr/README.md)                                                                             | Architecture decision records and their index                                              |
+| [docs/testing/test-strategy.md](docs/testing/test-strategy.md)                                              | Test strategy                                                                              |
+| [docs/operations/deployment-and-operations.md](docs/operations/deployment-and-operations.md)                | Deployment and operations                                                                  |
+| [docs/reports/](docs/reports/)                                                                              | Sprint reports                                                                             |
+| [Confluence space](https://isep-team-apn94608.atlassian.net/wiki/spaces/L) (team access)                    | Problem, research, vision, personas, user journeys, requirements, backlog and sprint pages |
+| [Jira project `SCRUM`](https://isep-team-apn94608.atlassian.net/jira/software/projects/SCRUM) (team access) | Backlog, sprints, decisions and feedback                                                   |
 
 ## How we work
 
@@ -107,12 +119,12 @@ The complete rules are on the Confluence page *Git, Pull Request and Jira Rules*
 
 ## Team
 
-| Name | Student no. | GitHub | Role |
-|---|---|---|---|
-| Diogo Pereira | 1221137 | [@DiogoPereira-1221137](https://github.com/DiogoPereira-1221137) | Product Owner, Developer |
-| Diogo Sousa | 1250505 | [@diogojms2](https://github.com/diogojms2) | Scrum Master, Developer |
-| Pedro Costa | 1211439 | [@PPedroC](https://github.com/PPedroC) | Developer |
-| Diogo Costa | 1211514 | [@DiogoC0307](https://github.com/DiogoC0307) | Developer |
+| Name          | Student no. | GitHub                                                           | Role                     |
+|---------------|-------------|------------------------------------------------------------------|--------------------------|
+| Diogo Pereira | 1221137     | [@DiogoPereira-1221137](https://github.com/DiogoPereira-1221137) | Product Owner, Developer |
+| Diogo Sousa   | 1250505     | [@diogojms2](https://github.com/diogojms2)                       | Scrum Master, Developer  |
+| Pedro Costa   | 1211439     | [@PPedroC](https://github.com/PPedroC)                           | Developer                |
+| Diogo Costa   | 1211514     | [@DiogoC0307](https://github.com/DiogoC0307)                     | Developer                |
 
 ## AI usage and third-party material
 
