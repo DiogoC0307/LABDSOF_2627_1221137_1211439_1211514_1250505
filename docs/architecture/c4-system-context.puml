@@ -1,0 +1,27 @@
+@startuml
+title Escala — System context (C4 level 1)
+
+skinparam componentStyle rectangle
+left to right direction
+
+actor "Member" as MEM
+actor "Supervisor / duty chief" as SUP
+actor "Commander" as CMD
+
+rectangle "Escala\npublished roster, unavailability, swaps and cover" as ESCALA #E3F2FD
+
+rectangle "IPMA open data\nRCM and warnings (information only)" as IPMA #EEEEEE
+rectangle "Language model\nunavailability extraction (feature-flagged)" as LLM #EEEEEE
+
+rectangle "Out of scope" #FFCDD2 {
+  rectangle "Dispatch, call-out and incident systems\nnever connected" as DIS
+}
+
+MEM --> ESCALA : own roster, unavailability, swap,\nconfirm presence, accept cover
+SUP --> ESCALA : builds and publishes schedule;\ninformed of changes (approval: D-01)
+CMD --> ESCALA : members and certifications
+ESCALA --> IPMA : polls hourly over HTTPS
+ESCALA --> LLM : extraction requests when AI_ENABLED
+ESCALA -[hidden]-> DIS
+
+@enduml

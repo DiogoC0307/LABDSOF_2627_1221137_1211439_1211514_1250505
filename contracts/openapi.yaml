@@ -1,0 +1,248 @@
+openapi: 3.0.3
+info:
+  title: Escala API
+  version: 0.1.0
+  description: >
+    REST contract for escala-api (published roster, unavailability, swaps, cover).
+    Authentication is a mocked bearer token carrying memberId and role (ADR 0006).
+servers:
+  - url: http://localhost:8080
+    description: Local Docker Compose
+tags:
+  - name: health
+  - name: me
+  - name: piquetes
+  - name: assignments
+  - name: unavailabilities
+  - name: swaps
+  - name: presence
+  - name: cover
+  - name: risk
+paths:
+  /me/roster:
+    get:
+      tags: [me]
+      summary: The caller's published shifts
+      operationId: getMyRoster
+      responses:
+        "200":
+          description: Own roster
+        "401":
+          description: Missing or invalid token
+  /health:
+    get:
+      tags: [health]
+      summary: Liveness
+      operationId: getHealth
+      security: []
+      responses:
+        "200":
+          description: Process is up
+  /health/ready:
+    get:
+      tags: [health]
+      summary: Readiness (database and broker reachable)
+      operationId: getHealthReady
+      security: []
+      responses:
+        "200":
+          description: Ready to receive traffic
+        "503":
+          description: Dependency not ready
+  /piquetes:
+    post:
+      tags: [piquetes]
+      summary: Supervisor creates a piquete with its slots
+      operationId: createPiquete
+      responses:
+        "201":
+          description: Created
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /piquetes/{id}/publish:
+    post:
+      tags: [piquetes]
+      summary: Publish the schedule and notify members of their shifts
+      operationId: publishPiquete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Published
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /assignments:
+    post:
+      tags: [assignments]
+      summary: Propose a member for a slot; 202 and AvaliacaoPedida (purpose ASSIGNMENT)
+      operationId: proposeAssignment
+      responses:
+        "202":
+          description: Accepted, evaluation pending
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /slots/{id}/candidates:
+    get:
+      tags: [assignments]
+      summary: Eligible and ineligible candidates with rule codes
+      operationId: listSlotCandidates
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Candidate list
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /assignments/{id}/confirm:
+    post:
+      tags: [assignments]
+      summary: Confirm an assignment; refused while no valid eligible evaluation exists
+      operationId: confirmAssignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Confirmed
+        "409":
+          description: Confirmation blocked (pending, failed, ineligible, or outdated)
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /unavailabilities:
+    post:
+      tags: [unavailabilities]
+      summary: Declare unavailability by form or free text; 202 without waiting for extraction
+      operationId: createUnavailability
+      responses:
+        "202":
+          description: Accepted
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /swaps:
+    post:
+      tags: [swaps]
+      summary: Request a swap with a named colleague
+      operationId: requestSwap
+      responses:
+        "201":
+          description: Created
+        "401":
+          description: Missing or invalid token
+  /swaps/{id}/accept:
+    post:
+      tags: [swaps]
+      summary: Counterpart accepts; 202 and AvaliacaoPedida (purpose SWAP)
+      operationId: acceptSwap
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Accepted, check pending
+        "409":
+          description: Check failed or approval required
+        "401":
+          description: Missing or invalid token
+  /swaps/{id}/approve:
+    post:
+      tags: [swaps]
+      summary: Supervisor approval when the corps requires it (D-01 / RN11)
+      operationId: approveSwap
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Approved
+        "401":
+          description: Missing or invalid token
+        "403":
+          description: Role not allowed
+  /slots/{id}/presence:
+    post:
+      tags: [presence]
+      summary: Confirm coming or cannot, 24 h before the shift
+      operationId: confirmPresence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Recorded; cannot opens a cover request
+        "401":
+          description: Missing or invalid token
+  /cover-requests/{id}/accept:
+    post:
+      tags: [cover]
+      summary: First free and qualified accept; 202 and AvaliacaoPedida (purpose COVER)
+      operationId: acceptCover
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "202":
+          description: Accepted, check pending
+        "409":
+          description: Slot already filled or check ineligible
+        "401":
+          description: Missing or invalid token
+  /risk/today:
+    get:
+      tags: [risk]
+      summary: Observed RCM for today, age, and assumed-higher display warning
+      operationId: getTodayRisk
+      responses:
+        "200":
+          description: Risk read model
+        "401":
+          description: Missing or invalid token
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Mocked token with memberId and role (ADR 0006)
+security:
+  - bearerAuth: []

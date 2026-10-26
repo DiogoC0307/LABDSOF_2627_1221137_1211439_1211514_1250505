@@ -1,0 +1,40 @@
+@startuml
+title Escala — Deployment view
+
+skinparam componentStyle rectangle
+
+rectangle "GitHub Actions" as CI {
+  rectangle "PR: build, test, secret scan" as PR
+  rectangle "main: build images, deploy" as MAIN
+}
+
+rectangle "Image registry\n(planned: GitHub Container Registry)" as REG
+
+node "Docker Compose host\n(developer laptop / evaluation machine)" as HOST {
+  component "web" as WEB
+  component "escala-api" as API
+  component "elegibilidade-worker" as WK
+  database "escala-db" as ADB
+  database "elegibilidade-db" as WDB
+  queue "RabbitMQ" as MQ
+  component "ipma-sim" as SIM
+  component "Prometheus" as PROM
+  component "Grafana" as GRAF
+}
+
+rectangle "IPMA open data" as IPMA
+
+PR --> MAIN
+MAIN --> REG : push images tagged SHA
+REG --> HOST : pull on deploy
+API --> ADB
+WK --> WDB
+API <--> MQ
+WK <--> MQ
+PROM --> API : scrape metrics
+PROM --> WK
+GRAF --> PROM
+WK --> IPMA : default profile
+WK ..> SIM : evaluation profile
+
+@enduml

@@ -1,0 +1,1355 @@
+Index: docs/architecture/technical-design.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Technical Design\r\n\r\n| Field | Value |\r\n|---|---|\r\n| Status | Draft |\r\n| Owner | [TODO: name] |\r\n| Contributors | [TODO: names] |\r\n| Deliverable | Sprint 1 · #7 Technical Design (full version); Final submission · #4 Architecture documentation |\r\n| Sources | Assignment §6, §6.1–§6.8, §7.1.2 #7, §9, §12 |\r\n| Confluence page | **07 · Technical Design** |\r\n| Last updated | YYYY-MM-DD |\r\n\r\n> **ℹ\uFE0F About this document.** The full technical design of Escala, the readiness-support app for a *Corpo de Bombeiros Voluntários* (volunteer fire corps): C4 views, data ownership, data model, API and event contracts, the eligibility flow, the IPMA integration, degraded modes, deployment and observability, with every diagram kept as code next to the code. The Confluence page **07 · Technical Design** summarises it and exports its diagrams; when the two disagree, update this document first. Developers read it before changing a boundary, a contract or a queue. ADR numbers refer to the [ADR index](../adr/README.md).\r\n\r\n> **ℹ\uFE0F Guidance.** §9: \"Teams should prefer documentation generated from or maintained close to the source code where appropriate.\" Change this file in the same pull request as the code it describes, and replace each `[TODO: …]` with the decision or with the Jira issue or *Proposed* ADR that will settle it. §6: \"All significant technical decisions must be justified.\" Point every choice to its ADR rather than arguing it here.\r\n\r\n## Summary\r\n\r\n> **ℹ\uFE0F Guidance.** One paragraph: the client, the backend components, how they communicate, where data lives, the external integration, and how the system is deployed and observed. Keep it consistent with the Summary on **07 · Technical Design**; this version may add detail and ADR numbers.\r\n\r\n[TODO: one paragraph]\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Escala tells a volunteer fire corps whether the people on today's *piquete* can actually crew the vehicles, given today's fire risk. It is an Angular PWA backed by two independently deployable components (ADR 0002). `escala-api` (Spring Boot) owns what the piquete needs: people, rosters, slots, unavailability, requests and audit. `elegibilidade-worker` (Spring Boot, Java) works out who can fill it: it runs the deterministic eligibility rules (ADR 0007), polls IPMA fire risk hourly (ADR 0010) and runs the AI extraction, but the AI never decides eligibility. The two exchange events through RabbitMQ with a transactional outbox, idempotency keys, retries and a dead-letter queue (ADR 0005, ADR 0009), and each owns its own PostgreSQL database (ADR 0003). Everything runs in Docker Compose, is built and deployed by GitHub Actions, and is observed with Prometheus and Grafana. Escala is about readiness, never dispatch.\r\n\r\n## System context\r\n\r\n> **ℹ\uFE0F Guidance.** C4 level 1: Escala as one box, the people who use it and the external systems it depends on. Keep the boundary visible: no dispatch or incident system is connected. Export the rendered diagram to **07 · Technical Design** whenever it changes.\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft from the proposed ADRs; edit it until it matches the product.\r\n\r\n```mermaid\r\nflowchart LR\r\n  ff[\"Firefighter\"]\r\n  dc[\"Duty chief\"]\r\n  cmd[\"Commander\"]\r\n  escala[\"Escala: readiness support for one volunteer fire corps\"]\r\n  ipma[\"IPMA open data: RCM fire risk and weather warnings\"]\r\n  llm[\"Language model: [TODO: local or hosted, ADR 0011]\"]\r\n  subgraph out[\"Out of scope: readiness, never dispatch\"]\r\n    dispatch[\"Dispatch and incident systems: never connected\"]\r\n  end\r\n  ff -->|\"sees own roster, declares unavailability, applies to slots\"| escala\r\n  dc -->|\"composes the piquete, confirms assignments\"| escala\r\n  cmd -->|\"manages members and certifications\"| escala\r\n  escala -->|\"polls hourly over HTTPS\"| ipma\r\n  escala -->|\"extraction and explanation requests\"| llm\r\n```\r\n\r\n## Containers\r\n\r\n> **ℹ\uFE0F Guidance.** C4 level 2: one box per deployable unit and one per data store, every arrow labelled with its protocol and whether it is sync or async. §6.2 requires \"at least two independently deployable backend components\"; ADR 0002 justifies them. No arrow may cross from one component into the other component's database.\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft; `ipma-sim` replaces IPMA in tests and in the `evaluation` profile.\r\n\r\n```mermaid\r\nflowchart LR\r\n  user[\"Firefighter, duty chief, commander\"]\r\n  subgraph stack[\"Escala on Docker Compose\"]\r\n    web[\"web: Angular PWA\"]\r\n    api[\"escala-api: Spring Boot\"]\r\n    apidb[(\"escala-db: PostgreSQL\")]\r\n    mq{{\"RabbitMQ\"}}\r\n    worker[\"elegibilidade-worker: Spring Boot (Java)\"]\r\n    wdb[(\"elegibilidade-db: PostgreSQL\")]\r\n    sim[\"ipma-sim: IPMA simulator\"]\r\n  end\r\n  ipma[\"IPMA open data\"]\r\n  llm[\"Language model\"]\r\n  user -->|\"HTTPS, sync\"| web\r\n  web -->|\"REST over HTTPS, sync\"| api\r\n  api -->|\"SQL, sync\"| apidb\r\n  api -->|\"AMQP via outbox, async\"| mq\r\n  mq -->|\"AMQP, async: AvaliacaoPedida, ExtracaoPedida\"| worker\r\n  worker -->|\"AMQP via outbox, async\"| mq\r\n  mq -->|\"AMQP, async: AvaliacaoConcluida, ExtracaoConcluida, RiscoAtualizado\"| api\r\n  worker -->|\"SQL, sync\"| wdb\r\n  worker -->|\"HTTPS, sync, hourly poll, default profile\"| ipma\r\n  worker -.->|\"HTTP, sync, evaluation profile and tests\"| sim\r\n  worker -->|\"HTTPS, sync, [TODO: ADR 0011]\"| llm\r\n```\r\n\r\n## Components and data ownership\r\n\r\n> **ℹ\uFE0F Guidance.** One row per deployable component, the same rows as **07 · Technical Design**. Then answer each §6.2 point in one line and name its ADR. No component reads another component's database; the worker gets what it needs from the event (ADR 0008).\r\n\r\n| Component | Responsibility | Owns data | Talks to | Sync / async |\r\n|---|---|---|---|---|\r\n| [TODO: component] | [TODO: responsibility] | [TODO: database] | [TODO: components and systems] | [TODO: sync / async, protocol] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | Component | Responsibility | Owns data | Talks to | Sync / async |\r\n> |---|---|---|---|---|\r\n> | `escala-api` (Spring Boot) | What the piquete needs: people, rosters, slots, unavailability, requests, audit; required composition for the day's risk (RF27, RF28) | `escala-db` | `web`; RabbitMQ | Sync REST with `web`; async events with the worker |\r\n> | `elegibilidade-worker` (Spring Boot, Java) | Who can fill it: eligibility evaluations (versioned engine, RF23), AI extraction with its non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], explanations from rule codes only, observed risk | `elegibilidade-db` | RabbitMQ; IPMA; language model | Async events; sync HTTP to IPMA and the model |\r\n> | `web` (Angular PWA) | Screens for firefighters, duty chiefs and commanders; roster readable offline (RNF06) | None (browser cache only) | `escala-api` | Sync REST |\r\n> | `ipma-sim` | Imitates the IPMA endpoints and their failures for tests and the `evaluation` profile | None | `elegibilidade-worker` | Sync HTTP |\r\n\r\n### Why these boundaries (§6.2)\r\n\r\n| §6.2 point | Decision | ADR |\r\n|---|---|---|\r\n| Component or service boundaries | [TODO: decision] | 0002 |\r\n| Responsibilities and data ownership | [TODO: decision] | 0003 |\r\n| Synchronous and asynchronous communication | [TODO: decision] | 0005, 0008 |\r\n| Coupling and cohesion | [TODO: decision] | 0008 |\r\n| Deployment implications | [TODO: decision] | 0002, 0004 |\r\n| Failure handling | [TODO: decision] | 0009, 0013 |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** *Boundaries:* split by question: \"what the piquete needs\" against \"who can fill it\". *Coupling:* events carry the state the rules need, so the worker never calls back into `escala-api`. *Deployment:* two images built from one monorepo, each deployable and restartable on its own. *Failure handling:* if the worker stops, `escala-api` keeps accepting requests and evaluations wait as \"pending\".\r\n\r\n## Data model\r\n\r\n> **ℹ\uFE0F Guidance.** One ER diagram per database, with the main entities, keys and the fields the business rules need (RN IDs from **Requirements and Quality Attributes**). IDs that point into the other component's data are plain references, never foreign keys. Use one PostgreSQL per component (ADR 0003), in line with §6.4: \"Teams should not introduce multiple database technologies unless the product requirements justify the additional complexity.\" Answer the remaining §6.4 points in the table below.\r\n\r\n### `escala-db` (owned by `escala-api`)\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft; field names are suggestions.\r\n\r\n```mermaid\r\nerDiagram\r\n  MEMBER ||--o{ CERTIFICATION : holds\r\n  MEMBER ||--o{ DRIVING_LICENCE : holds\r\n  MEMBER ||--o{ UNAVAILABILITY : declares\r\n  PIQUETE ||--|{ SLOT : has\r\n  SLOT ||--o{ ASSIGNMENT : \"filled by\"\r\n  MEMBER ||--o{ ASSIGNMENT : receives\r\n  SLOT ||--o{ COVER_REQUEST : \"opened for\"\r\n  COVER_REQUEST ||--o{ APPLICATION : receives\r\n  MEMBER ||--o{ APPLICATION : submits\r\n  MEMBER ||--o{ AUDIT_RECORD : authors\r\n  MEMBER {\r\n    uuid id PK\r\n    string roster_status \"active roster only, RN01\"\r\n    boolean within_age_limit \"RN08, no date of birth stored\"\r\n    string rank\r\n    string contact \"shown only to roles that need it\"\r\n    string role \"Firefighter, Duty chief or Commander\"\r\n  }\r\n  CERTIFICATION {\r\n    uuid id PK\r\n    uuid member_id FK\r\n    string type \"for example TAS\"\r\n    date issued_on\r\n    date expires_on \"expired does not count, RN02\"\r\n  }\r\n  DRIVING_LICENCE {\r\n    uuid id PK\r\n    uuid member_id FK\r\n    string licence_class \"must match the vehicle, RN03\"\r\n    date expires_on\r\n  }\r\n  UNAVAILABILITY {\r\n    uuid id PK\r\n    uuid member_id FK\r\n    string type \"UNAVAILABLE or PARTIAL\"\r\n    timestamp start_at \"UTC instant, ADR 0012\"\r\n    timestamp end_at\r\n    string source \"form or free text\"\r\n    string free_text \"deleted after confirmation, RNF09\"\r\n    boolean confirmed\r\n  }\r\n  PIQUETE {\r\n    uuid id PK\r\n    date duty_date\r\n    string period\r\n  }\r\n  SLOT {\r\n    uuid id PK\r\n    uuid piquete_id FK\r\n    string role\r\n    string vehicle\r\n    string required_certification\r\n  }\r\n  ASSIGNMENT {\r\n    uuid id PK\r\n    uuid slot_id FK\r\n    uuid member_id FK\r\n    string evaluation_state \"pending, evaluated or failed\"\r\n    string result \"eligible or ineligible\"\r\n    string rule_codes \"violated rules from the worker\"\r\n    string engine_version \"RF23\"\r\n    string status \"proposed, confirmed or exceptional\"\r\n    string exceptional_reason \"RF19\"\r\n  }\r\n  COVER_REQUEST {\r\n    uuid id PK\r\n    uuid slot_id FK\r\n    timestamp gap_detected_at \"outcome metric start\"\r\n    timestamp filled_at \"outcome metric end\"\r\n  }\r\n  APPLICATION {\r\n    uuid id PK\r\n    uuid cover_request_id FK\r\n    uuid member_id FK\r\n    timestamp applied_at\r\n  }\r\n  AUDIT_RECORD {\r\n    uuid id PK\r\n    uuid author_id FK\r\n    string action\r\n    timestamp occurred_at\r\n    jsonb old_value\r\n    jsonb new_value\r\n    string engine_version\r\n  }\r\n  OUTBOX_EVENT {\r\n    uuid event_id PK \"idempotency key\"\r\n    string type\r\n    jsonb payload\r\n    timestamp created_at\r\n    timestamp published_at \"null until relayed\"\r\n  }\r\n  PROCESSED_EVENT {\r\n    uuid event_id PK\r\n    timestamp processed_at\r\n  }\r\n```\r\n\r\n### `elegibilidade-db` (owned by `elegibilidade-worker`)\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft; `assignment_id` and `member_id` are references to `escala-api` data, not foreign keys.\r\n\r\n```mermaid\r\nerDiagram\r\n  EVALUATION ||--o{ VIOLATED_RULE : lists\r\n  EVALUATION {\r\n    uuid id PK\r\n    uuid request_event_id UK \"eventId of AvaliacaoPedida\"\r\n    uuid assignment_id \"reference only\"\r\n    uuid member_id \"reference only\"\r\n    string result \"ELIGIBLE or INELIGIBLE\"\r\n    string engine_version \"RF23\"\r\n    timestamp evaluated_at\r\n  }\r\n  VIOLATED_RULE {\r\n    uuid evaluation_id FK\r\n    string rule_code \"for example RN02\"\r\n  }\r\n  EXTRACTION {\r\n    uuid id PK\r\n    uuid request_event_id UK \"eventId of ExtracaoPedida\"\r\n    string proposed_type \"UNAVAILABLE, PARTIAL or NOT_AN_UNAVAILABILITY\"\r\n    timestamp proposed_start\r\n    timestamp proposed_end\r\n    string method \"model, baseline or fallback\"\r\n    int latency_ms\r\n    boolean confirmed \"[TODO: how the worker learns it]\"\r\n  }\r\n  RISK_OBSERVATION {\r\n    uuid id PK\r\n    string dico \"municipality code\"\r\n    int rcm \"1 to 5\"\r\n    date forecast_date\r\n    timestamp fetched_at \"age shown to users\"\r\n    string source \"IPMA or simulator\"\r\n  }\r\n  OUTBOX_EVENT {\r\n    uuid event_id PK \"idempotency key\"\r\n    string type\r\n    jsonb payload\r\n    timestamp created_at\r\n    timestamp published_at \"null until relayed\"\r\n  }\r\n  PROCESSED_EVENT {\r\n    uuid event_id PK\r\n    timestamp processed_at\r\n  }\r\n```\r\n\r\n### §6.4 data concerns\r\n\r\n| §6.4 point | Decision |\r\n|---|---|\r\n| Consistency requirements | [TODO: decision] |\r\n| Data lifecycle | [TODO: decision] |\r\n| Retention and deletion | [TODO: decision; keep in line with **09 · Security and Privacy Assessment**] |\r\n| Backup or recovery considerations | [TODO: decision] |\r\n| Relevant privacy constraints | [TODO: decision] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | §6.4 point | Decision |\r\n> |---|---|\r\n> | Consistency requirements | Strong inside each database; eventual between components, made visible as pending / evaluated / failed |\r\n> | Retention and deletion | Free text deleted after confirmation (RNF09); other periods as on **09 · Security and Privacy Assessment** |\r\n> | Backup or recovery considerations | [TODO: backup tool and frequency]; the outbox lets events be re-sent after a restore |\r\n> | Relevant privacy constraints | No names, contacts or free text leave `escala-db` except the free text sent once for extraction |\r\n\r\n## API outline\r\n\r\n> **ℹ\uFE0F Guidance.** [`contracts/openapi.yaml`](../../contracts/openapi.yaml) [TODO: not yet created] is the source of truth; change it in the same pull request as the endpoint and cover it with a contract test (see [Test Strategy](../testing/test-strategy.md)). List only the main endpoints here, with the roles allowed (from the access-control matrix on **09 · Security and Privacy Assessment**) and the requirement they serve.\r\n\r\n- REST contract: [`contracts/openapi.yaml`](../../contracts/openapi.yaml) [TODO: file not yet created]\r\n- Rendered API docs: [TODO: URL, or how to generate them]\r\n- Authentication: mocked token carrying member ID and role, checked on every business endpoint (ADR 0006); `/health` and `/health/ready` stay open for the container runtime and Prometheus [TODO: confirm]\r\n- Trace ID header: [TODO: header name]\r\n- Error format: [TODO: error format]\r\n\r\n| Endpoint | Purpose | Roles | Requirement |\r\n|---|---|---|---|\r\n| [TODO: method and path] | [TODO: purpose] | [TODO: roles] | [TODO: RF / RNF ID] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | Endpoint | Purpose | Roles | Requirement |\r\n> |---|---|---|---|\r\n> | `POST /piquetes` | Create a piquete for a date and period with its slots | Duty chief, Commander [TODO: confirm] | RF06, SCRUM-45 |\r\n> | `POST /assignments` | Propose a member for a slot; answers 202 and publishes `AvaliacaoPedida` | Duty chief, Commander | RF08 |\r\n> | `GET /slots/{id}/candidates` | Eligible and ineligible candidates with reasons | Duty chief, Commander | RF16 |\r\n> | `POST /assignments/{id}/confirm` | Confirm; refused while no valid evaluation exists | Duty chief, Commander | RF18, RF24 |\r\n> | `POST /unavailabilities` | Declare unavailability by form or free text; answers 202 without waiting for evaluation | Firefighter, Duty chief, Commander | RF12, RF13, RNF02 |\r\n> | `GET /health`, `GET /health/ready` | Liveness and readiness, on both services | None (infrastructure) | RF36 |\r\n\r\n## Asynchronous workflows\r\n\r\n> **ℹ\uFE0F Guidance.** §6.3 requires \"at least one meaningful asynchronous workflow\". Keep the same rows as **07 · Technical Design**, say why each one cannot be a synchronous call, and draw the sequence of the principal one (eligibility) with the outbox, the idempotency check, the retries and the dead-letter queue.\r\n\r\n| Workflow | Trigger event | Result event | Why async |\r\n|---|---|---|---|\r\n| Eligibility | `AvaliacaoPedida` (evaluation requested), `escala-api` → worker | `AvaliacaoConcluida` (evaluation completed), worker → `escala-api` | [TODO: why] |\r\n| Extraction | `ExtracaoPedida` (extraction requested), `escala-api` → worker | `ExtracaoConcluida` (extraction completed), worker → `escala-api` | [TODO: why] |\r\n| Risk update | Hourly IPMA poll in the worker (timer, no incoming event) | `RiscoAtualizado` (risk updated), worker → `escala-api` | [TODO: why] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** *Eligibility:* the API accepts the request without waiting for the evaluation (RNF02), so a slow or stopped worker never freezes the duty chief's screen. *Extraction:* the language model can be slow or down, and the form flow must keep working regardless. *Risk update:* IPMA is external and polled on a schedule; `escala-api` reacts to the new risk level instead of calling IPMA itself.\r\n\r\n### Eligibility flow\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft of the eligibility flow; status codes and the pending timeout are proposals.\r\n\r\n```mermaid\r\nsequenceDiagram\r\n  autonumber\r\n  actor DC as Duty chief\r\n  participant WEB as web\r\n  participant API as escala-api\r\n  participant ADB as escala-db\r\n  participant MQ as RabbitMQ\r\n  participant WK as elegibilidade-worker\r\n  participant WDB as elegibilidade-db\r\n\r\n  DC->>WEB: Propose a member for an open slot\r\n  WEB->>API: POST /assignments with trace ID\r\n  API->>ADB: One transaction: assignment pending and outbox row AvaliacaoPedida\r\n  API-->>WEB: 202 Accepted, evaluation pending\r\n  API->>MQ: Outbox relay publishes AvaliacaoPedida with its eventId\r\n  API->>ADB: Mark the outbox row as published\r\n  MQ->>WK: Deliver AvaliacaoPedida, at least once\r\n  WK->>WDB: Has this eventId been processed?\r\n  alt eventId already processed\r\n    WK->>MQ: Ack, no new effects\r\n  else new eventId\r\n    WK->>WK: Run the deterministic rules, no AI\r\n    WK->>WDB: One transaction: evaluation, processed eventId, outbox row AvaliacaoConcluida\r\n    WK->>MQ: Ack\r\n    WK->>MQ: Outbox relay publishes AvaliacaoConcluida\r\n    MQ->>API: Deliver AvaliacaoConcluida\r\n    API->>ADB: Skip if eventId processed, else store result, rule codes and engine version\r\n  else processing fails\r\n    WK->>MQ: Reject to the next retry queue\r\n    Note over MQ: Retry after 5 s, then 30 s, then 2 min, then dead-letter queue\r\n    %% [TODO: pending timeout value and which component marks the evaluation failed]\r\n    Note over API,ADB: No result before the pending timeout, state failed\r\n  end\r\n  DC->>WEB: Confirm the assignment\r\n  WEB->>API: POST confirm\r\n  alt evaluated and eligible\r\n    API-->>WEB: 200 Confirmed, audit record written\r\n  else pending, failed or ineligible\r\n    API-->>WEB: 409 Confirmation blocked, reason shown\r\n  end\r\n```\r\n\r\nWhen nobody is eligible, decision D-02 on **Investor Decision Log** settles whether the assignment is blocked or recorded as an exceptional assignment with a written reason (RF19): [TODO: outcome of D-02].\r\n\r\n## Event contracts\r\n\r\n> **ℹ\uFE0F Guidance.** One JSON Schema per event in [`contracts/events/`](../../contracts/events/) [TODO: folder not yet created], checked by contract tests on both sides. Events carry only the state the consumer needs (ADR 0008): no names, no contacts, no date of birth, and free text only in `ExtracaoPedida`. Every event has the same envelope; a breaking change gets a new `schemaVersion`, and consumers accept both versions during the rollout.\r\n\r\n- **Envelope:** `eventId` (UUID, also the idempotency key), `type`, `schemaVersion`, `occurredAt` (UTC instant, ADR 0012), `traceId` (RF37)\r\n- **Display time zone:** [TODO: time zone the PWA shows, e.g. Europe/Lisbon]\r\n\r\n| Event | Producer | Consumer | Schema file |\r\n|---|---|---|---|\r\n| `AvaliacaoPedida` | `escala-api` | `elegibilidade-worker` | [TODO: file] |\r\n| `AvaliacaoConcluida` | `elegibilidade-worker` | `escala-api` | [TODO: file] |\r\n| `ExtracaoPedida` | `escala-api` | `elegibilidade-worker` | [TODO: file] |\r\n| `ExtracaoConcluida` | `elegibilidade-worker` | `escala-api` | [TODO: file] |\r\n| `RiscoAtualizado` | `elegibilidade-worker` | `escala-api` | [TODO: file] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** An `AvaliacaoPedida` carrying only what the rules need. The member appears by ID only, and `withinAgeLimit: true` replaces a date of birth (RN08).\r\n>\r\n> ```json\r\n> {\r\n>   \"eventId\": \"6f1c2d3e-0000-4000-8000-000000000001\",\r\n>   \"type\": \"AvaliacaoPedida\",\r\n>   \"schemaVersion\": 1,\r\n>   \"occurredAt\": \"2026-10-15T07:42:10Z\",\r\n>   \"traceId\": \"4bf92f3577b34da6a3ce929d0e0e4736\",\r\n>   \"assignmentId\": \"6f1c2d3e-0000-4000-8000-000000000002\",\r\n>   \"slot\": {\r\n>     \"slotId\": \"6f1c2d3e-0000-4000-8000-000000000003\",\r\n>     \"start\": \"2026-10-15T08:00:00Z\",\r\n>     \"end\": \"2026-10-15T20:00:00Z\",\r\n>     \"requiredCertification\": \"TAS\",\r\n>     \"requiredLicenceClass\": \"C\"\r\n>   },\r\n>   \"candidate\": {\r\n>     \"memberId\": \"6f1c2d3e-0000-4000-8000-000000000004\",\r\n>     \"inActiveRoster\": true,\r\n>     \"withinAgeLimit\": true,\r\n>     \"certifications\": [\r\n>       { \"type\": \"TAS\", \"expiresOn\": \"2026-09-30\" }\r\n>     ],\r\n>     \"licenceClasses\": [\"B\", \"C\"],\r\n>     \"unavailabilities\": [],\r\n>     \"otherAssignments\": [\r\n>       { \"start\": \"2026-10-14T20:00:00Z\", \"end\": \"2026-10-15T08:00:00Z\" }\r\n>     ]\r\n>   }\r\n> }\r\n> ```\r\n>\r\n> With this input the engine answers `AvaliacaoConcluida` with `result: \"INELIGIBLE\"`, `violatedRules: [\"RN02\"]` (the TAS expired before the slot starts) and its `engineVersion`. Minimum rest (RN07) cannot be checked until the internal regulation is obtained. Licence classes are illustrative; the class each vehicle needs is still to confirm (RN03, verify).\r\n\r\n## Reliability of messaging\r\n\r\n> **ℹ\uFE0F Guidance.** §6.3: the workflow \"should demonstrate appropriate handling of retries, duplicate events, failures, and eventual consistency.\" Name one mechanism per concern, its ADR and the test that proves it in [Test Strategy](../testing/test-strategy.md). Keep the retry schedule identical to **07 · Technical Design**.\r\n\r\n| §6.3 concern | Mechanism | ADR | Test |\r\n|---|---|---|---|\r\n| Retries | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |\r\n| Duplicate events | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |\r\n| Failures | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |\r\n| Eventual consistency | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | §6.3 concern | Mechanism | ADR | Test |\r\n> |---|---|---|---|\r\n> | Retries | Retry queues after 5 s, 30 s and 2 min, then the dead-letter queue (DLQ) | 0005 | Integration: the worker fails twice, then succeeds |\r\n> | Duplicate events | Idempotency key per event: the consumer stores the `eventId` in the same transaction as the effect and ignores a second delivery (RNF05) | 0009 | Integration: the same event delivered twice gives one evaluation |\r\n> | Failures | Transactional outbox: the event is written in the same transaction as the state change, then relayed to RabbitMQ. After the last retry the message goes to the DLQ and shows on the dashboard | 0009 | Integration: broker stopped during a request, event published after restart |\r\n> | Eventual consistency | Visible states: pending / evaluated / failed. Confirmation stays blocked while no valid evaluation exists (RF24) | 0008 | End-to-end: confirmation refused while pending |\r\n\r\n### Queues and the dead-letter queue\r\n\r\n- Exchanges and queues: [TODO: names]\r\n- Outbox relay interval: [TODO: seconds]\r\n- Ordering: [TODO: how a consumer ignores a stale result, e.g. an older evaluation arriving after a newer one]\r\n- DLQ: alert when it is not empty; replay and purge steps in [Deployment and Operations](../operations/deployment-and-operations.md). `ExtracaoPedida` messages hold free text, so they are purged after [TODO: days] (see **09 · Security and Privacy Assessment**)\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** One topic exchange for Escala events; one queue per consumer and event type; three retry queues with a message time-to-live of 5 s, 30 s and 2 min that dead-letter back to the main queue; a retry-count header decides when a message moves to the DLQ.\r\n\r\n## External integration — IPMA\r\n\r\n> **ℹ\uFE0F Guidance.** §6.5: \"The application must handle unavailable, delayed, incomplete, or invalid external data appropriately.\" Keep the four cases identical to **07 · Technical Design**, add how each is tested with the simulator, and record the thresholds as configuration (ADR 0014). The IPMA terms of use require citing the source and notifying `webmaster@ipma.pt` (see **AI Usage and Third-Party Attribution**).\r\n\r\n- Rural fire risk (RCM 1–5 per municipality, by DICO code) for today and the next two days: `https://api.ipma.pt/open-data/forecast/meteorology/rcm/rcm-d{0,1,2}.json`\r\n- Weather warnings: `https://api.ipma.pt/open-data/forecast/warnings/warnings_www.json`; how a warning maps to our area: [TODO: verify the area field]\r\n- Polling: hourly, by `elegibilidade-worker`, with the last valid value cached in `elegibilidade-db` (ADR 0010); each poll publishes `RiscoAtualizado`\r\n- Our municipality's DICO code: [TODO: DICO]\r\n- Request timeout and retries per poll: [TODO: seconds, count]\r\n- Staleness threshold: [TODO: hours]; beyond it, assume the higher risk level (ADR 0013)\r\n- Attribution shown in the UI: [TODO: text]; IPMA notified on [TODO: date]\r\n\r\n| §6.5 case | Detection | Behaviour | Test (simulator mode) |\r\n|---|---|---|---|\r\n| Unavailable | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |\r\n| Delayed | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |\r\n| Incomplete | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |\r\n| Invalid | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | §6.5 case | Detection | Behaviour | Test (simulator mode) |\r\n> |---|---|---|---|\r\n> | Unavailable | Timeout ([TODO: s]) or HTTP error | Serve the last cached value with its age; beyond the staleness threshold, assume the higher risk level (ADR 0013) | Simulator answers 503 or never answers |\r\n> | Delayed | The data's reference date is older than expected (verify the field) | Same as unavailable: show the age; beyond the threshold, assume the higher risk level | Simulator serves yesterday's file |\r\n> | Incomplete | Our DICO code is missing from the response | Keep the last value for our municipality; log a warning with the trace ID | Simulator drops our DICO code |\r\n> | Invalid | Schema validation fails, or an RCM value is outside 1–5 | Reject the whole response, keep the last valid value and increment an error metric | Simulator returns malformed JSON or RCM 7 |\r\n\r\n**IPMA simulator.** `tools/ipma-sim` serves the same endpoints and reproduces each case above on demand. Tests and the `evaluation` profile use it, so the product runs offline in the evaluation environment (§12). Modes and how to switch them: [TODO: modes and switch, e.g. environment variable or admin endpoint].\r\n\r\n## Degraded modes\r\n\r\n> **ℹ\uFE0F Guidance.** §6.8: \"The product should fail safely and communicate limitations clearly to users.\" Keep the rows and messages identical to **07 · Technical Design**, and add how each failure is detected and how it is demonstrated. If Escala itself is down, the corps goes back to the phone. The step-by-step runbook is in [Deployment and Operations](../operations/deployment-and-operations.md).\r\n\r\n| Dependency down | Behaviour | Message to the user | Detection | Demonstrated by |\r\n|---|---|---|---|---|\r\n| IPMA | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |\r\n| AI service | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |\r\n| `elegibilidade-worker` | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |\r\n| [TODO: other dependency, e.g. RabbitMQ, network connection] | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n>\r\n> | Dependency down | Behaviour | Message to the user | Detection | Demonstrated by |\r\n> |---|---|---|---|---|\r\n> | IPMA | Last value shown with its age; beyond the threshold, the higher risk level is assumed | \"Fire risk from IPMA last updated 3 h ago. Showing the higher level until IPMA responds.\" | Failed polls; data-age metric above the threshold | Simulator in \"unavailable\" mode |\r\n> | AI service | Free-text box replaced by the unavailability form (RF35) | \"Automatic reading is unavailable. Please enter the dates in the form.\" | Extraction timeout or error; feature flag off | Stop the model or turn the flag off |\r\n> | `elegibilidade-worker` | Evaluations stay \"pending\"; confirmation is blocked | \"Eligibility check pending. You can confirm once the check is complete.\" | No `AvaliacaoConcluida`; queue depth grows | Stop the worker container, then restart it and watch the backlog drain |\r\n\r\n## Deployment view\r\n\r\n> **ℹ\uFE0F Guidance.** Show where each container runs, how it gets there (the pipeline) and which profile it belongs to: `default`, or `evaluation` (IPMA simulator and AI fallback, runs offline, §12). Commands, configuration, secrets and rollback live in [Deployment and Operations](../operations/deployment-and-operations.md); link to it rather than copying them.\r\n\r\n- Environment: [TODO: where it is deployed]\r\n- URL: [TODO: URL]\r\n- Image registry: [TODO: registry, or built on the host]\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Starting draft of the deployment view.\r\n\r\n```mermaid\r\nflowchart TB\r\n  pr[\"Pull request merged to main\"] --> ci[\"GitHub Actions: build, test, secret scan, build images\"]\r\n  ci -->|\"push images\"| reg[\"Image registry: [TODO: registry]\"]\r\n  subgraph host[\"Docker Compose host: [TODO: where]\"]\r\n    web[\"web: Angular PWA\"]\r\n    api[\"escala-api\"]\r\n    worker[\"elegibilidade-worker\"]\r\n    apidb[(\"escala-db\")]\r\n    wdb[(\"elegibilidade-db\")]\r\n    mq{{\"RabbitMQ\"}}\r\n    sim[\"ipma-sim: evaluation profile and tests\"]\r\n    prom[\"Prometheus\"]\r\n    graf[\"Grafana\"]\r\n  end\r\n  reg -->|\"pull on deploy\"| host\r\n  api --> apidb\r\n  worker --> wdb\r\n  api <-->|\"events\"| mq\r\n  worker <-->|\"events\"| mq\r\n  prom -->|\"scrapes metrics\"| api\r\n  prom -->|\"scrapes metrics\"| worker\r\n  graf -->|\"queries\"| prom\r\n  worker -->|\"default profile\"| ipma[\"IPMA open data\"]\r\n  worker -.->|\"evaluation profile\"| sim\r\n```\r\n\r\n## Observability and SLIs\r\n\r\n> **ℹ\uFE0F Guidance.** §6.7 sets a minimum: structured application logs, health checks, relevant metrics, correlation or trace identifiers, error reporting and a small operational dashboard. Say where each one is and how the trace ID travels from `web` through `escala-api` and the event to `elegibilidade-worker`. Give each SLI a precise definition, a target and the metric it comes from; keep the two SLIs identical to **07 · Technical Design**.\r\n\r\n- Logs: [TODO: format and where to read them]; never contacts or free text (see **09 · Security and Privacy Assessment**)\r\n- Trace ID: created at [TODO: web or the API edge], sent as an HTTP header and as `traceId` in every event (RF37)\r\n- Health checks: `/health` (liveness) and `/health/ready` (readiness: database and broker reachable) on both services (RF36)\r\n- Metrics: [TODO: main metrics], exposed to Prometheus (RF38)\r\n- Error reporting: [TODO: how errors surface to the team]\r\n- Dashboard: Grafana — [TODO: link] (RF39)\r\n\r\n| SLI | Definition | Target | Measured from | Shown on |\r\n|---|---|---|---|---|\r\n| Eligibility evaluation p95 latency | [TODO: from which timestamp to which] | < 5 s (RNF01) | [TODO: metric] | [TODO: dashboard panel] |\r\n| % of requests evaluated without manual intervention | [TODO: what counts as manual intervention] | [TODO: %] | [TODO: metric] | [TODO: dashboard panel] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Log line fields: `timestamp` (UTC), `level`, `service`, `traceId`, `eventId`, `message`. Metrics: evaluations requested / completed / failed, evaluation duration from the outbox row of `AvaliacaoPedida` to `AvaliacaoConcluida` applied, DLQ size, age of the IPMA data served, and how many extractions fell back to the form. \"Manual intervention\" counts DLQ replays and exceptional assignments.\r\n\r\n## Done when\r\n- [ ] Every §7.1.2 #7 item is covered: System context; Container or component view; Data model; API outline; Asynchronous workflow; External integration; Deployment view\r\n- [ ] All Mermaid diagrams render on GitHub and match the code: Docker Compose file, `contracts/openapi.yaml`, `contracts/events/`\r\n- [ ] Components, events, retry schedule, IPMA cases, degraded modes and SLIs agree with **07 · Technical Design**, and its exported diagrams are current\r\n- [ ] Every remaining `[TODO: …]` points to a Jira issue or a *Proposed* ADR\r\n- [ ] Reviewed by another team member\r\n- [ ] Guidance and example blocks removed\r\n- [ ] Status set to Done\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/architecture/technical-design.md b/docs/architecture/technical-design.md
+--- a/docs/architecture/technical-design.md	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/architecture/technical-design.md	(date 1793047163938)
+@@ -2,59 +2,51 @@
+ 
+ | Field | Value |
+ |---|---|
+-| Status | Draft |
+-| Owner | [TODO: name] |
+-| Contributors | [TODO: names] |
++| Status | In review |
++| Owner | Pedro Costa |
++| Contributors | Diogo Pereira, Diogo Sousa, Diogo Costa |
+ | Deliverable | Sprint 1 · #7 Technical Design (full version); Final submission · #4 Architecture documentation |
+-| Sources | Assignment §6, §6.1–§6.8, §7.1.2 #7, §9, §12 |
+-| Confluence page | **07 · Technical Design** |
+-| Last updated | YYYY-MM-DD |
++| Sources | Assignment §6, §6.1–§6.8, §7.1.2 #7, §9, §12; **D-00**; **04 · Product Vision**; **Requirements and Quality Attributes** |
++| Confluence page | **07 · Technical Design** (summary — update Git first; edit Confluence only with the page owner's permission) |
++| Last updated | 2026-10-26 |
+ 
+-> **ℹ️ About this document.** The full technical design of Escala, the readiness-support app for a *Corpo de Bombeiros Voluntários* (volunteer fire corps): C4 views, data ownership, data model, API and event contracts, the eligibility flow, the IPMA integration, degraded modes, deployment and observability, with every diagram kept as code next to the code. The Confluence page **07 · Technical Design** summarises it and exports its diagrams; when the two disagree, update this document first. Developers read it before changing a boundary, a contract or a queue. ADR numbers refer to the [ADR index](../adr/README.md).
++Full technical design of Escala after **D-00** (members' problem: published roster, unavailability, swaps, presence confirmation and cover). Diagrams live as code in this folder. The Confluence page **07 · Technical Design** summarises this file; when they disagree, this document wins. ADR numbers: [ADR index](../adr/README.md).
+ 
+-> **ℹ️ Guidance.** §9: "Teams should prefer documentation generated from or maintained close to the source code where appropriate." Change this file in the same pull request as the code it describes, and replace each `[TODO: …]` with the decision or with the Jira issue or *Proposed* ADR that will settle it. §6: "All significant technical decisions must be justified." Point every choice to its ADR rather than arguing it here.
++This is a Git document. Confluence is view-only from the agent unless a team member explicitly allows an edit.
+ 
+ ## Summary
+ 
+-> **ℹ️ Guidance.** One paragraph: the client, the backend components, how they communicate, where data lives, the external integration, and how the system is deployed and observed. Keep it consistent with the Summary on **07 · Technical Design**; this version may add detail and ADR numbers.
+-
+-[TODO: one paragraph]
+-
+-> **✏️ Example (illustrative — replace).** Escala tells a volunteer fire corps whether the people on today's *piquete* can actually crew the vehicles, given today's fire risk. It is an Angular PWA backed by two independently deployable components (ADR 0002). `escala-api` (Spring Boot) owns what the piquete needs: people, rosters, slots, unavailability, requests and audit. `elegibilidade-worker` (Spring Boot, Java) works out who can fill it: it runs the deterministic eligibility rules (ADR 0007), polls IPMA fire risk hourly (ADR 0010) and runs the AI extraction, but the AI never decides eligibility. The two exchange events through RabbitMQ with a transactional outbox, idempotency keys, retries and a dead-letter queue (ADR 0005, ADR 0009), and each owns its own PostgreSQL database (ADR 0003). Everything runs in Docker Compose, is built and deployed by GitHub Actions, and is observed with Prometheus and Grafana. Escala is about readiness, never dispatch.
++Escala is a mobile roster for one volunteer fire corps: members see their shifts, say when they cannot serve, swap with a colleague, confirm they are coming, and receive cover requests only if they are free and qualified (**D-00**, UJ1 / UJ3 / UJ6). It is an Angular PWA with two independently deployable Spring Boot services ([ADR 0002](../adr/0002-split-backend-into-two-independently-deployable-components.md)). `escala-api` owns people, the published schedule, unavailability, swaps, cover requests and audit. `elegibilidade-worker` ([ADR 0015](../adr/0015-implement-elegibilidade-worker-in-java-with-spring-boot.md)) runs deterministic function and eligibility checks ([ADR 0007](../adr/0007-deterministic-eligibility-engine-ai-never-decides.md)), extracts unavailability from free text, and polls IPMA so today's fire risk can be *shown* ([ADR 0010](../adr/0010-poll-ipma-hourly-and-cache-the-last-valid-value.md)). AI never decides who is eligible, who may swap, or who is asked to cover; explanations of failed checks are template text per rule code (RF22, RF34 Won't). The services exchange events through RabbitMQ with a transactional outbox, idempotency keys, retries and a dead-letter queue ([ADR 0005](../adr/0005-use-rabbitmq-as-message-broker.md), [ADR 0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md)). Each owns its own PostgreSQL database ([ADR 0003](../adr/0003-one-postgresql-database-per-component.md)). The stack runs in Docker Compose, is built by GitHub Actions, and is observed with Prometheus and Grafana. Escala is about readiness, never dispatch.
+ 
+ ## System context
+ 
+-> **ℹ️ Guidance.** C4 level 1: Escala as one box, the people who use it and the external systems it depends on. Keep the boundary visible: no dispatch or incident system is connected. Export the rendered diagram to **07 · Technical Design** whenever it changes.
+-
+-> **✏️ Example (illustrative — replace).** Starting draft from the proposed ADRs; edit it until it matches the product.
++C4 level 1. PlantUML: [`c4-system-context.puml`](c4-system-context.puml). Primary users are **members** (volunteers, cadets, professional firefighters). The supervisor (API role `DUTY_CHIEF`) publishes the schedule and is informed of every swap and cover. Optional approval of swaps is **D-01** (open). The container view that the Confluence page **High Level System Architecture** should export is [`high_level_system_architecture.puml`](high_level_system_architecture.puml).
+ 
+ ```mermaid
+ flowchart LR
+-  ff["Firefighter"]
+-  dc["Duty chief"]
++  mem["Member"]
++  sup["Supervisor / duty chief"]
+   cmd["Commander"]
+-  escala["Escala: readiness support for one volunteer fire corps"]
+-  ipma["IPMA open data: RCM fire risk and weather warnings"]
+-  llm["Language model: [TODO: local or hosted, ADR 0011]"]
+-  subgraph out["Out of scope: readiness, never dispatch"]
+-    dispatch["Dispatch and incident systems: never connected"]
++  escala["Escala: published roster, unavailability, swaps and cover"]
++  ipma["IPMA open data: RCM and warnings, information only"]
++  llm["Language model: unavailability extraction only, ADR 0011"]
++  subgraph out["Out of scope"]
++    dispatch["Dispatch, call-out and incident systems: never connected"]
+   end
+-  ff -->|"sees own roster, declares unavailability, applies to slots"| escala
+-  dc -->|"composes the piquete, confirms assignments"| escala
+-  cmd -->|"manages members and certifications"| escala
+-  escala -->|"polls hourly over HTTPS"| ipma
+-  escala -->|"extraction and explanation requests"| llm
++  mem -->|"own roster, unavailability, swap, confirm presence, accept cover"| escala
++  sup -->|"builds and publishes schedule, informed of changes, optional approval D-01"| escala
++  cmd -->|"members and certifications"| escala
++  escala -->|"hourly HTTPS poll"| ipma
++  escala -->|"extraction requests when AI_ENABLED"| llm
+ ```
+ 
+ ## Containers
+ 
+-> **ℹ️ Guidance.** C4 level 2: one box per deployable unit and one per data store, every arrow labelled with its protocol and whether it is sync or async. §6.2 requires "at least two independently deployable backend components"; ADR 0002 justifies them. No arrow may cross from one component into the other component's database.
+-
+-> **✏️ Example (illustrative — replace).** Starting draft; `ipma-sim` replaces IPMA in tests and in the `evaluation` profile.
++C4 level 2. Canonical diagram: [`high_level_system_architecture.puml`](high_level_system_architecture.puml) (PNG: [`high_level_system_architecture.png`](high_level_system_architecture.png)). Also [`c4-containers.puml`](c4-containers.puml). No component reads another component's database.
+ 
+ ```mermaid
+ flowchart LR
+-  user["Firefighter, duty chief, commander"]
++  user["Member, supervisor, commander"]
+   subgraph stack["Escala on Docker Compose"]
+     web["web: Angular PWA"]
+     api["escala-api: Spring Boot"]
+@@ -70,134 +62,114 @@
+   web -->|"REST over HTTPS, sync"| api
+   api -->|"SQL, sync"| apidb
+   api -->|"AMQP via outbox, async"| mq
+-  mq -->|"AMQP, async: AvaliacaoPedida, ExtracaoPedida"| worker
++  mq -->|"AvaliacaoPedida, ExtracaoPedida"| worker
+   worker -->|"AMQP via outbox, async"| mq
+-  mq -->|"AMQP, async: AvaliacaoConcluida, ExtracaoConcluida, RiscoAtualizado"| api
++  mq -->|"AvaliacaoConcluida, ExtracaoConcluida, RiscoAtualizado"| api
+   worker -->|"SQL, sync"| wdb
+-  worker -->|"HTTPS, sync, hourly poll, default profile"| ipma
+-  worker -.->|"HTTP, sync, evaluation profile and tests"| sim
+-  worker -->|"HTTPS, sync, [TODO: ADR 0011]"| llm
++  worker -->|"HTTPS hourly, default profile"| ipma
++  worker -.->|"HTTP, evaluation profile"| sim
++  worker -->|"HTTPS when AI_ENABLED"| llm
+ ```
+ 
+ ## Components and data ownership
+ 
+-> **ℹ️ Guidance.** One row per deployable component, the same rows as **07 · Technical Design**. Then answer each §6.2 point in one line and name its ADR. No component reads another component's database; the worker gets what it needs from the event (ADR 0008).
+-
+ | Component | Responsibility | Owns data | Talks to | Sync / async |
+ |---|---|---|---|---|
+-| [TODO: component] | [TODO: responsibility] | [TODO: database] | [TODO: components and systems] | [TODO: sync / async, protocol] |
+-
+-> **✏️ Example (illustrative — replace).**
+->
+-> | Component | Responsibility | Owns data | Talks to | Sync / async |
+-> |---|---|---|---|---|
+-> | `escala-api` (Spring Boot) | What the piquete needs: people, rosters, slots, unavailability, requests, audit; required composition for the day's risk (RF27, RF28) | `escala-db` | `web`; RabbitMQ | Sync REST with `web`; async events with the worker |
+-> | `elegibilidade-worker` (Spring Boot, Java) | Who can fill it: eligibility evaluations (versioned engine, RF23), AI extraction with its non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], explanations from rule codes only, observed risk | `elegibilidade-db` | RabbitMQ; IPMA; language model | Async events; sync HTTP to IPMA and the model |
+-> | `web` (Angular PWA) | Screens for firefighters, duty chiefs and commanders; roster readable offline (RNF06) | None (browser cache only) | `escala-api` | Sync REST |
+-> | `ipma-sim` | Imitates the IPMA endpoints and their failures for tests and the `evaluation` profile | None | `elegibilidade-worker` | Sync HTTP |
++| `escala-api` (Spring Boot) | Published schedule, members, certifications, unavailability, swaps, presence confirmation, cover requests, notifications, audit | `escala-db` | `web`; RabbitMQ | Sync REST with `web`; async events with the worker |
++| `elegibilidade-worker` (Spring Boot, Java) | Deterministic checks that a swap or cover keeps required functions (RF21, RF23); AI extraction (RF31–RF33); cached IPMA observations (RF25, RF29) | `elegibilidade-db` | RabbitMQ; IPMA; language model | Async events; sync HTTP to IPMA and the model |
++| `web` (Angular PWA) | Member phone screens and supervisor editor; last-loaded roster readable offline (RNF06) | None (browser cache only) | `escala-api` | Sync REST |
++| `ipma-sim` | Same IPMA paths and the four §6.5 failure modes for tests and the `evaluation` profile | None | `elegibilidade-worker` | Sync HTTP |
+ 
+ ### Why these boundaries (§6.2)
+ 
+ | §6.2 point | Decision | ADR |
+ |---|---|---|
+-| Component or service boundaries | [TODO: decision] | 0002 |
+-| Responsibilities and data ownership | [TODO: decision] | 0003 |
+-| Synchronous and asynchronous communication | [TODO: decision] | 0005, 0008 |
+-| Coupling and cohesion | [TODO: decision] | 0008 |
+-| Deployment implications | [TODO: decision] | 0002, 0004 |
+-| Failure handling | [TODO: decision] | 0009, 0013 |
+-
+-> **✏️ Example (illustrative — replace).** *Boundaries:* split by question: "what the piquete needs" against "who can fill it". *Coupling:* events carry the state the rules need, so the worker never calls back into `escala-api`. *Deployment:* two images built from one monorepo, each deployable and restartable on its own. *Failure handling:* if the worker stops, `escala-api` keeps accepting requests and evaluations wait as "pending".
++| Component or service boundaries | Split “the published roster and its changes” (`escala-api`) from “slow or external work”: rule checks, extraction, IPMA poll | [0002](../adr/0002-split-backend-into-two-independently-deployable-components.md) |
++| Responsibilities and data ownership | One PostgreSQL per component; no cross-database reads | [0003](../adr/0003-one-postgresql-database-per-component.md) |
++| Synchronous and asynchronous communication | Browser ↔ API is sync REST. Checks and extraction are async so a stopped worker never freezes “I can’t serve” or a swap accept (RNF02) | [0005](../adr/0005-use-rabbitmq-as-message-broker.md), [0008](../adr/0008-events-carry-the-state-the-consumer-needs.md) |
++| Coupling and cohesion | Events carry the facts the rules need; the worker never calls back into `escala-api` | [0008](../adr/0008-events-carry-the-state-the-consumer-needs.md) |
++| Deployment implications | One monorepo, two backend images plus the PWA, each restartable on its own | [0002](../adr/0002-split-backend-into-two-independently-deployable-components.md), [0004](../adr/0004-use-a-monorepo.md) |
++| Failure handling | Worker down: unavailability and swap *requests* are accepted; applying a swap or cover stays blocked until a valid check exists (RF24). IPMA down: last RCM shown with its age; composition rules stay off (RN10, D-00) | [0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md), [0013](../adr/0013-assume-the-higher-risk-when-ipma-data-is-unusable.md) |
+ 
+ ## Data model
+ 
+-> **ℹ️ Guidance.** One ER diagram per database, with the main entities, keys and the fields the business rules need (RN IDs from **Requirements and Quality Attributes**). IDs that point into the other component's data are plain references, never foreign keys. Use one PostgreSQL per component (ADR 0003), in line with §6.4: "Teams should not introduce multiple database technologies unless the product requirements justify the additional complexity." Answer the remaining §6.4 points in the table below.
++IDs that point at the other component are plain references, never foreign keys. One PostgreSQL per component ([ADR 0003](../adr/0003-one-postgresql-database-per-component.md)).
++
++**Source of truth:** [`domain_model.puml`](domain_model.puml) (PNG: [`domain_model.png`](domain_model.png)). The lists below are a summary; if they disagree with the PlantUML, update the PlantUML first.
+ 
+ ### `escala-db` (owned by `escala-api`)
+ 
+-> **✏️ Example (illustrative — replace).** Starting draft; field names are suggestions.
+-
+ ```mermaid
+ erDiagram
+   MEMBER ||--o{ CERTIFICATION : holds
+   MEMBER ||--o{ DRIVING_LICENCE : holds
+   MEMBER ||--o{ UNAVAILABILITY : declares
+   PIQUETE ||--|{ SLOT : has
+-  SLOT ||--o{ ASSIGNMENT : "filled by"
++  SLOT ||--o{ ASSIGNMENT : filled_by
+   MEMBER ||--o{ ASSIGNMENT : receives
+-  SLOT ||--o{ COVER_REQUEST : "opened for"
++  MEMBER ||--o{ SWAP_REQUEST : opens
++  SWAP_REQUEST }o--|| SLOT : from_slot
++  SWAP_REQUEST }o--|| SLOT : to_slot
++  SLOT ||--o{ PRESENCE_CONFIRMATION : asks
++  SLOT ||--o{ COVER_REQUEST : opened_for
+   COVER_REQUEST ||--o{ APPLICATION : receives
+   MEMBER ||--o{ APPLICATION : submits
+   MEMBER ||--o{ AUDIT_RECORD : authors
++  PIQUETE }o--o| DAILY_RISK : "shown for date"
+   MEMBER {
+     uuid id PK
+-    string roster_status "active roster only, RN01"
+-    boolean within_age_limit "RN08, no date of birth stored"
++    string roster_status "RN01"
++    boolean within_age_limit "RN08, no date of birth"
+     string rank
+-    string contact "shown only to roles that need it"
+-    string role "Firefighter, Duty chief or Commander"
+-  }
+-  CERTIFICATION {
+-    uuid id PK
+-    uuid member_id FK
+-    string type "for example TAS"
+-    date issued_on
+-    date expires_on "expired does not count, RN02"
+-  }
+-  DRIVING_LICENCE {
+-    uuid id PK
+-    uuid member_id FK
+-    string licence_class "must match the vehicle, RN03"
+-    date expires_on
+-  }
+-  UNAVAILABILITY {
+-    uuid id PK
+-    uuid member_id FK
+-    string type "UNAVAILABLE or PARTIAL"
+-    timestamp start_at "UTC instant, ADR 0012"
+-    timestamp end_at
+-    string source "form or free text"
+-    string free_text "deleted after confirmation, RNF09"
+-    boolean confirmed
+-  }
+-  PIQUETE {
+-    uuid id PK
+-    date duty_date
+-    string period
++    string contact
++    string role "FIREFIGHTER, DUTY_CHIEF, COMMANDER"
+   }
+   SLOT {
+     uuid id PK
+     uuid piquete_id FK
+-    string role
+-    string vehicle
++    string function "e.g. driver, crew"
+     string required_certification
++    string required_licence_class
++    string status "OPEN, FILLED, PENDING_COVER"
+   }
+-  ASSIGNMENT {
++  SWAP_REQUEST {
++    uuid id PK
++    uuid requester_id FK
++    uuid counterpart_id FK
++    string evaluation_state
++    string approval_state "NOT_REQUIRED, WAITING, APPROVED, REJECTED"
++    string engine_version
++  }
++  PRESENCE_CONFIRMATION {
+     uuid id PK
+     uuid slot_id FK
+     uuid member_id FK
+-    string evaluation_state "pending, evaluated or failed"
+-    string result "eligible or ineligible"
+-    string rule_codes "violated rules from the worker"
+-    string engine_version "RF23"
+-    string status "proposed, confirmed or exceptional"
+-    string exceptional_reason "RF19"
++    timestamp asked_at "24 h before, RF42, configurable"
++    string answer "PENDING, COMING, CANNOT"
+   }
+   COVER_REQUEST {
+     uuid id PK
+     uuid slot_id FK
+-    timestamp gap_detected_at "outcome metric start"
+-    timestamp filled_at "outcome metric end"
++    timestamp gap_detected_at
++    timestamp filled_at
++    string status "OPEN, FILLED, ESCALATED, CANCELLED"
+   }
+-  APPLICATION {
++  UNAVAILABILITY {
+     uuid id PK
+-    uuid cover_request_id FK
+     uuid member_id FK
+-    timestamp applied_at
++    timestamp start_at
++    timestamp end_at
++    string source "FORM or FREE_TEXT"
++    boolean confirmed
++  }
++  DAILY_RISK {
++    date duty_date PK
++    int rcm
++    timestamp fetched_at
++    boolean assumed_higher "display only, RN10 off"
+   }
+   AUDIT_RECORD {
+     uuid id PK
+-    uuid author_id FK
+     string action
+     timestamp occurred_at
+     jsonb old_value
+@@ -205,11 +177,10 @@
+     string engine_version
+   }
+   OUTBOX_EVENT {
+-    uuid event_id PK "idempotency key"
++    uuid event_id PK
+     string type
+     jsonb payload
+-    timestamp created_at
+-    timestamp published_at "null until relayed"
++    timestamp published_at
+   }
+   PROCESSED_EVENT {
+     uuid event_id PK
+@@ -219,52 +190,30 @@
+ 
+ ### `elegibilidade-db` (owned by `elegibilidade-worker`)
+ 
+-> **✏️ Example (illustrative — replace).** Starting draft; `assignment_id` and `member_id` are references to `escala-api` data, not foreign keys.
+-
+ ```mermaid
+ erDiagram
+   EVALUATION ||--o{ VIOLATED_RULE : lists
+   EVALUATION {
+     uuid id PK
+-    uuid request_event_id UK "eventId of AvaliacaoPedida"
+-    uuid assignment_id "reference only"
++    uuid request_event_id UK
++    string purpose "SWAP, COVER, ASSIGNMENT"
++    uuid subject_id "swap, application or assignment id"
+     uuid member_id "reference only"
+     string result "ELIGIBLE or INELIGIBLE"
+-    string engine_version "RF23"
+-    timestamp evaluated_at
+-  }
+-  VIOLATED_RULE {
+-    uuid evaluation_id FK
+-    string rule_code "for example RN02"
++    string engine_version
+   }
+   EXTRACTION {
+     uuid id PK
+-    uuid request_event_id UK "eventId of ExtracaoPedida"
+-    string proposed_type "UNAVAILABLE, PARTIAL or NOT_AN_UNAVAILABILITY"
+-    timestamp proposed_start
+-    timestamp proposed_end
+-    string method "model, baseline or fallback"
+-    int latency_ms
+-    boolean confirmed "[TODO: how the worker learns it]"
++    uuid request_event_id UK
++    string method "MODEL, BASELINE or FALLBACK"
+   }
+   RISK_OBSERVATION {
+     uuid id PK
+-    string dico "municipality code"
+-    int rcm "1 to 5"
++    string dico
++    int rcm
+     date forecast_date
+-    timestamp fetched_at "age shown to users"
+-    string source "IPMA or simulator"
+-  }
+-  OUTBOX_EVENT {
+-    uuid event_id PK "idempotency key"
+-    string type
+-    jsonb payload
+-    timestamp created_at
+-    timestamp published_at "null until relayed"
+-  }
+-  PROCESSED_EVENT {
+-    uuid event_id PK
+-    timestamp processed_at
++    timestamp fetched_at
++    string source "IPMA or SIMULATOR"
+   }
+ ```
+ 
+@@ -272,295 +221,222 @@
+ 
+ | §6.4 point | Decision |
+ |---|---|
+-| Consistency requirements | [TODO: decision] |
+-| Data lifecycle | [TODO: decision] |
+-| Retention and deletion | [TODO: decision; keep in line with **09 · Security and Privacy Assessment**] |
+-| Backup or recovery considerations | [TODO: decision] |
+-| Relevant privacy constraints | [TODO: decision] |
+-
+-> **✏️ Example (illustrative — replace).**
+->
+-> | §6.4 point | Decision |
+-> |---|---|
+-> | Consistency requirements | Strong inside each database; eventual between components, made visible as pending / evaluated / failed |
+-> | Retention and deletion | Free text deleted after confirmation (RNF09); other periods as on **09 · Security and Privacy Assessment** |
+-> | Backup or recovery considerations | [TODO: backup tool and frequency]; the outbox lets events be re-sent after a restore |
+-> | Relevant privacy constraints | No names, contacts or free text leave `escala-db` except the free text sent once for extraction |
++| Consistency requirements | Strong inside each database. Between components: pending / evaluated / failed / outdated. A swap or cover is not applied until `evaluated` + `ELIGIBLE` (RF24). If the corps requires approval (**D-01**), that is a second gate after the check |
++| Data lifecycle | Unavailability is confirmed by the member. Swaps: requested → accepted → checked → applied (or waiting for approval). Cover: gap → request to free and qualified members → first valid accept fills the slot. If nobody accepts: wait, then alert the supervisor (**D-02**, open; preferred A+C) |
++| Retention and deletion | Free text deleted after confirmation or discard (RNF09). `ExtracaoPedida` in the DLQ purged after 24 h |
++| Backup or recovery | `pg_dump` per database; unpublished outbox rows are re-sent after restore. See [Deployment and Operations](../operations/deployment-and-operations.md) |
++| Privacy | No names, contacts or date of birth leave `escala-db`. Free text is sent once in `ExtracaoPedida` and is not logged. Reason for unavailability is never stored. Cover balance (RF44) is private to the member |
+ 
+ ## API outline
+ 
+-> **ℹ️ Guidance.** [`contracts/openapi.yaml`](../../contracts/openapi.yaml) [TODO: not yet created] is the source of truth; change it in the same pull request as the endpoint and cover it with a contract test (see [Test Strategy](../testing/test-strategy.md)). List only the main endpoints here, with the roles allowed (from the access-control matrix on **09 · Security and Privacy Assessment**) and the requirement they serve.
++Source of truth: [`contracts/openapi.yaml`](../../contracts/openapi.yaml). Change it in the same pull request as the endpoint.
+ 
+-- REST contract: [`contracts/openapi.yaml`](../../contracts/openapi.yaml) [TODO: file not yet created]
+-- Rendered API docs: [TODO: URL, or how to generate them]
+-- Authentication: mocked token carrying member ID and role, checked on every business endpoint (ADR 0006); `/health` and `/health/ready` stay open for the container runtime and Prometheus [TODO: confirm]
+-- Trace ID header: [TODO: header name]
+-- Error format: [TODO: error format]
++- REST: [`contracts/openapi.yaml`](../../contracts/openapi.yaml)
++- Rendered docs: not published; generate from the YAML
++- Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)); `/health` and `/health/ready` open
++- Trace ID: `X-Trace-Id` (PWA, or API if missing) → `traceId` on every event (RF37)
++- Errors: RFC 7807 Problem Details
+ 
+ | Endpoint | Purpose | Roles | Requirement |
+ |---|---|---|---|
+-| [TODO: method and path] | [TODO: purpose] | [TODO: roles] | [TODO: RF / RNF ID] |
++| `GET /me/roster` | My published shifts | Member | RF10, RF46 |
++| `POST /piquetes` | Supervisor creates a week/day grid with slots | Duty chief, Commander | RF06, RF07 |
++| `POST /piquetes/{id}/publish` | Publish and notify members of their shifts | Duty chief, Commander | RF46 |
++| `POST /unavailabilities` | Form or free text; **202** without waiting for extraction or re-check (RNF02) | All authenticated | RF12, RF13 |
++| `POST /swaps` | Request a swap with a named colleague | Member | RF41 |
++| `POST /swaps/{id}/accept` | Counterpart accepts; **202** and `AvaliacaoPedida` (`purpose: SWAP`) | Counterpart | RF41, RF21 |
++| `POST /swaps/{id}/approve` | Supervisor approval when RN11 is on | Duty chief, Commander | RN11, **D-01** |
++| `POST /slots/{id}/presence` | Confirm coming / cannot, 24 h window | Assigned member | RF42 |
++| `POST /cover-requests/{id}/accept` | First free and qualified accept; **202** and `AvaliacaoPedida` (`purpose: COVER`) | Invited member | RF17, RF43 |
++| `POST /assignments/{id}/confirm` | Supervisor confirms a planned slot; refused without a valid check | Duty chief, Commander | RF18, RF24 |
++| `GET /risk/today` | RCM, age, assumed-higher *display* flag | All authenticated | RF25, RF29 |
++| `GET /health`, `GET /health/ready` | Liveness / readiness on both services | None | RF36 |
+ 
+-> **✏️ Example (illustrative — replace).**
+->
+-> | Endpoint | Purpose | Roles | Requirement |
+-> |---|---|---|---|
+-> | `POST /piquetes` | Create a piquete for a date and period with its slots | Duty chief, Commander [TODO: confirm] | RF06, SCRUM-45 |
+-> | `POST /assignments` | Propose a member for a slot; answers 202 and publishes `AvaliacaoPedida` | Duty chief, Commander | RF08 |
+-> | `GET /slots/{id}/candidates` | Eligible and ineligible candidates with reasons | Duty chief, Commander | RF16 |
+-> | `POST /assignments/{id}/confirm` | Confirm; refused while no valid evaluation exists | Duty chief, Commander | RF18, RF24 |
+-> | `POST /unavailabilities` | Declare unavailability by form or free text; answers 202 without waiting for evaluation | Firefighter, Duty chief, Commander | RF12, RF13, RNF02 |
+-> | `GET /health`, `GET /health/ready` | Liveness and readiness, on both services | None (infrastructure) | RF36 |
++Walking skeleton (Sprint 1): `POST /piquetes` plus a trivial `AvaliacaoPedida` → `AvaliacaoConcluida`, no rules. Swaps and cover are Sprint 2 slices.
+ 
+ ## Asynchronous workflows
+ 
+-> **ℹ️ Guidance.** §6.3 requires "at least one meaningful asynchronous workflow". Keep the same rows as **07 · Technical Design**, say why each one cannot be a synchronous call, and draw the sequence of the principal one (eligibility) with the outbox, the idempotency check, the retries and the dead-letter queue.
++The assignment needs at least one meaningful async workflow (§6.3). The **principal** one is the function check on a swap or cover: the member must not wait on the engine (RNF02), and the schedule must not change without a valid result (RF24, RNF04).
+ 
+ | Workflow | Trigger event | Result event | Why async |
+ |---|---|---|---|
+-| Eligibility | `AvaliacaoPedida` (evaluation requested), `escala-api` → worker | `AvaliacaoConcluida` (evaluation completed), worker → `escala-api` | [TODO: why] |
+-| Extraction | `ExtracaoPedida` (extraction requested), `escala-api` → worker | `ExtracaoConcluida` (extraction completed), worker → `escala-api` | [TODO: why] |
+-| Risk update | Hourly IPMA poll in the worker (timer, no incoming event) | `RiscoAtualizado` (risk updated), worker → `escala-api` | [TODO: why] |
++| Function / eligibility check | `AvaliacaoPedida` (`purpose`: `SWAP`, `COVER` or `ASSIGNMENT`) | `AvaliacaoConcluida` | Accept the click with 202; a slow or stopped worker must not freeze the phone. Applying the change waits for `ELIGIBLE` |
++| Extraction | `ExtracaoPedida` | `ExtracaoConcluida` | The model can be slow or down; the form flow stays up (RF35) |
++| Risk update | Hourly timer in the worker | `RiscoAtualizado` | IPMA is external. `escala-api` stores a read model to *display*; it does not call IPMA and does not change required slots (RN10 off, RF27/RF28 Won't) |
+ 
+-> **✏️ Example (illustrative — replace).** *Eligibility:* the API accepts the request without waiting for the evaluation (RNF02), so a slow or stopped worker never freezes the duty chief's screen. *Extraction:* the language model can be slow or down, and the form flow must keep working regardless. *Risk update:* IPMA is external and polled on a schedule; `escala-api` reacts to the new risk level instead of calling IPMA itself.
++### Cover flow (UJ6) — principal sequence
+ 
+-### Eligibility flow
+-
+-> **✏️ Example (illustrative — replace).** Starting draft of the eligibility flow; status codes and the pending timeout are proposals.
++Presence confirmation is 24 h before the shift (RF42, configurable). “Cannot” or no answer frees the slot and opens a cover request sent only to members who are free and qualified (RF43). **D-02** (open) decides what happens if nobody accepts; the design supports an alert to the supervisor after a wait, and an exceptional assignment with a recorded reason if investors choose A+C.
+ 
+ ```mermaid
+ sequenceDiagram
+   autonumber
+-  actor DC as Duty chief
++  actor M as Assigned member
++  actor C as Colleague
++  actor S as Supervisor
+   participant WEB as web
+   participant API as escala-api
+   participant ADB as escala-db
+   participant MQ as RabbitMQ
+   participant WK as elegibilidade-worker
+-  participant WDB as elegibilidade-db
+ 
+-  DC->>WEB: Propose a member for an open slot
+-  WEB->>API: POST /assignments with trace ID
+-  API->>ADB: One transaction: assignment pending and outbox row AvaliacaoPedida
+-  API-->>WEB: 202 Accepted, evaluation pending
+-  API->>MQ: Outbox relay publishes AvaliacaoPedida with its eventId
+-  API->>ADB: Mark the outbox row as published
+-  MQ->>WK: Deliver AvaliacaoPedida, at least once
+-  WK->>WDB: Has this eventId been processed?
+-  alt eventId already processed
+-    WK->>MQ: Ack, no new effects
+-  else new eventId
+-    WK->>WK: Run the deterministic rules, no AI
+-    WK->>WDB: One transaction: evaluation, processed eventId, outbox row AvaliacaoConcluida
+-    WK->>MQ: Ack
+-    WK->>MQ: Outbox relay publishes AvaliacaoConcluida
+-    MQ->>API: Deliver AvaliacaoConcluida
+-    API->>ADB: Skip if eventId processed, else store result, rule codes and engine version
+-  else processing fails
+-    WK->>MQ: Reject to the next retry queue
+-    Note over MQ: Retry after 5 s, then 30 s, then 2 min, then dead-letter queue
+-    %% [TODO: pending timeout value and which component marks the evaluation failed]
+-    Note over API,ADB: No result before the pending timeout, state failed
++  Note over API: 24 h before start, RF42
++  API->>M: Ask to confirm presence
++  alt cannot or no answer
++    M->>WEB: Cannot come
++    WEB->>API: POST /slots/{id}/presence
++    API->>ADB: Free slot, open CoverRequest, outbox invitations
++    API-->>WEB: 202
+   end
+-  DC->>WEB: Confirm the assignment
+-  WEB->>API: POST confirm
+-  alt evaluated and eligible
+-    API-->>WEB: 200 Confirmed, audit record written
+-  else pending, failed or ineligible
+-    API-->>WEB: 409 Confirmation blocked, reason shown
++  C->>WEB: Accept cover
++  WEB->>API: POST /cover-requests/{id}/accept
++  API->>ADB: Application pending + outbox AvaliacaoPedida
++  API-->>WEB: 202, check pending
++  API->>MQ: Publish AvaliacaoPedida
++  MQ->>WK: Deliver at least once
++  WK->>WK: Deterministic rules, no AI
++  WK->>MQ: AvaliacaoConcluida
++  MQ->>API: Result
++  alt ELIGIBLE and first valid accept
++    API->>ADB: Fill slot, notify supervisor (RN11)
++    API-->>C: Slot yours
++  else INELIGIBLE
++    API-->>C: 409 with template reason (RF22)
++  else pending timeout 60 s
++    API->>ADB: evaluation_state failed; slot stays open
+   end
++  S->>WEB: Sees the change; approves only if D-01 requires it
+ ```
+ 
+-When nobody is eligible, decision D-02 on **Investor Decision Log** settles whether the assignment is blocked or recorded as an exceptional assignment with a written reason (RF19): [TODO: outcome of D-02].
++Swap (UJ3) uses the same check with `purpose: SWAP` and two members. The schedule changes only after `ELIGIBLE` (and approval if RN11 is on).
+ 
+ ## Event contracts
+ 
+-> **ℹ️ Guidance.** One JSON Schema per event in [`contracts/events/`](../../contracts/events/) [TODO: folder not yet created], checked by contract tests on both sides. Events carry only the state the consumer needs (ADR 0008): no names, no contacts, no date of birth, and free text only in `ExtracaoPedida`. Every event has the same envelope; a breaking change gets a new `schemaVersion`, and consumers accept both versions during the rollout.
++Schemas: [`contracts/events/`](../../contracts/events/). Facts only ([ADR 0008](../adr/0008-events-carry-the-state-the-consumer-needs.md)): no names, no contacts, no date of birth. Free text only in `ExtracaoPedida`.
+ 
+-- **Envelope:** `eventId` (UUID, also the idempotency key), `type`, `schemaVersion`, `occurredAt` (UTC instant, ADR 0012), `traceId` (RF37)
+-- **Display time zone:** [TODO: time zone the PWA shows, e.g. Europe/Lisbon]
++- Envelope: `eventId`, `type`, `schemaVersion`, `occurredAt` (UTC, [ADR 0012](../adr/0012-store-instants-in-utc.md)), `traceId`
++- Display time zone: `Europe/Lisbon`
+ 
+-| Event | Producer | Consumer | Schema file |
++| Event | Producer | Consumer | Schema |
+ |---|---|---|---|
+-| `AvaliacaoPedida` | `escala-api` | `elegibilidade-worker` | [TODO: file] |
+-| `AvaliacaoConcluida` | `elegibilidade-worker` | `escala-api` | [TODO: file] |
+-| `ExtracaoPedida` | `escala-api` | `elegibilidade-worker` | [TODO: file] |
+-| `ExtracaoConcluida` | `elegibilidade-worker` | `escala-api` | [TODO: file] |
+-| `RiscoAtualizado` | `elegibilidade-worker` | `escala-api` | [TODO: file] |
++| `AvaliacaoPedida` | `escala-api` | worker | [`avaliacao-pedida.schema.json`](../../contracts/events/avaliacao-pedida.schema.json) |
++| `AvaliacaoConcluida` | worker | `escala-api` | [`avaliacao-concluida.schema.json`](../../contracts/events/avaliacao-concluida.schema.json) |
++| `ExtracaoPedida` | `escala-api` | worker | [`extracao-pedida.schema.json`](../../contracts/events/extracao-pedida.schema.json) |
++| `ExtracaoConcluida` | worker | `escala-api` | [`extracao-concluida.schema.json`](../../contracts/events/extracao-concluida.schema.json) |
++| `RiscoAtualizado` | worker | `escala-api` | [`risco-atualizado.schema.json`](../../contracts/events/risco-atualizado.schema.json) |
+ 
+-> **✏️ Example (illustrative — replace).** An `AvaliacaoPedida` carrying only what the rules need. The member appears by ID only, and `withinAgeLimit: true` replaces a date of birth (RN08).
+->
+-> ```json
+-> {
+->   "eventId": "6f1c2d3e-0000-4000-8000-000000000001",
+->   "type": "AvaliacaoPedida",
+->   "schemaVersion": 1,
+->   "occurredAt": "2026-10-15T07:42:10Z",
+->   "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+->   "assignmentId": "6f1c2d3e-0000-4000-8000-000000000002",
+->   "slot": {
+->     "slotId": "6f1c2d3e-0000-4000-8000-000000000003",
+->     "start": "2026-10-15T08:00:00Z",
+->     "end": "2026-10-15T20:00:00Z",
+->     "requiredCertification": "TAS",
+->     "requiredLicenceClass": "C"
+->   },
+->   "candidate": {
+->     "memberId": "6f1c2d3e-0000-4000-8000-000000000004",
+->     "inActiveRoster": true,
+->     "withinAgeLimit": true,
+->     "certifications": [
+->       { "type": "TAS", "expiresOn": "2026-09-30" }
+->     ],
+->     "licenceClasses": ["B", "C"],
+->     "unavailabilities": [],
+->     "otherAssignments": [
+->       { "start": "2026-10-14T20:00:00Z", "end": "2026-10-15T08:00:00Z" }
+->     ]
+->   }
+-> }
+-> ```
+->
+-> With this input the engine answers `AvaliacaoConcluida` with `result: "INELIGIBLE"`, `violatedRules: ["RN02"]` (the TAS expired before the slot starts) and its `engineVersion`. Minimum rest (RN07) cannot be checked until the internal regulation is obtained. Licence classes are illustrative; the class each vehicle needs is still to confirm (RN03, verify).
++`AvaliacaoPedida` includes `purpose` (`SWAP`  `COVER`  `ASSIGNMENT`) and the candidate facts the rules need (`inActiveRoster`, `withinAgeLimit`, certifications, licences, unavailabilities, other assignments).
+ 
+ ## Reliability of messaging
+ 
+-> **ℹ️ Guidance.** §6.3: the workflow "should demonstrate appropriate handling of retries, duplicate events, failures, and eventual consistency." Name one mechanism per concern, its ADR and the test that proves it in [Test Strategy](../testing/test-strategy.md). Keep the retry schedule identical to **07 · Technical Design**.
+-
+ | §6.3 concern | Mechanism | ADR | Test |
+ |---|---|---|---|
+-| Retries | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |
+-| Duplicate events | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |
+-| Failures | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |
+-| Eventual consistency | [TODO: mechanism] | [TODO: ADR] | [TODO: TC ID] |
+-
+-> **✏️ Example (illustrative — replace).**
+->
+-> | §6.3 concern | Mechanism | ADR | Test |
+-> |---|---|---|---|
+-> | Retries | Retry queues after 5 s, 30 s and 2 min, then the dead-letter queue (DLQ) | 0005 | Integration: the worker fails twice, then succeeds |
+-> | Duplicate events | Idempotency key per event: the consumer stores the `eventId` in the same transaction as the effect and ignores a second delivery (RNF05) | 0009 | Integration: the same event delivered twice gives one evaluation |
+-> | Failures | Transactional outbox: the event is written in the same transaction as the state change, then relayed to RabbitMQ. After the last retry the message goes to the DLQ and shows on the dashboard | 0009 | Integration: broker stopped during a request, event published after restart |
+-> | Eventual consistency | Visible states: pending / evaluated / failed. Confirmation stays blocked while no valid evaluation exists (RF24) | 0008 | End-to-end: confirmation refused while pending |
++| Retries | 5 s, 30 s, 2 min, then DLQ | [0005](../adr/0005-use-rabbitmq-as-message-broker.md) | `TC-SCRUM-39-01` |
++| Duplicate events | `eventId` stored in the same transaction as the effect (RNF05) | [0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md) | `TC-SCRUM-39-02` |
++| Failures | Transactional outbox; last retry → DLQ | [0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md) | `TC-SCRUM-39-03` |
++| Eventual consistency | pending / evaluated / failed / outdated; swap or cover not applied without a valid `ELIGIBLE` result (RF24) | [0008](../adr/0008-events-carry-the-state-the-consumer-needs.md) | `TC-SCRUM-39-04` |
+ 
+-### Queues and the dead-letter queue
+-
+-- Exchanges and queues: [TODO: names]
+-- Outbox relay interval: [TODO: seconds]
+-- Ordering: [TODO: how a consumer ignores a stale result, e.g. an older evaluation arriving after a newer one]
+-- DLQ: alert when it is not empty; replay and purge steps in [Deployment and Operations](../operations/deployment-and-operations.md). `ExtracaoPedida` messages hold free text, so they are purged after [TODO: days] (see **09 · Security and Privacy Assessment**)
+-
+-> **✏️ Example (illustrative — replace).** One topic exchange for Escala events; one queue per consumer and event type; three retry queues with a message time-to-live of 5 s, 30 s and 2 min that dead-letter back to the main queue; a retry-count header decides when a message moves to the DLQ.
++- Exchange `escala.events`. Queues per event type; retry queues `*.retry.5s|30s|2m`; DLQ `escala.dlq`.
++- Outbox relay: 1 s.
++- Ordering: apply a result only if `occurredAt` is newer than the subject's current evaluation.
++- First valid cover accept wins; a later `ELIGIBLE` for the same request is ignored if the slot is already filled.
+ 
+ ## External integration — IPMA
+ 
+-> **ℹ️ Guidance.** §6.5: "The application must handle unavailable, delayed, incomplete, or invalid external data appropriately." Keep the four cases identical to **07 · Technical Design**, add how each is tested with the simulator, and record the thresholds as configuration (ADR 0014). The IPMA terms of use require citing the source and notifying `webmaster@ipma.pt` (see **AI Usage and Third-Party Attribution**).
++Must in the MVP: **fetch** today's and +2 days RCM and **show age** (RF25, RF29). Must **not** in the MVP: compute required composition from risk (RF27, RF28 Won't; RN10 off, F7, **D-00**). A high-risk extra slot is a Should product idea, not an engine rule.
+ 
+-- Rural fire risk (RCM 1–5 per municipality, by DICO code) for today and the next two days: `https://api.ipma.pt/open-data/forecast/meteorology/rcm/rcm-d{0,1,2}.json`
+-- Weather warnings: `https://api.ipma.pt/open-data/forecast/warnings/warnings_www.json`; how a warning maps to our area: [TODO: verify the area field]
+-- Polling: hourly, by `elegibilidade-worker`, with the last valid value cached in `elegibilidade-db` (ADR 0010); each poll publishes `RiscoAtualizado`
+-- Our municipality's DICO code: [TODO: DICO]
+-- Request timeout and retries per poll: [TODO: seconds, count]
+-- Staleness threshold: [TODO: hours]; beyond it, assume the higher risk level (ADR 0013)
+-- Attribution shown in the UI: [TODO: text]; IPMA notified on [TODO: date]
++- RCM: `https://api.ipma.pt/open-data/forecast/meteorology/rcm/rcm-d{0,1,2}.json` — use `dataPrev`, `fileDate`, `local.{DICO}.data.rcm`
++- Warnings: `https://api.ipma.pt/open-data/forecast/warnings/warnings_www.json` (RF26 Could)
++- Poll: hourly, worker, cache last valid value ([ADR 0010](../adr/0010-poll-ipma-hourly-and-cache-the-last-valid-value.md))
++- DICO: **1312** (Porto), configuration ([ADR 0014](../adr/0014-keep-operational-rules-as-configuration.md))
++- Timeout: 5 s, 2 retries
++- Staleness: **3 hours**. Beyond that, the UI shows the last value, its age, and an “assumed higher” *warning*. It does not add slots or block swaps ([ADR 0013](../adr/0013-assume-the-higher-risk-when-ipma-data-is-unusable.md))
++- Attribution: “Fire risk: IPMA (api.ipma.pt)”. Notify `webmaster@ipma.pt` — pending team action
+ 
+-| §6.5 case | Detection | Behaviour | Test (simulator mode) |
++| §6.5 case | Detection | Behaviour | Simulator |
+ |---|---|---|---|
+-| Unavailable | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |
+-| Delayed | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |
+-| Incomplete | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |
+-| Invalid | [TODO: detection] | [TODO: behaviour] | [TODO: mode / TC ID] |
++| Unavailable | Timeout 5 s or HTTP 5xx | Last cache + age; after 3 h, assumed-higher *warning* | `unavailable` — `TC-SCRUM-39-05` |
++| Delayed | `dataPrev` / `fileDate` older than the forecast day | Same as unavailable | `delayed` — `TC-SCRUM-39-06` |
++| Incomplete | DICO missing | Keep last value for our municipality; log warning | `incomplete` — `TC-SCRUM-39-07` |
++| Invalid | Bad JSON or RCM not in 1–5 | Reject payload; keep last valid; `ipma_invalid_total` | `invalid` — `TC-SCRUM-39-08` |
+ 
+-> **✏️ Example (illustrative — replace).**
+->
+-> | §6.5 case | Detection | Behaviour | Test (simulator mode) |
+-> |---|---|---|---|
+-> | Unavailable | Timeout ([TODO: s]) or HTTP error | Serve the last cached value with its age; beyond the staleness threshold, assume the higher risk level (ADR 0013) | Simulator answers 503 or never answers |
+-> | Delayed | The data's reference date is older than expected (verify the field) | Same as unavailable: show the age; beyond the threshold, assume the higher risk level | Simulator serves yesterday's file |
+-> | Incomplete | Our DICO code is missing from the response | Keep the last value for our municipality; log a warning with the trace ID | Simulator drops our DICO code |
+-> | Invalid | Schema validation fails, or an RCM value is outside 1–5 | Reject the whole response, keep the last valid value and increment an error metric | Simulator returns malformed JSON or RCM 7 |
+-
+-**IPMA simulator.** `tools/ipma-sim` serves the same endpoints and reproduces each case above on demand. Tests and the `evaluation` profile use it, so the product runs offline in the evaluation environment (§12). Modes and how to switch them: [TODO: modes and switch, e.g. environment variable or admin endpoint].
++`tools/ipma-sim` serves the same paths. `IPMA_SIM_MODE`: `ok`  `unavailable`  `delayed`  `incomplete`  `invalid`. The `evaluation` profile uses it so the product runs offline (§12).
+ 
+ ## Degraded modes
+ 
+-> **ℹ️ Guidance.** §6.8: "The product should fail safely and communicate limitations clearly to users." Keep the rows and messages identical to **07 · Technical Design**, and add how each failure is detected and how it is demonstrated. If Escala itself is down, the corps goes back to the phone. The step-by-step runbook is in [Deployment and Operations](../operations/deployment-and-operations.md).
++If Escala itself is down, the corps goes back to the phone. Runbook: [Deployment and Operations](../operations/deployment-and-operations.md).
+ 
+-| Dependency down | Behaviour | Message to the user | Detection | Demonstrated by |
+-|---|---|---|---|---|
+-| IPMA | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |
+-| AI service | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |
+-| `elegibilidade-worker` | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |
+-| [TODO: other dependency, e.g. RabbitMQ, network connection] | [TODO: behaviour] | [TODO: message] | [TODO: detection] | [TODO: demo / TC ID] |
+-
+-> **✏️ Example (illustrative — replace).**
+->
+-> | Dependency down | Behaviour | Message to the user | Detection | Demonstrated by |
+-> |---|---|---|---|---|
+-> | IPMA | Last value shown with its age; beyond the threshold, the higher risk level is assumed | "Fire risk from IPMA last updated 3 h ago. Showing the higher level until IPMA responds." | Failed polls; data-age metric above the threshold | Simulator in "unavailable" mode |
+-> | AI service | Free-text box replaced by the unavailability form (RF35) | "Automatic reading is unavailable. Please enter the dates in the form." | Extraction timeout or error; feature flag off | Stop the model or turn the flag off |
+-> | `elegibilidade-worker` | Evaluations stay "pending"; confirmation is blocked | "Eligibility check pending. You can confirm once the check is complete." | No `AvaliacaoConcluida`; queue depth grows | Stop the worker container, then restart it and watch the backlog drain |
++| Dependency down | Behaviour | Message to the user |
++|---|---|---|
++| IPMA | Last RCM with age; after 3 h, assumed-higher warning on the badge only | "Fire risk from IPMA last updated {age}. Level may be higher than shown. The schedule is unchanged." |
++| AI service | Form instead of free-text extraction (RF35); template reasons for failed swaps/covers | "Automatic reading is unavailable. Please enter the dates in the form." |
++| `elegibilidade-worker` | Unavailability and swap/cover *requests* still 202. Applying a swap or filling a cover stays pending | "Check pending. Your shift will update when the check completes." |
++| RabbitMQ | Same as worker down; outbox waits; `/health/ready` 503 | "Check pending. Your shift will update when the check completes." |
+ 
+ ## Deployment view
+ 
+-> **ℹ️ Guidance.** Show where each container runs, how it gets there (the pipeline) and which profile it belongs to: `default`, or `evaluation` (IPMA simulator and AI fallback, runs offline, §12). Commands, configuration, secrets and rollback live in [Deployment and Operations](../operations/deployment-and-operations.md); link to it rather than copying them.
++PlantUML: [`c4-deployment.puml`](c4-deployment.puml). Commands: [Deployment and Operations](../operations/deployment-and-operations.md).
+ 
+-- Environment: [TODO: where it is deployed]
+-- URL: [TODO: URL]
+-- Image registry: [TODO: registry, or built on the host]
+-
+-> **✏️ Example (illustrative — replace).** Starting draft of the deployment view.
++- Environment: Docker Compose on a laptop (`default` or `evaluation`). Shared host not provisioned yet
++- URLs (planned): PWA `http://localhost:4200`, API `http://localhost:8080`, Grafana `http://localhost:3000`
++- Registry: GHCR planned; until then, images built on the host
++- `evaluation`: `ipma-sim`, `AI_ENABLED=false`, offline (§12)
+ 
+ ```mermaid
+ flowchart TB
+-  pr["Pull request merged to main"] --> ci["GitHub Actions: build, test, secret scan, build images"]
+-  ci -->|"push images"| reg["Image registry: [TODO: registry]"]
+-  subgraph host["Docker Compose host: [TODO: where]"]
+-    web["web: Angular PWA"]
++  pr["PR merged to main"] --> ci["GitHub Actions: build, test, secret scan, images"]
++  ci --> reg["GHCR (planned)"]
++  subgraph host["Docker Compose host"]
++    web["web"]
+     api["escala-api"]
+     worker["elegibilidade-worker"]
+     apidb[("escala-db")]
+     wdb[("elegibilidade-db")]
+     mq{{"RabbitMQ"}}
+-    sim["ipma-sim: evaluation profile and tests"]
++    sim["ipma-sim"]
+     prom["Prometheus"]
+     graf["Grafana"]
+   end
+-  reg -->|"pull on deploy"| host
++  reg --> host
+   api --> apidb
+   worker --> wdb
+-  api <-->|"events"| mq
+-  worker <-->|"events"| mq
+-  prom -->|"scrapes metrics"| api
+-  prom -->|"scrapes metrics"| worker
+-  graf -->|"queries"| prom
+-  worker -->|"default profile"| ipma["IPMA open data"]
+-  worker -.->|"evaluation profile"| sim
++  api <--> mq
++  worker <--> mq
++  prom --> api
++  prom --> worker
++  graf --> prom
++  worker -->|"default"| ipma["IPMA"]
++  worker -.->|"evaluation"| sim
+ ```
+ 
+ ## Observability and SLIs
+ 
+-> **ℹ️ Guidance.** §6.7 sets a minimum: structured application logs, health checks, relevant metrics, correlation or trace identifiers, error reporting and a small operational dashboard. Say where each one is and how the trace ID travels from `web` through `escala-api` and the event to `elegibilidade-worker`. Give each SLI a precise definition, a target and the metric it comes from; keep the two SLIs identical to **07 · Technical Design**.
++- Logs: JSON to stdout (`timestamp` UTC, `level`, `service`, `traceId`, `eventId`, `message`); `docker compose logs -f <service>`. No contacts or free text
++- Trace ID: PWA → `X-Trace-Id` → events (RF37)
++- Health: `/health`, `/health/ready` (RF36)
++- Metrics: checks requested / completed / failed, duration, DLQ size, IPMA data age, extractions fallen back to form, open cover requests, time-to-fill (RF38)
++- Errors: Grafana alerts (worker not ready, stale IPMA, DLQ > 0, slow checks) → Jira Bug
++- Dashboard: Grafana `http://localhost:3000` (RF39)
+ 
+-- Logs: [TODO: format and where to read them]; never contacts or free text (see **09 · Security and Privacy Assessment**)
+-- Trace ID: created at [TODO: web or the API edge], sent as an HTTP header and as `traceId` in every event (RF37)
+-- Health checks: `/health` (liveness) and `/health/ready` (readiness: database and broker reachable) on both services (RF36)
+-- Metrics: [TODO: main metrics], exposed to Prometheus (RF38)
+-- Error reporting: [TODO: how errors surface to the team]
+-- Dashboard: Grafana — [TODO: link] (RF39)
++| SLI | Definition | Target | Shown on |
++|---|---|---|---|
++| Function-check p95 | From outbox `AvaliacaoPedida` to result applied | < 5 s (RNF01) | Grafana “Check p95” |
++| Checks without manual intervention | Completed `evaluated` with no DLQ replay and no exceptional assignment | ≥ 95 % | Grafana “Unattended checks” |
+ 
+-| SLI | Definition | Target | Measured from | Shown on |
+-|---|---|---|---|---|
+-| Eligibility evaluation p95 latency | [TODO: from which timestamp to which] | < 5 s (RNF01) | [TODO: metric] | [TODO: dashboard panel] |
+-| % of requests evaluated without manual intervention | [TODO: what counts as manual intervention] | [TODO: %] | [TODO: metric] | [TODO: dashboard panel] |
++Product success (cover median < 15 min) is an outcome metric on **MVP, Success Criteria and Ethical Engagement**, not an SLI of this stack.
+ 
+-> **✏️ Example (illustrative — replace).** Log line fields: `timestamp` (UTC), `level`, `service`, `traceId`, `eventId`, `message`. Metrics: evaluations requested / completed / failed, evaluation duration from the outbox row of `AvaliacaoPedida` to `AvaliacaoConcluida` applied, DLQ size, age of the IPMA data served, and how many extractions fell back to the form. "Manual intervention" counts DLQ replays and exceptional assignments.
++## Open product decisions that this design must not pre-empt
++
++| ID | Question | Effect on this design |
++|---|---|---|
++| **D-01** | Must a swap wait for supervisor approval? | `approval_state` and `POST /swaps/{id}/approve`; default informed-only, setting per corps (RN11) |
++| **D-02** | Nobody accepts a cover? | Cover request can `ESCALATED`; exceptional assignment with reason if investors pick C. Not “nobody eligible for a planned slot” |
+ 
+ ## Done when
+-- [ ] Every §7.1.2 #7 item is covered: System context; Container or component view; Data model; API outline; Asynchronous workflow; External integration; Deployment view
+-- [ ] All Mermaid diagrams render on GitHub and match the code: Docker Compose file, `contracts/openapi.yaml`, `contracts/events/`
+-- [ ] Components, events, retry schedule, IPMA cases, degraded modes and SLIs agree with **07 · Technical Design**, and its exported diagrams are current
+-- [ ] Every remaining `[TODO: …]` points to a Jira issue or a *Proposed* ADR
++
++- [x] §7.1.2 #7 items covered, aligned with **D-00** (UJ1, UJ3, UJ6)
++- [x] Mermaid matches planned Compose, OpenAPI and events
++- [ ] Confluence **07 · Technical Design** updated *by a page editor* from this file (agent: view only)
+ - [ ] Reviewed by another team member
+-- [ ] Guidance and example blocks removed
+-- [ ] Status set to Done
++- [x] Guidance/example template blocks not used in this Git document
++- [ ] Status Done after review
+Index: docs/testing/test-strategy.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Test Strategy\r\n\r\n| Field | Value |\r\n|---|---|\r\n| Status | Draft |\r\n| Owner | [TODO: name] |\r\n| Contributors | [TODO: names] |\r\n| Deliverable | Sprint 2 · #10 Automated unit, integration, and relevant end-to-end tests; Final submission · #7 Test and quality evidence |\r\n| Sources | Assignment §8.3, §9, §11, §12; Deck (Analysis → Design → Test plan → Code → Test execution; Definition of Ready; Definition of Done) |\r\n| Confluence page | — (linked from **Definition of Done (DoD)** and **07 · Technical Design**) |\r\n| Last updated | YYYY-MM-DD |\r\n\r\n> **ℹ\uFE0F About this document.** How Escala is tested: which risks drive the tests, which test types run where, how test cases are named and traced, and where the evidence lives. It is the \"Test strategy and evidence\" of assignment §9 and answers §8.3; developers, reviewers and the teaching staff read it next to the [Technical Design](../architecture/technical-design.md) and [Deployment and Operations](../operations/deployment-and-operations.md).\r\n\r\n## Approach\r\n\r\n> **ℹ\uFE0F Guidance.** Assignment §8.3: \"The test strategy should be proportional to the system's risks and architecture.\" List the top 5–7 product and technical risks, most severe first, and name the test type that covers each; a risk with no test goes to [What remains untested and why](#what-remains-untested-and-why). Test cases are planned before code, following the deck's *Analysis → Design → Test plan → Code → Test execution*; the **Definition of Ready (DoR)** already requires `TC-` IDs.\r\n\r\n```mermaid\r\nflowchart LR\r\n  A[\"Analysis: story and RN IDs\"] --> D[\"Design: technical design and ADRs\"]\r\n  D --> T[\"Test plan: TC IDs in Jira (DoR)\"]\r\n  T --> C[\"Code: tests written with the code\"]\r\n  C --> E[\"Test execution: CI and recorded functional tests (DoD)\"]\r\n```\r\n\r\n| # | Risk | Test type(s) that cover it | Requirement / rule |\r\n|---|---|---|---|\r\n| 1 | [TODO: risk] | [TODO: test type] | [TODO: RN / RF / RNF ID] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n> | # | Risk | Test type(s) that cover it | Requirement / rule |\r\n> |---|---|---|---|\r\n> | 1 | Someone with an expired TAS is confirmed on a slot | Unit (eligibility rules), end-to-end (confirmation blocked) | RN02, RF24, RNF04 |\r\n> | 2 | A duplicate event creates a second evaluation or assignment | Integration (real RabbitMQ and PostgreSQL), contract | RNF05 |\r\n> | 3 | IPMA is down or returns invalid data and the risk shown is wrong | Resilience (IPMA simulator modes), unit (response parser) | RF25, RF29, RNF03 |\r\n> | 4 | `escala-api` and `elegibilidade-worker` disagree on an event schema | Contract | `contracts/events/` |\r\n> | 5 | The AI extraction reads the wrong dates and the user does not notice | AI evaluation, end-to-end (editable fields, \"read automatically\" label) | RF31–RF33 |\r\n\r\n## Test types\r\n\r\n> **ℹ\uFE0F Guidance.** One row per §8.3 test type; in *What it covers*, name the risk or requirement it protects, because §8.3 asks teams to \"justify the types of tests selected\". Tools marked \"e.g.\" are suggestions: confirm or replace them. If you drop a type, move it to *What remains untested and why* with the reason.\r\n\r\n| Type | What it covers | Tool | CI stage | Owner |\r\n|---|---|---|---|---|\r\n| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | e.g. JUnit 5 (`escala-api`, `elegibilidade-worker`), [TODO: tool] (`apps/web`) | tests | [TODO: name] |\r\n| Integration | Each service with its real PostgreSQL and RabbitMQ: transactional outbox, idempotency key, retries 5 s / 30 s / 2 min then DLQ, free text deleted after confirmation (RNF09) | e.g. Testcontainers | tests | [TODO: name] |\r\n| Contract | API ↔ worker event schemas (`AvaliacaoPedida`, `AvaliacaoConcluida`, `ExtracaoPedida`, `ExtracaoConcluida`, `RiscoAtualizado`) against `contracts/events/`; REST endpoints against `contracts/openapi.yaml` | [TODO: schema validator used in both test suites] | tests | [TODO: name] |\r\n| End-to-end | Principal journey J1 on the Docker Compose stack: declared unavailability → gap → eligible candidates → confirmation; confirmation blocked without a valid evaluation (RF24) | [TODO: browser test tool] | image (runs against the built images) [TODO: confirm] | [TODO: name] |\r\n| Security | Static analysis; dependency check; secret scanning (RNF07); role checks on every endpoint, e.g. nobody confirms their own application | [TODO: static analysis tool]; [TODO: dependency checker]; [TODO: secret scanner] | static analysis; dependency check | [TODO: name] |\r\n| Performance | Eligibility evaluation p95 < 5 s (RNF01); unavailability accepted with 202 in < 500 ms (RNF02) | [TODO: load-test tool] | [TODO: scheduled, or manual before the Sprint 3 review] | [TODO: name] |\r\n| Resilience | IPMA simulator modes (unavailable, delayed, incomplete, invalid); worker stopped → evaluations \"pending\", confirmation blocked; AI off → form fallback | IPMA simulator (`tools/ipma-sim`), Docker Compose | [TODO: stage, e.g. nightly] | [TODO: name] |\r\n| AI evaluation | Extraction on the 60-case synthetic dataset, compared with the non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], against the acceptance criteria on **06 · Responsible AI Opportunity Assessment** (start/end exact ≥ 95%, type ≥ 90%, adverse handled 100%, p95 latency < 4 s) | Dataset runner [TODO: path] | [TODO: when the prompt, model or dataset changes] | [TODO: name] |\r\n\r\n## Test case convention\r\n\r\n- **ID:** `TC-<story>-<n>`, e.g. `TC-SCRUM-999-01`, `TC-SCRUM-999-02`.\r\n- **Format:** Given/When/Then, written in the Jira story's acceptance criteria before coding (DoR: \"a test plan and test cases are outlined\").\r\n- **Coverage:** every business rule (`RN`) gets at least one positive, one negative and one **boundary** test case.\r\n- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story (e.g. `@DisplayName(\"TC-SCRUM-999-03 …\")`, `def test_tc_esc_31_03_…`).\r\n- **Manual functional tests** (DoD: \"functional tests performed and recorded\"): record TC ID, date, version, who and result [TODO: where, e.g. a comment on the Jira story].\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** Story `SCRUM-999`, reject assigning someone whose TAS has expired (RN02):\r\n> - `TC-SCRUM-999-01` (negative): **Given** Member B's TAS expired before the slot date, **When** the duty chief assigns Member B, **Then** the evaluation is ineligible with rule code `RN02` and confirmation is blocked.\r\n> - `TC-SCRUM-999-02` (boundary): **Given** Member C's TAS expires on the slot date, **When** the duty chief assigns Member C, **Then** [TODO: eligible or ineligible, once the team confirms how RN02 treats the expiry day].\r\n> - `TC-SCRUM-999-03` (positive): **Given** Member A holds a TAS valid beyond the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the evaluation is eligible and the assignment can be confirmed.\r\n\r\n## Boundary cases catalogue\r\n\r\n> **ℹ\uFE0F Guidance.** Boundaries are where eligibility bugs hide. Keep one row per boundary and add one whenever a rule is refined. When the expected behaviour depends on a rule that is not confirmed yet, write `[TODO: …]` naming the rule (e.g. `[TODO: RN07 — internal regulation still to obtain]`); never guess the rule in a test.\r\n\r\n| Boundary case | Rule / requirement | Expected behaviour | Test case(s) |\r\n|---|---|---|---|\r\n| Certification expiring on the slot date | RN02 | [TODO: eligible or ineligible — decide how RN02 treats the expiry day] | `TC-SCRUM-999-02` |\r\n| Rest period ending exactly at the next start | RN07 | [TODO: internal regulation still to obtain; the minimum rest is configurable] | [TODO: TC ID] |\r\n| Duty period crossing midnight | RN05, RN09 | Overlap is checked on start/end instants, not calendar dates; hours count on [TODO: which day] | [TODO: TC ID] |\r\n| Daylight-saving change | RN07, RN09, ADR 0012 (UTC instants with explicit time zone) | A slot spanning the clock change is one hour longer or shorter than its wall-clock times suggest; rest and hours use real duration [TODO: confirm] | [TODO: TC ID] |\r\n| Duplicate event delivered twice | RNF05 | The idempotency key makes the second delivery a no-op: one evaluation, one assignment | [TODO: TC ID] |\r\n| [TODO: next boundary] | [TODO: rule] | [TODO: behaviour] | [TODO: TC ID] |\r\n\r\n## Test data\r\n\r\n> **ℹ\uFE0F Guidance.** Assignment §11: \"Real personal or sensitive data should not be used when synthetic or anonymized data is sufficient.\" For Escala synthetic data is always sufficient, so every test uses it. Say where each data set lives and how it is produced; never copy real rosters, certifications or messages, even anonymised.\r\n\r\n- **Seed data:** placeholder members (Member A, Member B…), synthetic certifications and licences, one fictional corps. Path: [TODO: path].\r\n- **IPMA fixtures:** simulator responses for RCM levels 1–5 and for the four §6.5 cases (unavailable, delayed, incomplete, invalid). Path: `tools/ipma-sim` [TODO: fixture folder].\r\n- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path [TODO: path]; origin and limitations on **06 · Responsible AI Opportunity Assessment**.\r\n- **Clock:** tests use a fixed clock [TODO: how], so boundary cases do not depend on the day the pipeline runs.\r\n\r\n> **✏\uFE0F Example (illustrative — replace).** One synthetic seed member: `{\"code\": \"M-A\", \"name\": \"Member A\", \"roster\": \"ACTIVE\", \"certifications\": [{\"type\": \"TAS\", \"expiresOn\": \"YYYY-MM-DD\"}], \"licenceClass\": \"[TODO: class]\"}`. No contacts, no date of birth.\r\n\r\n## Evidence\r\n\r\n> **ℹ\uFE0F Guidance.** Assignment §12 asks for \"Test and quality evidence\". Every row must end in a link a reviewer can open, not \"ask us\". Attach the final reports to the release so they outlive CI artefact retention [TODO: check the retention period].\r\n\r\n| Evidence | Produced by | Where to find it |\r\n|---|---|---|\r\n| Unit, integration and contract test reports | CI `tests` stage | GitHub Actions run → artefacts [TODO: link] |\r\n| Coverage report | CI `tests` stage | [TODO: link] |\r\n| Static analysis and dependency check reports | CI `static analysis` and `dependency check` stages | [TODO: link] |\r\n| End-to-end report (screenshots on failure) | CI `image` stage [TODO: confirm] | [TODO: link] |\r\n| Recorded manual functional tests | Team members | [TODO: where, e.g. Jira story comments] |\r\n| Performance results | [TODO: stage or person] | [TODO: link] |\r\n| Resilience and degraded-mode demonstration | Runbook in [Deployment and Operations](../operations/deployment-and-operations.md) | [TODO: recording or CI run link] |\r\n| AI evaluation results | Dataset runner | **06 · Responsible AI Opportunity Assessment** [TODO: link to the report] |\r\n\r\n## What remains untested and why\r\n\r\n> **ℹ\uFE0F Guidance.** Required by §8.3: \"Teams must justify the types of tests selected and identify important areas that remain untested.\" Name each untested area, why it is untested, what could go wrong and what reduces the risk. An honest gap is worth more than a claimed coverage number; review this list at every sprint review.\r\n\r\n| Area | Why it is untested | What could go wrong | Mitigation / when |\r\n|---|---|---|---|\r\n| [TODO: area] | [TODO: reason] | [TODO: consequence] | [TODO: mitigation or planned sprint] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n> | Area | Why it is untested | What could go wrong | Mitigation / when |\r\n> |---|---|---|---|\r\n> | Real authentication | Mocked in the MVP (§6.6 footnote); roles are tested, login is not | Integration problems with a future identity provider | [TODO: when real authentication is planned] |\r\n> | Live IPMA API failures | The live API cannot be forced to fail; failure modes are reproduced with the simulator only | A real response differs from the simulator's format | One check against the live endpoints [TODO: when]; unknown formats are treated as invalid data |\r\n> | PWA on many phone models | No device lab | Layout or offline problems on some phones | Manual check on [TODO: number] team phones; accessibility review in Sprint 3 |\r\n\r\n## Done when\r\n- [ ] Every top risk in *Approach* maps to at least one test type, or is listed under *What remains untested and why*\r\n- [ ] Every business rule (RN) has positive, negative and boundary test cases, with `TC-` IDs linked in Jira\r\n- [ ] Every link under *Evidence* opens the latest green run or report\r\n- [ ] *What remains untested and why* is filled and reviewed at the last sprint review\r\n- [ ] Reviewed by another team member\r\n- [ ] Guidance and example blocks removed\r\n- [ ] Status set to Done\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/testing/test-strategy.md b/docs/testing/test-strategy.md
+--- a/docs/testing/test-strategy.md	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/testing/test-strategy.md	(date 1793044742233)
+@@ -75,7 +75,7 @@
+ | Rest period ending exactly at the next start | RN07 | [TODO: internal regulation still to obtain; the minimum rest is configurable] | [TODO: TC ID] |
+ | Duty period crossing midnight | RN05, RN09 | Overlap is checked on start/end instants, not calendar dates; hours count on [TODO: which day] | [TODO: TC ID] |
+ | Daylight-saving change | RN07, RN09, ADR 0012 (UTC instants with explicit time zone) | A slot spanning the clock change is one hour longer or shorter than its wall-clock times suggest; rest and hours use real duration [TODO: confirm] | [TODO: TC ID] |
+-| Duplicate event delivered twice | RNF05 | The idempotency key makes the second delivery a no-op: one evaluation, one assignment | [TODO: TC ID] |
++| Duplicate event delivered twice | RNF05 | The idempotency key makes the second delivery a no-op: one evaluation, one assignment | `TC-SCRUM-39-02` |
+ | [TODO: next boundary] | [TODO: rule] | [TODO: behaviour] | [TODO: TC ID] |
+ 
+ ## Test data
+Index: docs/adr/README.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Architecture Decision Records (README)\r\n\r\nThis folder holds Escala's architecture decision records (ADRs), one file per decision. It satisfies Sprint 1 deliverable #8, \"Architecture Decision Records\" (assignment §7.1.2), which asks for *\"Principal architectural and technological choices; Alternatives considered; Decision rationale; Consequences and trade-offs\"*. The Confluence page **08 · Architecture Decision Records** is the reviewers' index and points here. How this folder relates to the rest of the documentation is explained in the [Documentation README](../README.md).\r\n\r\n## What an ADR is\r\n\r\nAn ADR is a short record of one significant architecture or technology decision. It covers the context that forced the decision, the decision itself, the alternatives rejected and why, and the consequences. Read in order, the ADRs tell how the architecture evolved, which is the basis of the Sprint 3 *architecture evolution narrative* (§7.3.2 #11).\r\n\r\n## When to write one\r\n\r\nWrite an ADR when a decision:\r\n\r\n- chooses or changes a component, technology, data store, integration style or security mechanism (e.g. the message broker, one database per component, mocked authentication)\r\n- is hard to reverse, or affects more than one component (`escala-api`, `elegibilidade-worker`, `web`, `infra`)\r\n- changes a quality attribute (`RNF`) or how an assignment requirement from §6 is met\r\n- revises an earlier ADR, including a technical decision revised after investor feedback (§5.7). In that case, also link the entry on **Investor Decision Log**\r\n\r\nDo not write one for routine code choices (naming, a helper library, refactorings) that stay inside one component.\r\n\r\nThe planned first ADRs (0001–0014, all *Proposed*) are listed on **08 · Architecture Decision Records**. Use those numbers so that both indexes agree. ADR 0001 records the decision to keep ADRs in this folder.\r\n\r\n## Naming\r\n\r\n- File: `NNNN-kebab-case-title.md`, with four digits, numbered in sequence and never reused. Example: `0005-use-rabbitmq-as-message-broker.md`.\r\n- H1 inside the file: `# NNNN · <Decision>`, e.g. `# 0005 · Use RabbitMQ as message broker`.\r\n- Title the decision, not the topic (\"Use RabbitMQ as message broker\", not \"Messaging\").\r\n- `0000` is reserved for the [template](0000-adr-template.md).\r\n\r\n## Statuses\r\n\r\n| Status | Meaning |\r\n|---|---|\r\n| Proposed | Written and open for review; not yet agreed by the team |\r\n| Accepted | Agreed; the code follows it |\r\n| Superseded by NNNN | Replaced by a later ADR; kept for history |\r\n| Deprecated | No longer applies and nothing replaces it (e.g. the component was removed) |\r\n\r\n## Rules\r\n\r\n- **At least one rejected alternative, with its reason.** An ADR with no alternatives is a statement, not a decision.\r\n- **Written the day the decision is taken.** The Date field is that day, not the day the ADR was tidied up. Each ADR has its own date.\r\n- **Never edit an accepted ADR's decision; supersede it.** Write a new ADR that says \"Supersedes NNNN\" under *Related*. In the old ADR, change only the status line to \"Superseded by NNNN\". Superseding this way keeps the history.\r\n- **One decision per file.** Split a decision that covers two separate questions.\r\n- **Reviewed like code.** Each ADR goes through a pull request whose branch or title carries the Jira key (`SCRUM-xx`), and another member approves it. The *Deciders* field and the PR author are individual contribution evidence (\"Architecture decisions\", §10).\r\n- **Keep both indexes in sync.** When you add or change an ADR, update the table below and **08 · Architecture Decision Records** at the same time.\r\n\r\n## How to add an ADR\r\n\r\n1. Copy [0000-adr-template.md](0000-adr-template.md) to `NNNN-kebab-case-title.md`, using the next free number.\r\n2. Fill every section and delete the guidance blocks and the example.\r\n3. Open a pull request referencing the Jira issue. Set the status to *Accepted* once the team agrees.\r\n4. Add a row to the index below and to **08 · Architecture Decision Records**.\r\n\r\n## Index\r\n\r\nOne row per ADR, newest last. Link each file, e.g. `[0005](0005-use-rabbitmq-as-message-broker.md)`. The table starts empty: until the first ADR file is merged, the planned numbers and titles (0001–0014, all *Proposed*) are on **08 · Architecture Decision Records**. Add a row here when its file exists, with the same number and title.\r\n\r\n| ADR | Title | Status | Date | Supersedes / superseded by |\r\n|---|---|---|---|---|\r\n| [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Proposed | 2026-10-11 | — |\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/adr/README.md b/docs/adr/README.md
+--- a/docs/adr/README.md	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/adr/README.md	(date 1793044741635)
+@@ -53,8 +53,22 @@
+ 
+ ## Index
+ 
+-One row per ADR, newest last. Link each file, e.g. `[0005](0005-use-rabbitmq-as-message-broker.md)`. The table starts empty: until the first ADR file is merged, the planned numbers and titles (0001–0014, all *Proposed*) are on **08 · Architecture Decision Records**. Add a row here when its file exists, with the same number and title.
++One row per ADR, newest last. Link each file, e.g. `[0005](0005-use-rabbitmq-as-message-broker.md)`. Keep this table identical to **08 · Architecture Decision Records**.
+ 
+ | ADR | Title | Status | Date | Supersedes / superseded by |
+ |---|---|---|---|---|
++| [0001](0001-keep-adrs-in-git.md) | Keep architecture decision records in Git | Proposed | 2026-09-23 | — |
++| [0002](0002-split-backend-into-two-independently-deployable-components.md) | Split the backend into two independently deployable components | Proposed | 2026-09-24 | — |
++| [0003](0003-one-postgresql-database-per-component.md) | Give each component its own PostgreSQL database | Proposed | 2026-09-24 | — |
++| [0004](0004-use-a-monorepo.md) | Keep the product in one monorepo | Proposed | 2026-09-25 | — |
++| [0005](0005-use-rabbitmq-as-message-broker.md) | Use RabbitMQ as message broker | Proposed | 2026-09-26 | — |
++| [0006](0006-mock-authentication-and-enforce-roles.md) | Mock authentication and enforce real roles | Proposed | 2026-09-28 | — |
++| [0007](0007-deterministic-eligibility-engine-ai-never-decides.md) | Keep eligibility deterministic; AI never decides | Proposed | 2026-09-29 | — |
++| [0008](0008-events-carry-the-state-the-consumer-needs.md) | Carry the consumer's required state on the event | Proposed | 2026-09-30 | — |
++| [0009](0009-transactional-outbox-and-idempotent-consumers.md) | Use a transactional outbox and idempotent consumers | Proposed | 2026-10-02 | — |
++| [0010](0010-poll-ipma-hourly-and-cache-the-last-valid-value.md) | Poll IPMA hourly and cache the last valid value | Proposed | 2026-10-03 | — |
++| [0011](0011-call-a-language-model-behind-a-feature-flag.md) | Call a language model behind a feature flag | Proposed | 2026-10-06 | — |
++| [0012](0012-store-instants-in-utc.md) | Store instants in UTC and display Europe/Lisbon | Proposed | 2026-10-07 | — |
++| [0013](0013-assume-the-higher-risk-when-ipma-data-is-unusable.md) | Assume the higher risk when IPMA data is unusable | Proposed | 2026-10-08 | — |
++| [0014](0014-keep-operational-rules-as-configuration.md) | Keep operational rules as configuration | Proposed | 2026-10-09 | — |
+ | [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Proposed | 2026-10-11 | — |
+Index: docs/architecture/high_level_system_architecture.puml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>@startuml\r\n' Escala — high-level system architecture.\r\n' One Angular client, two Java (Spring Boot) services, one PostgreSQL database per service.\r\n' The services talk asynchronously through RabbitMQ; no service reads another service's database.\r\n\r\nskinparam componentStyle rectangle\r\nskinparam packageStyle rectangle\r\nskinparam linetype polyline\r\nskinparam nodesep 90\r\nskinparam ranksep 120\r\n\r\n<style>\r\narrow {\r\n  FontSize 11\r\n}\r\n</style>\r\n\r\nleft to right direction\r\n\r\ntitle Escala — High-level system architecture\r\n\r\nlegend top right\r\n  |= Colour |= Element |\r\n  |<#E8F5E9> | Client (Angular) |\r\n  |<#E3F2FD> | escala-api (Java) |\r\n  |<#FFF3E0> | elegibilidade-worker (Java) |\r\n  |<#EEEEEE> | Messaging / external |\r\n  Solid line: synchronous. Dashed line: asynchronous.\r\nendlegend\r\n\r\nactor \"Firefighter\" as FF\r\nactor \"Duty chief\" as DC\r\nactor \"Commander\" as CMD\r\n\r\npackage \"Client\" #E8F5E9 {\r\n    component \"web\\nAngular PWA\" as WEB\r\n}\r\n\r\npackage \"escala-api\" #E3F2FD {\r\n    component \"escala-api\\nSpring Boot\\nREST API\" as API\r\n    database \"escala-db\\nPostgreSQL\" as ADB\r\n}\r\n\r\npackage \"Messaging\" #EEEEEE {\r\n    queue \"RabbitMQ\" as MQ\r\n}\r\n\r\npackage \"elegibilidade-worker\" #FFF3E0 {\r\n    component \"elegibilidade-worker\\nSpring Boot\" as WK\r\n    database \"elegibilidade-db\\nPostgreSQL\" as WDB\r\n}\r\n\r\npackage \"External systems\" #EEEEEE {\r\n    component \"IPMA\\nfire risk data\" as IPMA\r\n    component \"Language model\" as LLM\r\n}\r\n\r\n' Users\r\nFF --> WEB\r\nDC --> WEB\r\nCMD --> WEB\r\n\r\n' Client -> escala-api\r\nWEB --> API : REST/JSON\\n(HTTPS)\r\n\r\n' Each service owns its database\r\nAPI --> ADB : SQL\r\nWK --> WDB : SQL\r\n\r\n' Asynchronous messaging: one line per service, both directions\r\nAPI <..> MQ : requests out\\nresults in\r\nMQ <..> WK : requests in\\nresults out\r\n\r\n' External systems\r\nWK --> IPMA : HTTPS\r\nWK --> LLM : HTTPS\r\n\r\n@enduml\r\n\r\n\r\n\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/architecture/high_level_system_architecture.puml b/docs/architecture/high_level_system_architecture.puml
+--- a/docs/architecture/high_level_system_architecture.puml	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/architecture/high_level_system_architecture.puml	(date 1793047094888)
+@@ -1,13 +1,14 @@
+ @startuml
+-' Escala — high-level system architecture.
+-' One Angular client, two Java (Spring Boot) services, one PostgreSQL database per service.
+-' The services talk asynchronously through RabbitMQ; no service reads another service's database.
++' Escala — high-level system architecture (C4 containers), aligned with D-00.
++' Angular PWA, two Java Spring Boot services, one PostgreSQL per service.
++' Async through RabbitMQ; no service reads another service's database.
++' IPMA is displayed; the language model extracts unavailability only.
+ 
+ skinparam componentStyle rectangle
+ skinparam packageStyle rectangle
+ skinparam linetype polyline
+-skinparam nodesep 90
+-skinparam ranksep 120
++skinparam nodesep 80
++skinparam ranksep 110
+ 
+ <style>
+ arrow {
+@@ -17,7 +18,7 @@
+ 
+ left to right direction
+ 
+-title Escala — High-level system architecture
++title Escala — High-level system architecture (D-00)
+ 
+ legend top right
+   |= Colour |= Element |
+@@ -28,8 +29,8 @@
+   Solid line: synchronous. Dashed line: asynchronous.
+ endlegend
+ 
+-actor "Firefighter" as FF
+-actor "Duty chief" as DC
++actor "Member" as MEM
++actor "Supervisor" as SUP
+ actor "Commander" as CMD
+ 
+ package "Client" #E8F5E9 {
+@@ -51,32 +52,25 @@
+ }
+ 
+ package "External systems" #EEEEEE {
+-    component "IPMA\nfire risk data" as IPMA
+-    component "Language model" as LLM
++    component "IPMA\nfire risk (information)" as IPMA
++    component "Language model\nextraction only" as LLM
++    component "ipma-sim\nevaluation profile" as SIM
+ }
+ 
+-' Users
+-FF --> WEB
+-DC --> WEB
+-CMD --> WEB
++MEM --> WEB : roster, unavailability,\nswap, presence, cover
++SUP --> WEB : publish schedule;\ninformed of changes
++CMD --> WEB : members, certifications
+ 
+-' Client -> escala-api
+-WEB --> API : REST/JSON\n(HTTPS)
++WEB --> API : REST/JSON\n(HTTPS, sync)
+ 
+-' Each service owns its database
+ API --> ADB : SQL
+ WK --> WDB : SQL
+ 
+-' Asynchronous messaging: one line per service, both directions
+-API <..> MQ : requests out\nresults in
+-MQ <..> WK : requests in\nresults out
++API <..> MQ : AvaliacaoPedida,\nExtracaoPedida out
++MQ <..> WK : checks and extraction in;\nAvaliacaoConcluida,\nExtracaoConcluida,\nRiscoAtualizado out
+ 
+-' External systems
+-WK --> IPMA : HTTPS
+-WK --> LLM : HTTPS
++WK --> IPMA : HTTPS, hourly\ndefault profile
++WK ..> SIM : HTTP\nevaluation / tests
++WK --> LLM : HTTPS\nwhen AI_ENABLED
+ 
+ @enduml
+-
+-
+-
+-
+Index: docs/operations/deployment-and-operations.md
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Deployment and Operations\r\n\r\n| Field | Value |\r\n|---|---|\r\n| Status | Draft |\r\n| Owner | [TODO: name] |\r\n| Contributors | [TODO: names] |\r\n| Deliverable | Sprint 1 · #10 Walking Skeleton (Containerized deployment); Sprint 2 · #11 CI/CD pipeline; Final submission · #3 Deployment instructions |\r\n| Sources | Assignment §6.7, §6.8, §8.4, §8.5, §9, §11, §12 |\r\n| Confluence page | **10 · Walking Skeleton**, **07 · Technical Design** |\r\n| Last updated | YYYY-MM-DD |\r\n\r\n> **ℹ\uFE0F About this document.** How to run, configure, deploy, roll back and operate Escala, plus the runbook for its degraded modes. It is the \"Deployment and operation guide\" of assignment §9 and the \"Deployment instructions\" of §12: the teaching staff follow it to run the product, and the team follows it on demo day. The architecture behind it is in the [Technical Design](../architecture/technical-design.md); the tests that prove the runbook are in the [Test Strategy](../testing/test-strategy.md). Keep the quick start in the [repository README](../../README.md) identical to [Run locally](#run-locally).\r\n\r\n## Environments\r\n\r\n> **ℹ\uFE0F Guidance.** §8.4 asks for \"Environment-specific configuration\". List every environment, which profile it runs and who uses it. Every environment uses synthetic data only (§11); no real corps member appears in any of them.\r\n\r\n| Environment | Where it runs | Profile | Data | Used by | URL |\r\n|---|---|---|---|---|---|\r\n| Local | Developer laptop, Docker Compose | `default` or `evaluation` | Synthetic seed | Developers | `http://localhost:[TODO: port]` |\r\n| CI | GitHub Actions runners | `evaluation` [TODO: confirm] | Synthetic seed and test fixtures | Pipeline | — |\r\n| Deployed | [TODO: host or provider] | `default` | Synthetic seed | Team, investors at the sprint reviews | [TODO: URL] |\r\n| Evaluation | Teaching staff machine, Docker Compose, offline | `evaluation` | Synthetic seed | Teaching staff (§12) | `http://localhost:[TODO: port]` |\r\n\r\n## Prerequisites\r\n\r\n> **ℹ\uFE0F Guidance.** List only what a clean machine needs, with minimum versions. Aim for the evaluation environment to need nothing but Docker and Git: build every image with a multi-stage Dockerfile so no JDK or Node.js is needed on the host (§8.4 \"Reproducible builds\") [TODO: confirm].\r\n\r\n- Docker [TODO: minimum version] with Docker Compose v2 [TODO: minimum version]\r\n- Git\r\n- Free ports: [TODO: list, e.g. web, `escala-api`, RabbitMQ management, Grafana]\r\n- Memory and disk for the whole stack: [TODO: measured, e.g. after `docker stats`]\r\n- Development only: JDK [TODO: Java version] (`escala-api`, `elegibilidade-worker`), Node.js [TODO: version] (`apps/web`)\r\n\r\n## Run locally\r\n\r\n> **ℹ\uFE0F Guidance.** One command, from a clean clone, starts everything: web, `escala-api`, `elegibilidade-worker`, both databases, RabbitMQ, the IPMA simulator, Prometheus and Grafana. Test it on a machine where it has never run, and write down what \"working\" looks like so the reader can check it.\r\n\r\n```bash\r\ngit clone [TODO: repository URL] && cd [TODO: folder]\r\n[TODO: the one command, e.g. docker compose --profile evaluation up --build]\r\n```\r\n\r\nIt works when:\r\n\r\n- `GET /health/ready` answers ready on `escala-api` and `elegibilidade-worker` (RF36): [TODO: URLs]\r\n- the PWA opens at `http://localhost:[TODO: port]` and shows today's *piquete* from the seed data\r\n- Grafana opens at `http://localhost:[TODO: port]` with the Escala dashboard\r\n\r\nStop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.\r\n\r\n## Configuration\r\n\r\n> **ℹ\uFE0F Guidance.** One row per environment variable, matching `.env.example` exactly. Never write a secret value here: a secret's default is \"— (secret)\" and its handling is in [Secrets handling](#secrets-handling). Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration too (ADR 0014): name the file that holds them [TODO: path].\r\n\r\n| Variable | Purpose | Required | Default |\r\n|---|---|---|---|\r\n| [TODO: variable] | [TODO: purpose] | [TODO: Yes / No] | [TODO: default, or \"— (secret)\"] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n> | Variable | Purpose | Required | Default |\r\n> |---|---|---|---|\r\n> | `ESCALA_PROFILE` | `default` or `evaluation` (see [Profiles](#profiles)) | No | `default` |\r\n> | `IPMA_BASE_URL` | IPMA open-data base URL; the `evaluation` profile points it at `tools/ipma-sim` | No | `https://api.ipma.pt/open-data` |\r\n> | `IPMA_DICO` | Municipality (DICO code) whose RCM is read | No | [TODO: DICO] |\r\n> | `RISK_STALENESS_THRESHOLD` | Age of IPMA data after which the higher risk level is assumed (ADR 0013) | No | [TODO: hours] |\r\n> | `AI_ENABLED` | Feature flag; `false` turns AI off and keeps the form flow (RF35) | No | `true` (`false` in `evaluation`) |\r\n> | `RETRY_DELAYS` | Retry queue delays before the dead-letter queue | No | `5s,30s,2m` |\r\n> | `ESCALA_DB_PASSWORD` | Password of `escala-db`, used by `escala-api` only | Yes | — (secret) |\r\n> | `LLM_API_KEY` | Language-model key, worker only; needed only if ADR 0011 chooses a hosted model | No | — (secret) |\r\n\r\n## Secrets handling\r\n\r\n> **ℹ\uFE0F Guidance.** §8.4 asks for \"Secure secret handling\", and RNF07 requires no secrets in the repository, checked in CI. Explain here the deploy-time steps; the policy and threat analysis are on **09 · Security and Privacy Assessment**. §11: \"Security controls must not be disabled solely to simplify the demonstration.\" — the `evaluation` profile keeps them on.\r\n\r\n- **Local and evaluation:** `.env` is git-ignored; `.env.example` is committed with placeholders only. [TODO: how a reader creates `.env`, e.g. copy it and set local passwords]\r\n- **CI/CD and deployed:** secrets live in GitHub Actions secrets [TODO: or environment secrets] and reach the containers as environment variables at deploy time; they never appear in logs.\r\n- **Repository check:** a secret scanner runs in CI and fails the build on any finding ([TODO: tool]).\r\n- **Separation:** each component has its own database credentials; the language-model key exists only in the worker's environment.\r\n- **Leak:** rotate the secret at once, redeploy, and record a Jira issue labelled `risk`.\r\n\r\n| Secret | Used by | Stored in | Rotation |\r\n|---|---|---|---|\r\n| [TODO: secret name, never its value] | [TODO: component] | [TODO: where] | [TODO: when and how] |\r\n\r\n## Profiles\r\n\r\n> **ℹ\uFE0F Guidance.** §12 asks for enough information \"to inspect, deploy, execute, and evaluate the product\". The `evaluation` profile uses the IPMA simulator and the AI fallback so the teaching staff can run everything offline. Say how a profile is selected and what changes; nothing else may differ between profiles.\r\n\r\n| Profile | IPMA source | AI | Network needed | Used for |\r\n|---|---|---|---|---|\r\n| `default` | Live IPMA open data, polled hourly with cache | [TODO: model per ADR 0011]; form fallback when down or off | Yes | Deployed environment, sprint reviews |\r\n| `evaluation` | `tools/ipma-sim` | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |\r\n\r\n- How to select a profile: [TODO: e.g. `ESCALA_PROFILE`, a Compose profile or an override file]\r\n- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command]\r\n\r\n## CI/CD pipeline\r\n\r\n> **ℹ\uFE0F Guidance.** §8.5: \"The pipeline should provide rapid and visible feedback when a change introduces a defect.\" Keep the stages below and name the tool and the report of each. Tag every image with the commit SHA and the release tag, so any earlier version can be redeployed ([Rollback](#rollback)).\r\n\r\n```mermaid\r\nflowchart LR\r\n  subgraph PR[\"Every pull request\"]\r\n    B[\"build\"] --> T[\"tests\"] --> S[\"static analysis\"] --> D[\"dependency check\"]\r\n  end\r\n  subgraph MAIN[\"Merge to main\"]\r\n    I[\"image\"] --> P[\"deploy\"]\r\n  end\r\n  D --> I\r\n```\r\n\r\n| Stage | What it does | Tool | Report |\r\n|---|---|---|---|\r\n| build | Compiles and packages `escala-api`, `elegibilidade-worker` and `apps/web` | [TODO: e.g. Maven / Gradle, npm] | Build log |\r\n| tests | Unit, integration and contract tests ([Test Strategy](../testing/test-strategy.md)) | [TODO: tools] | Test and coverage reports [TODO: link] |\r\n| static analysis | Static analysis and secret scanning (RNF07) | [TODO: tools] | [TODO: link] |\r\n| dependency check | Known vulnerabilities in dependencies and base images | [TODO: tool] | [TODO: link] |\r\n| image | Builds and pushes one image per component; end-to-end tests run against these images [TODO: confirm] | Docker; registry [TODO: which] | Image tags |\r\n| deploy | Deploys the new tags to the deployed environment, then checks `/health/ready` | [TODO: how] | Deploy log with the deployed tag |\r\n\r\n- Workflow file: `.github/workflows/[TODO: file].yml`\r\n- Triggers: [TODO: confirm the split above between pull requests and `main`]\r\n\r\n## Deploy\r\n\r\n> **ℹ\uFE0F Guidance.** §8.4 asks for \"Automated deployment where feasible\". Describe the automatic path first, then the manual command for when the pipeline cannot run. A deploy is finished only when both services answer ready and the running tag is recorded.\r\n\r\n1. Merge to `main`; the pipeline builds, tests and pushes the images tagged [TODO: tag scheme].\r\n2. The deploy stage updates the deployed environment: [TODO: mechanism].\r\n3. Database migrations run [TODO: how and when; each component migrates only its own database].\r\n4. Smoke check: `/health/ready` on both services, then open today's piquete in the PWA.\r\n5. Record the deployed tag: [TODO: where, e.g. the release notes or the Jira version].\r\n\r\nManual deploy of a given tag:\r\n\r\n```bash\r\n[TODO: one command, e.g. ESCALA_TAG=<tag> docker compose pull && ESCALA_TAG=<tag> docker compose up -d]\r\n```\r\n\r\n## Rollback\r\n\r\n> **ℹ\uFE0F Guidance.** §8.4 asks for \"A documented rollback or recovery approach\", and RNF08 asks for one documented command. A rollback redeploys the previous image tag; it does not undo database migrations, so every migration must also work with the previous version [TODO: confirm]. Rehearse the rollback before each review.\r\n\r\n```bash\r\n[TODO: one command, e.g. ESCALA_TAG=<previous-tag> docker compose up -d]\r\n```\r\n\r\n- Roll back when: [TODO: e.g. `/health/ready` fails after a deploy, or a principal journey breaks]\r\n- Find the previous tag: [TODO: where]\r\n- After a rollback: check `/health/ready`, check the dead-letter queue is empty, and open a Jira Bug.\r\n\r\n## Observability\r\n\r\n> **ℹ\uFE0F Guidance.** §6.7 asks for \"Structured application logs\", \"Health checks\", \"Relevant metrics\", \"Correlation or trace identifiers\" and \"Error reporting\". Give the place to look for each, the two SLIs with their targets, and the alerts with their first action. Same list as **07 · Technical Design**; this document adds the commands and links.\r\n\r\n- **Dashboard:** Grafana — [TODO: link] (RF39)\r\n- **Logs:** structured, with one trace ID from `web` through `escala-api` and the event to `elegibilidade-worker` (RF37). Read them with `docker compose logs -f escala-api` (or any other service name) [TODO: or the log tool used in the deployed environment].\r\n- **Health:** `/health` and `/health/ready` on both services (RF36).\r\n- **Metrics:** exposed to Prometheus (RF38) — [TODO: main metrics].\r\n- **Error reporting:** [TODO: how errors reach the team, e.g. error-rate panel and alerts below]\r\n- **SLI 1:** eligibility evaluation p95 latency; target < 5 s (RNF01).\r\n- **SLI 2:** % of requests evaluated without manual intervention; target [TODO: %].\r\n\r\n| Alert | Condition | Notified | First action |\r\n|---|---|---|---|\r\n| [TODO: alert] | [TODO: condition] | [TODO: who, which channel] | [TODO: runbook row or command] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n> | Alert | Condition | Notified | First action |\r\n> |---|---|---|---|\r\n> | Worker not ready | `elegibilidade-worker` `/health/ready` fails for [TODO: minutes] | Team channel [TODO: which] | Runbook: worker down |\r\n> | Stale fire risk | Age of the IPMA data served > staleness threshold | Team channel | Runbook: IPMA down |\r\n> | Dead letters | Dead-letter queue size > 0 | Team channel | Inspect the message, fix, then replay [TODO: how] |\r\n> | Slow evaluations | Eligibility evaluation p95 ≥ 5 s for [TODO: minutes] | Team channel | Check the worker's metrics and queue depth |\r\n\r\n## Runbook — degraded modes\r\n\r\n> **ℹ\uFE0F Guidance.** §6.8: \"The product should fail safely and communicate limitations clearly to users.\" Each row is a scripted demo for Sprint 2 (#13 Demonstration of at least one failure condition) and Sprint 3 (#8 Resilience and degraded-mode demonstration). *Expected behaviour* must match the degraded modes and user messages on **07 · Technical Design**; if Escala itself is down, the corps goes back to the phone.\r\n\r\n| Scenario | How to trigger (for the demo) | Expected behaviour | Recovery |\r\n|---|---|---|---|\r\n| IPMA down | Switch `tools/ipma-sim` to *unavailable* [TODO: command], or `docker compose stop ipma-sim` | The last RCM value is shown with its age (RF29); beyond the staleness threshold ([TODO: hours]), the higher risk level is assumed (ADR 0013) | Restore the simulator mode or start it; after the next poll [TODO: or a forced poll], the age resets and the real level is shown again |\r\n| AI down | Turn the AI feature flag off (RF35) [TODO: how], or make the model unreachable [TODO: how] | Form fallback: the free-text box is replaced by the unavailability form; explanations use template text per rule code | Turn the flag on or restore the model; free text is offered again, still with human confirmation |\r\n| Worker down | `docker compose stop elegibilidade-worker` | Evaluations stay \"pending\"; confirmation is blocked (RF24); the API still accepts requests (RNF02) | `docker compose start elegibilidade-worker`; queued requests are processed, evaluations move from \"pending\" to \"evaluated\"; check the dead-letter queue is empty |\r\n\r\n- The other §6.5 cases (delayed, incomplete, invalid IPMA data) are reproduced with the simulator modes; their expected behaviour is in the [Technical Design](../architecture/technical-design.md).\r\n- Demo recordings: [TODO: links]\r\n\r\n## Known limitations in the evaluation environment\r\n\r\n> **ℹ\uFE0F Guidance.** §12: \"Any functionality that cannot be executed in the evaluation environment must be clearly identified, explained, and demonstrated through suitable evidence.\" List each one with the evidence that replaces it, and keep this list identical to the one on **Sprint 3 · Deliverables**.\r\n\r\n| Functionality | Why it cannot run there | Evidence provided |\r\n|---|---|---|\r\n| [TODO: functionality] | [TODO: reason] | [TODO: recording, logs, report] |\r\n\r\n> **✏\uFE0F Example (illustrative — replace).**\r\n> | Functionality | Why it cannot run there | Evidence provided |\r\n> |---|---|---|\r\n> | Live IPMA data | The `evaluation` profile runs offline with `tools/ipma-sim` | Recording of the deployed environment reading live RCM; worker logs with the IPMA source cited |\r\n> | AI extraction with a hosted model (only if ADR 0011 chooses a hosted API) | Needs network access and an API key | The `evaluation` profile uses the form fallback; recorded demo and the AI evaluation report |\r\n> | Automated deploy stage | Runs only in GitHub Actions, against the deployed environment | Link to a green pipeline run and its deploy log |\r\n\r\n## Done when\r\n- [ ] Someone who did not write it ran the *Run locally* command from a clean clone with the `evaluation` profile, then ran it again with the network disconnected once the images were built, and every check under *It works when* passed both times\r\n- [ ] The *Configuration* table matches `.env.example`, and no secret value appears in this document or the repository\r\n- [ ] The rollback command was rehearsed on the deployed environment and restored the previous image tag\r\n- [ ] Each runbook scenario was triggered and recovered at least once, with the behaviour and messages on **07 · Technical Design**\r\n- [ ] Reviewed by another team member\r\n- [ ] Guidance and example blocks removed\r\n- [ ] Status set to Done\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/operations/deployment-and-operations.md b/docs/operations/deployment-and-operations.md
+--- a/docs/operations/deployment-and-operations.md	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/operations/deployment-and-operations.md	(date 1793044745614)
+@@ -18,10 +18,10 @@
+ 
+ | Environment | Where it runs | Profile | Data | Used by | URL |
+ |---|---|---|---|---|---|
+-| Local | Developer laptop, Docker Compose | `default` or `evaluation` | Synthetic seed | Developers | `http://localhost:[TODO: port]` |
++| Local | Developer laptop, Docker Compose | `default` or `evaluation` | Synthetic seed | Developers | `http://localhost:4200` (PWA), `http://localhost:8080` (API) |
+ | CI | GitHub Actions runners | `evaluation` [TODO: confirm] | Synthetic seed and test fixtures | Pipeline | — |
+ | Deployed | [TODO: host or provider] | `default` | Synthetic seed | Team, investors at the sprint reviews | [TODO: URL] |
+-| Evaluation | Teaching staff machine, Docker Compose, offline | `evaluation` | Synthetic seed | Teaching staff (§12) | `http://localhost:[TODO: port]` |
++| Evaluation | Teaching staff machine, Docker Compose, offline | `evaluation` | Synthetic seed | Teaching staff (§12) | `http://localhost:4200` (PWA), `http://localhost:8080` (API) |
+ 
+ ## Prerequisites
+ 
+@@ -161,7 +161,7 @@
+ - **Metrics:** exposed to Prometheus (RF38) — [TODO: main metrics].
+ - **Error reporting:** [TODO: how errors reach the team, e.g. error-rate panel and alerts below]
+ - **SLI 1:** eligibility evaluation p95 latency; target < 5 s (RNF01).
+-- **SLI 2:** % of requests evaluated without manual intervention; target [TODO: %].
++- **SLI 2:** % of requests evaluated without manual intervention; target ≥ 95 %.
+ 
+ | Alert | Condition | Notified | First action |
+ |---|---|---|---|
+@@ -181,7 +181,7 @@
+ 
+ | Scenario | How to trigger (for the demo) | Expected behaviour | Recovery |
+ |---|---|---|---|
+-| IPMA down | Switch `tools/ipma-sim` to *unavailable* [TODO: command], or `docker compose stop ipma-sim` | The last RCM value is shown with its age (RF29); beyond the staleness threshold ([TODO: hours]), the higher risk level is assumed (ADR 0013) | Restore the simulator mode or start it; after the next poll [TODO: or a forced poll], the age resets and the real level is shown again |
++| IPMA down | Set `IPMA_SIM_MODE=unavailable` on `ipma-sim` and recreate the container, or `docker compose stop ipma-sim` | The last RCM value is shown with its age (RF29); beyond the staleness threshold (3 h), the higher risk level is assumed (ADR 0013) | Restore `IPMA_SIM_MODE=ok` or start the simulator; after the next hourly poll the age resets and the real level is shown again |
+ | AI down | Turn the AI feature flag off (RF35) [TODO: how], or make the model unreachable [TODO: how] | Form fallback: the free-text box is replaced by the unavailability form; explanations use template text per rule code | Turn the flag on or restore the model; free text is offered again, still with human confirmation |
+ | Worker down | `docker compose stop elegibilidade-worker` | Evaluations stay "pending"; confirmation is blocked (RF24); the API still accepts requests (RNF02) | `docker compose start elegibilidade-worker`; queued requests are processed, evaluations move from "pending" to "evaluated"; check the dead-letter queue is empty |
+ 
+Index: docs/architecture/domain_model.puml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>@startuml\r\n' Escala domain model.\r\n' Packages are bounded contexts; the colour shows the service that owns the data.\r\n' Associations that cross from escala-api data into elegibilidade-worker data are ID references\r\n' carried by events, never foreign keys: they are drawn dashed.\r\n' Technical tables (outbox, processed events) are infrastructure and are not shown here.\r\n\r\nskinparam classAttributeIconSize 0\r\nskinparam packageStyle rectangle\r\nskinparam linetype ortho\r\nskinparam maxClassWidth 280\r\nskinparam dpi 100\r\nscale 0.85\r\nhide methods\r\nhide empty members\r\n\r\ntitle Escala — Domain model\r\n\r\nlegend bottom left\r\n  |= Colour |= Owned by |\r\n  |<#E3F2FD> | escala-api / escala-db |\r\n  |<#FFF3E0> | elegibilidade-worker / elegibilidade-db |\r\n  Dashed line: reference by ID through an event, no foreign key.\r\nendlegend\r\n\r\n' =====================================================================\r\n' escala-api — what the piquete needs\r\n' =====================================================================\r\n\r\npackage \"Personnel & Qualifications\" #E3F2FD {\r\n    class Member {\r\n        + id: UUID\r\n        + fullName: String\r\n        + rank: Rank\r\n        + rosterStatus: RosterStatus\r\n        + accessRole: AccessRole\r\n        + withinAgeLimit: Boolean\r\n        + contact: String\r\n        + active: Boolean\r\n        --\r\n        only ACTIVE_ROSTER can be scheduled\r\n        age limit stored as yes/no, no date of birth\r\n        contact shown only to roles that need it\r\n    }\r\n\r\n    enum RosterStatus {\r\n        COMMAND_ROSTER\r\n        ACTIVE_ROSTER\r\n        RESERVE_ROSTER\r\n        HONORARY_ROSTER\r\n    }\r\n\r\n    enum Rank {\r\n        CADET\r\n        TRAINEE\r\n        FIREFIGHTER_3RD_CLASS\r\n        FIREFIGHTER_2ND_CLASS\r\n        FIREFIGHTER_1ST_CLASS\r\n        SUB_CHIEF\r\n        CHIEF\r\n        OFFICER\r\n        COMMANDER\r\n        --\r\n        career category,\r\n        does not grant permissions\r\n    }\r\n\r\n    enum AccessRole {\r\n        FIREFIGHTER\r\n        DUTY_CHIEF\r\n        COMMANDER\r\n    }\r\n\r\n    class CertificationType {\r\n        + code: String\r\n        + name: String\r\n        --\r\n        e.g. TAS, TAT\r\n    }\r\n\r\n    class Certification {\r\n        + id: UUID\r\n        + issuedOn: Date\r\n        + expiresOn: Date\r\n        --\r\n        expired at slot start = does not count\r\n    }\r\n\r\n    class DrivingLicence {\r\n        + id: UUID\r\n        + licenceClass: String\r\n        + expiresOn: Date\r\n        --\r\n        must match the vehicle class\r\n    }\r\n\r\n    class ServiceHoursEntry {\r\n        + id: UUID\r\n        + date: Date\r\n        + hours: Decimal\r\n        + category: HoursCategory\r\n        --\r\n        created from confirmed\r\n        assignments, never self-declared\r\n    }\r\n\r\n    enum HoursCategory {\r\n        EMERGENCY_STANDBY\r\n        TRAINING\r\n        OTHER\r\n    }\r\n}\r\n\r\npackage \"Roster & Slots\" #E3F2FD {\r\n    class Vehicle {\r\n        + id: UUID\r\n        + code: String\r\n        + type: VehicleType\r\n        + requiredLicenceClass: String\r\n    }\r\n\r\n    class VehicleType {\r\n        + code: String\r\n        + name: String\r\n        --\r\n        e.g. ambulance, fire engine\r\n    }\r\n\r\n    class CompositionRule {\r\n        + id: UUID\r\n        + riskLevel: RiskLevel\r\n        + role: SlotRole\r\n        + minimumCount: Integer\r\n        + version: String\r\n        --\r\n        configuration, not code\r\n    }\r\n\r\n    class Piquete {\r\n        + id: UUID\r\n        + dutyDate: Date\r\n        + period: ShiftPeriod\r\n        + start: Instant\r\n        + end: Instant\r\n        --\r\n        instants in UTC\r\n    }\r\n\r\n    enum ShiftPeriod {\r\n        DAY\r\n        NIGHT\r\n    }\r\n\r\n    class Slot {\r\n        + id: UUID\r\n        + role: SlotRole\r\n        + status: SlotStatus\r\n        --\r\n        open when no confirmed assignment\r\n    }\r\n\r\n    enum SlotRole {\r\n        CREW_CHIEF\r\n        DRIVER\r\n        CREW_MEMBER\r\n    }\r\n\r\n    enum SlotStatus {\r\n        OPEN\r\n        PROPOSED\r\n        FILLED\r\n    }\r\n\r\n    class Assignment {\r\n        + id: UUID\r\n        + status: AssignmentStatus\r\n        + evaluationState: EvaluationState\r\n        + evaluationId: UUID\r\n        + result: EligibilityResult\r\n        + violatedRuleCodes: List<String>\r\n        + engineVersion: String\r\n        + exceptionalReason: String\r\n        + proposedAt: Instant\r\n        + confirmedAt: Instant\r\n        --\r\n        no overlap for the same member\r\n        never inside a confirmed unavailability\r\n        confirm only when EVALUATED + ELIGIBLE\r\n    }\r\n\r\n    enum AssignmentStatus {\r\n        PROPOSED\r\n        CONFIRMED\r\n        EXCEPTIONAL\r\n        CANCELLED\r\n    }\r\n\r\n    enum EvaluationState {\r\n        PENDING\r\n        EVALUATED\r\n        FAILED\r\n        OUTDATED\r\n    }\r\n\r\n    class DailyRisk {\r\n        + date: Date\r\n        + rcm: RiskLevel\r\n        + fetchedAt: Instant\r\n        + assumedHigher: Boolean\r\n        --\r\n        read model fed by RiscoAtualizado\r\n        stale = higher level\r\n    }\r\n}\r\n\r\npackage \"Unavailability & Coverage\" #E3F2FD {\r\n    class Unavailability {\r\n        + id: UUID\r\n        + type: UnavailabilityType\r\n        + start: Instant\r\n        + end: Instant\r\n        + dailyWindowFrom: LocalTime\r\n        + dailyWindowTo: LocalTime\r\n        + source: DeclarationSource\r\n        + readAutomatically: Boolean\r\n        + confirmed: Boolean\r\n        --\r\n        no reason stored (may be health data)\r\n    }\r\n\r\n    class FreeTextMessage {\r\n        + id: UUID\r\n        + text: String\r\n        + referenceDate: Date\r\n        + receivedAt: Instant\r\n        --\r\n        transient; deleted after\r\n        confirmation or discard\r\n    }\r\n\r\n    enum UnavailabilityType {\r\n        UNAVAILABLE\r\n        PARTIAL\r\n    }\r\n\r\n    enum DeclarationSource {\r\n        FORM\r\n        FREE_TEXT\r\n    }\r\n\r\n    class CoverRequest {\r\n        + id: UUID\r\n        + status: CoverRequestStatus\r\n        + gapDetectedAt: Instant\r\n        + filledAt: Instant\r\n    }\r\n\r\n    enum CoverRequestStatus {\r\n        OPEN\r\n        FILLED\r\n        CANCELLED\r\n        EXPIRED\r\n    }\r\n\r\n    class Application {\r\n        + id: UUID\r\n        + appliedAt: Instant\r\n        + status: ApplicationStatus\r\n        --\r\n        never confirmed by the applicant\r\n    }\r\n\r\n    enum ApplicationStatus {\r\n        SUBMITTED\r\n        SELECTED\r\n        NOT_SELECTED\r\n        WITHDRAWN\r\n    }\r\n\r\n    class Notification {\r\n        + id: UUID\r\n        + type: NotificationType\r\n        + createdAt: Instant\r\n        + readAt: Instant\r\n    }\r\n\r\n    enum NotificationType {\r\n        COVER_REQUEST_OPENED\r\n        ASSIGNMENT_CONFIRMED\r\n        ASSIGNMENT_CANCELLED\r\n        COMPOSITION_BELOW_REQUIRED\r\n        CERTIFICATION_EXPIRING\r\n    }\r\n}\r\n\r\npackage \"Audit\" #E3F2FD {\r\n    class AuditRecord {\r\n        + id: UUID\r\n        + action: AuditAction\r\n        + occurredAt: Instant\r\n        + entityType: String\r\n        + entityId: UUID\r\n        + oldValue: JSON\r\n        + newValue: JSON\r\n        + engineVersion: String\r\n        + reason: String\r\n        --\r\n        append-only\r\n    }\r\n\r\n    enum AuditAction {\r\n        ASSIGNMENT_CONFIRMED\r\n        EXCEPTIONAL_ASSIGNMENT\r\n        CERTIFICATION_CHANGED\r\n        UNAVAILABILITY_CONFIRMED\r\n        ROLE_CHANGED\r\n    }\r\n}\r\n\r\n' =====================================================================\r\n' elegibilidade-worker — who can fill it\r\n' =====================================================================\r\n\r\npackage \"Eligibility\" #FFF3E0 {\r\n    class EligibilityEvaluation {\r\n        + id: UUID\r\n        + requestEventId: UUID\r\n        + assignmentId: UUID\r\n        + memberId: UUID\r\n        + result: EligibilityResult\r\n        + engineVersion: String\r\n        + evaluatedAt: Instant\r\n        --\r\n        deterministic rules, no AI\r\n        requestEventId unique = idempotency\r\n    }\r\n\r\n    class ViolatedRule {\r\n        + ruleCode: String\r\n        + explanation: String\r\n    }\r\n\r\n    enum EligibilityResult {\r\n        ELIGIBLE\r\n        INELIGIBLE\r\n    }\r\n}\r\n\r\npackage \"AI Extraction\" #FFF3E0 {\r\n    class UnavailabilityExtraction {\r\n        + id: UUID\r\n        + requestEventId: UUID\r\n        + unavailabilityRequestId: UUID\r\n        + proposedType: ExtractionType\r\n        + proposedStart: Instant\r\n        + proposedEnd: Instant\r\n        + method: ExtractionMethod\r\n        + latencyMs: Integer\r\n        + extractedAt: Instant\r\n        --\r\n        only a proposal, confirmed by the member\r\n    }\r\n\r\n    enum ExtractionType {\r\n        UNAVAILABLE\r\n        PARTIAL\r\n        NOT_AN_UNAVAILABILITY\r\n    }\r\n\r\n    enum ExtractionMethod {\r\n        MODEL\r\n        BASELINE\r\n        FALLBACK\r\n    }\r\n}\r\n\r\npackage \"Fire Risk\" #FFF3E0 {\r\n    class RiskObservation {\r\n        + id: UUID\r\n        + dico: String\r\n        + forecastDate: Date\r\n        + rcm: RiskLevel\r\n        + fetchedAt: Instant\r\n        + source: RiskSource\r\n        --\r\n        hourly poll, last valid value cached\r\n    }\r\n\r\n    class WeatherWarning {\r\n        + id: UUID\r\n        + areaCode: String\r\n        + type: String\r\n        + level: String\r\n        + start: Instant\r\n        + end: Instant\r\n    }\r\n\r\n    enum RiskLevel {\r\n        REDUCED = 1\r\n        MODERATE = 2\r\n        HIGH = 3\r\n        VERY_HIGH = 4\r\n        MAXIMUM = 5\r\n    }\r\n\r\n    enum RiskSource {\r\n        IPMA\r\n        SIMULATOR\r\n    }\r\n}\r\n\r\n' =====================================================================\r\n' Relationships — escala-api (foreign keys inside escala-db)\r\n' =====================================================================\r\n\r\nMember \"1\" *-- \"0..*\" Certification : holds >\r\nCertification \"0..*\" --> \"1\" CertificationType : of type >\r\nMember \"1\" *-- \"0..*\" DrivingLicence : holds >\r\nMember \"1\" *-- \"0..*\" ServiceHoursEntry : accumulates >\r\nMember \"1\" *-- \"0..*\" Unavailability : declares >\r\nMember \"1\" -- \"0..*\" Application : submits >\r\nMember \"1\" -- \"0..*\" Assignment : receives >\r\nMember \"1\" -- \"0..*\" Notification : receives >\r\nMember \"1\" -- \"0..*\" AuditRecord : authors >\r\n\r\nVehicle \"0..*\" --> \"1\" VehicleType : of type >\r\nCompositionRule \"0..*\" --> \"1\" VehicleType : for >\r\n\r\nPiquete \"1\" *-- \"1..*\" Slot : composed of >\r\nPiquete \"0..*\" --> \"0..1\" DailyRisk : planned for risk of >\r\nSlot \"0..*\" --> \"1\" Vehicle : crews >\r\nSlot \"0..*\" --> \"0..1\" CertificationType : requires >\r\nSlot \"1\" -- \"0..*\" Assignment : filled by >\r\nSlot \"1\" -- \"0..*\" CoverRequest : opened for >\r\n\r\nCoverRequest \"1\" -- \"0..*\" Application : receives >\r\nApplication \"0..1\" -- \"0..1\" Assignment : leads to >\r\nAssignment \"0..1\" -- \"0..*\" ServiceHoursEntry : counts as >\r\n\r\nUnavailability \"1\" *-- \"0..1\" FreeTextMessage : declared through >\r\n\r\n' =====================================================================\r\n' Relationships — elegibilidade-worker (foreign keys inside elegibilidade-db)\r\n' =====================================================================\r\n\r\nEligibilityEvaluation \"1\" *-- \"0..*\" ViolatedRule : lists >\r\n\r\n' =====================================================================\r\n' Cross-service references (IDs carried by events, no foreign keys)\r\n' =====================================================================\r\n\r\nAssignment \"1\" ..> \"0..*\" EligibilityEvaluation : AvaliacaoPedida / AvaliacaoConcluida >\r\nFreeTextMessage \"1\" ..> \"0..1\" UnavailabilityExtraction : ExtracaoPedida / ExtracaoConcluida >\r\nRiskObservation \"0..*\" ..> \"0..1\" DailyRisk : RiscoAtualizado >\r\n\r\n@enduml\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/docs/architecture/domain_model.puml b/docs/architecture/domain_model.puml
+--- a/docs/architecture/domain_model.puml	(revision 81ac0cbca02ec092e5161e67d820b0bfe3124b8f)
++++ b/docs/architecture/domain_model.puml	(date 1793047091360)
+@@ -1,8 +1,7 @@
+ @startuml
+-' Escala domain model.
+-' Packages are bounded contexts; the colour shows the service that owns the data.
+-' Associations that cross from escala-api data into elegibilidade-worker data are ID references
+-' carried by events, never foreign keys: they are drawn dashed.
++' Escala domain model — aligned with D-00 (published roster, unavailability, swaps, presence, cover).
++' Packages are bounded contexts; colour shows which service owns the data.
++' Associations that cross services are ID references carried by events, never foreign keys (dashed).
+ ' Technical tables (outbox, processed events) are infrastructure and are not shown here.
+ 
+ skinparam classAttributeIconSize 0
+@@ -10,11 +9,11 @@
+ skinparam linetype ortho
+ skinparam maxClassWidth 280
+ skinparam dpi 100
+-scale 0.85
++scale 0.82
+ hide methods
+ hide empty members
+ 
+-title Escala — Domain model
++title Escala — Domain model (D-00)
+ 
+ legend bottom left
+   |= Colour |= Owned by |
+@@ -24,7 +23,7 @@
+ endlegend
+ 
+ ' =====================================================================
+-' escala-api — what the piquete needs
++' escala-api — the published roster and its changes
+ ' =====================================================================
+ 
+ package "Personnel & Qualifications" #E3F2FD {
+@@ -41,6 +40,8 @@
+         only ACTIVE_ROSTER can be scheduled
+         age limit stored as yes/no, no date of birth
+         contact shown only to roles that need it
++        accessRole FIREFIGHTER = member in the PWA
++        DUTY_CHIEF = supervisor
+     }
+ 
+     enum RosterStatus {
+@@ -100,8 +101,8 @@
+         + hours: Decimal
+         + category: HoursCategory
+         --
+-        created from confirmed
+-        assignments, never self-declared
++        from confirmed assignments
++        RF04 out of MVP (D-00)
+     }
+ 
+     enum HoursCategory {
+@@ -133,7 +134,8 @@
+         + minimumCount: Integer
+         + version: String
+         --
+-        configuration, not code
++        configuration, RN10 default off
++        unused by the engine in the MVP (F7, D-00)
+     }
+ 
+     class Piquete {
+@@ -142,8 +144,10 @@
+         + period: ShiftPeriod
+         + start: Instant
+         + end: Instant
++        + publishedAt: Instant
+         --
+         instants in UTC
++        members see it only after publish (RF46)
+     }
+ 
+     enum ShiftPeriod {
+@@ -156,7 +160,7 @@
+         + role: SlotRole
+         + status: SlotStatus
+         --
+-        open when no confirmed assignment
++        function the piquete must keep (RN04)
+     }
+ 
+     enum SlotRole {
+@@ -167,8 +171,8 @@
+ 
+     enum SlotStatus {
+         OPEN
+-        PROPOSED
+         FILLED
++        PENDING_COVER
+     }
+ 
+     class Assignment {
+@@ -183,13 +187,12 @@
+         + proposedAt: Instant
+         + confirmedAt: Instant
+         --
+-        no overlap for the same member
+-        never inside a confirmed unavailability
+-        confirm only when EVALUATED + ELIGIBLE
++        who occupies the slot on the published roster
++        no overlap; never inside unavailability
++        exceptionalReason only if D-02 chooses C
+     }
+ 
+     enum AssignmentStatus {
+-        PROPOSED
+         CONFIRMED
+         EXCEPTIONAL
+         CANCELLED
+@@ -208,12 +211,12 @@
+         + fetchedAt: Instant
+         + assumedHigher: Boolean
+         --
+-        read model fed by RiscoAtualizado
+-        stale = higher level
++        display only (RF25, RF29)
++        assumedHigher = warning, does not add slots
+     }
+ }
+ 
+-package "Unavailability & Coverage" #E3F2FD {
++package "Unavailability, swaps & cover" #E3F2FD {
+     class Unavailability {
+         + id: UUID
+         + type: UnavailabilityType
+@@ -235,7 +238,7 @@
+         + receivedAt: Instant
+         --
+         transient; deleted after
+-        confirmation or discard
++        confirmation or discard (RNF09)
+     }
+ 
+     enum UnavailabilityType {
+@@ -248,16 +251,59 @@
+         FREE_TEXT
+     }
+ 
++    class SwapRequest {
++        + id: UUID
++        + evaluationState: EvaluationState
++        + approvalState: ApprovalState
++        + engineVersion: String
++        + requestedAt: Instant
++        + appliedAt: Instant
++        --
++        UJ3 / RF41
++        schedule changes only when
++        EVALUATED + ELIGIBLE
++        and approval if RN11 on (D-01)
++    }
++
++    enum ApprovalState {
++        NOT_REQUIRED
++        WAITING
++        APPROVED
++        REJECTED
++    }
++
++    class PresenceConfirmation {
++        + id: UUID
++        + askedAt: Instant
++        + deadlineAt: Instant
++        + answer: PresenceAnswer
++        --
++        RF42 / UJ6
++        asked ~24 h before start
++        CANNOT or no answer opens a cover
++    }
++
++    enum PresenceAnswer {
++        PENDING
++        COMING
++        CANNOT
++    }
++
+     class CoverRequest {
+         + id: UUID
+         + status: CoverRequestStatus
+         + gapDetectedAt: Instant
+         + filledAt: Instant
++        + escalatedAt: Instant
++        --
++        sent only to free and qualified members (RF43)
++        ESCALATED = D-02 (open)
+     }
+ 
+     enum CoverRequestStatus {
+         OPEN
+         FILLED
++        ESCALATED
+         CANCELLED
+         EXPIRED
+     }
+@@ -266,7 +312,9 @@
+         + id: UUID
+         + appliedAt: Instant
+         + status: ApplicationStatus
++        + evaluationState: EvaluationState
+         --
++        first valid ELIGIBLE accept fills the slot
+         never confirmed by the applicant
+     }
+ 
+@@ -285,10 +333,14 @@
+     }
+ 
+     enum NotificationType {
++        SCHEDULE_PUBLISHED
++        SWAP_REQUESTED
++        SWAP_APPLIED
++        PRESENCE_ASKED
+         COVER_REQUEST_OPENED
+-        ASSIGNMENT_CONFIRMED
++        COVER_FILLED
++        COVER_ESCALATED
+         ASSIGNMENT_CANCELLED
+-        COMPOSITION_BELOW_REQUIRED
+         CERTIFICATION_EXPIRING
+     }
+ }
+@@ -309,7 +361,12 @@
+     }
+ 
+     enum AuditAction {
+-        ASSIGNMENT_CONFIRMED
++        PIQUETE_PUBLISHED
++        SWAP_APPLIED
++        SWAP_APPROVED
++        PRESENCE_CANNOT
++        COVER_FILLED
++        COVER_ESCALATED
+         EXCEPTIONAL_ASSIGNMENT
+         CERTIFICATION_CHANGED
+         UNAVAILABILITY_CONFIRMED
+@@ -318,14 +375,15 @@
+ }
+ 
+ ' =====================================================================
+-' elegibilidade-worker — who can fill it
++' elegibilidade-worker
+ ' =====================================================================
+ 
+ package "Eligibility" #FFF3E0 {
+     class EligibilityEvaluation {
+         + id: UUID
+         + requestEventId: UUID
+-        + assignmentId: UUID
++        + purpose: EvaluationPurpose
++        + subjectId: UUID
+         + memberId: UUID
+         + result: EligibilityResult
+         + engineVersion: String
+@@ -333,11 +391,22 @@
+         --
+         deterministic rules, no AI
+         requestEventId unique = idempotency
++        subjectId = swap, cover application
++        or assignment id
++    }
++
++    enum EvaluationPurpose {
++        SWAP
++        COVER
++        ASSIGNMENT
+     }
+ 
+     class ViolatedRule {
+         + ruleCode: String
+         + explanation: String
++        --
++        explanation is template text (RF22)
++        not generated by the model (RF34 Won't)
+     }
+ 
+     enum EligibilityResult {
+@@ -384,6 +453,7 @@
+         + source: RiskSource
+         --
+         hourly poll, last valid value cached
++        shown on the PWA, does not set composition
+     }
+ 
+     class WeatherWarning {
+@@ -393,6 +463,8 @@
+         + level: String
+         + start: Instant
+         + end: Instant
++        --
++        RF26 Could
+     }
+ 
+     enum RiskLevel {
+@@ -410,7 +482,7 @@
+ }
+ 
+ ' =====================================================================
+-' Relationships — escala-api (foreign keys inside escala-db)
++' Relationships — escala-api
+ ' =====================================================================
+ 
+ Member "1" *-- "0..*" Certification : holds >
+@@ -419,7 +491,10 @@
+ Member "1" *-- "0..*" ServiceHoursEntry : accumulates >
+ Member "1" *-- "0..*" Unavailability : declares >
+ Member "1" -- "0..*" Application : submits >
+-Member "1" -- "0..*" Assignment : receives >
++Member "1" -- "0..*" Assignment : occupies >
++Member "1" -- "0..*" SwapRequest : requests >
++Member "1" -- "0..*" SwapRequest : counterpart >
++Member "1" -- "0..*" PresenceConfirmation : answers >
+ Member "1" -- "0..*" Notification : receives >
+ Member "1" -- "0..*" AuditRecord : authors >
+ 
+@@ -427,12 +502,16 @@
+ CompositionRule "0..*" --> "1" VehicleType : for >
+ 
+ Piquete "1" *-- "1..*" Slot : composed of >
+-Piquete "0..*" --> "0..1" DailyRisk : planned for risk of >
++Piquete "0..*" --> "0..1" DailyRisk : displays risk of >
+ Slot "0..*" --> "1" Vehicle : crews >
+ Slot "0..*" --> "0..1" CertificationType : requires >
+ Slot "1" -- "0..*" Assignment : filled by >
++Slot "1" -- "0..1" PresenceConfirmation : asks >
+ Slot "1" -- "0..*" CoverRequest : opened for >
+ 
++SwapRequest "0..*" --> "1" Slot : from slot >
++SwapRequest "0..*" --> "1" Slot : to slot >
++
+ CoverRequest "1" -- "0..*" Application : receives >
+ Application "0..1" -- "0..1" Assignment : leads to >
+ Assignment "0..1" -- "0..*" ServiceHoursEntry : counts as >
+@@ -440,18 +519,19 @@
+ Unavailability "1" *-- "0..1" FreeTextMessage : declared through >
+ 
+ ' =====================================================================
+-' Relationships — elegibilidade-worker (foreign keys inside elegibilidade-db)
++' Relationships — elegibilidade-worker
+ ' =====================================================================
+ 
+ EligibilityEvaluation "1" *-- "0..*" ViolatedRule : lists >
+ 
+ ' =====================================================================
+-' Cross-service references (IDs carried by events, no foreign keys)
++' Cross-service references (events, no foreign keys)
+ ' =====================================================================
+ 
+-Assignment "1" ..> "0..*" EligibilityEvaluation : AvaliacaoPedida / AvaliacaoConcluida >
++SwapRequest "1" ..> "0..*" EligibilityEvaluation : AvaliacaoPedida purpose SWAP >
++Application "1" ..> "0..*" EligibilityEvaluation : AvaliacaoPedida purpose COVER >
++Assignment "1" ..> "0..*" EligibilityEvaluation : AvaliacaoPedida purpose ASSIGNMENT >
+ FreeTextMessage "1" ..> "0..1" UnavailabilityExtraction : ExtracaoPedida / ExtracaoConcluida >
+ RiskObservation "0..*" ..> "0..1" DailyRisk : RiscoAtualizado >
+ 
+ @enduml
+-

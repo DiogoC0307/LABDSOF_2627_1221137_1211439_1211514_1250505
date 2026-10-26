@@ -1,0 +1,35 @@
+@startuml
+title Escala — Containers (C4 level 2)
+
+skinparam componentStyle rectangle
+skinparam linetype polyline
+left to right direction
+
+actor "Member, supervisor, commander" as USER
+
+package "Escala on Docker Compose" {
+  component "web\nAngular PWA" as WEB #E8F5E9
+  component "escala-api\nSpring Boot" as API #E3F2FD
+  database "escala-db\nPostgreSQL" as ADB
+  queue "RabbitMQ" as MQ
+  component "elegibilidade-worker\nSpring Boot (Java)" as WK #FFF3E0
+  database "elegibilidade-db\nPostgreSQL" as WDB
+  component "ipma-sim\nIPMA simulator" as SIM
+}
+
+rectangle "IPMA open data" as IPMA #EEEEEE
+rectangle "Language model" as LLM #EEEEEE
+
+USER --> WEB : HTTPS, sync
+WEB --> API : REST over HTTPS, sync
+API --> ADB : SQL, sync
+API --> MQ : AMQP via outbox, async
+MQ --> WK : AvaliacaoPedida, ExtracaoPedida
+WK --> MQ : AvaliacaoConcluida, ExtracaoConcluida, RiscoAtualizado
+MQ --> API : result events
+WK --> WDB : SQL, sync
+WK --> IPMA : HTTPS, hourly poll, default profile
+WK ..> SIM : HTTP, evaluation profile and tests
+WK --> LLM : HTTPS extraction, when AI_ENABLED
+
+@enduml

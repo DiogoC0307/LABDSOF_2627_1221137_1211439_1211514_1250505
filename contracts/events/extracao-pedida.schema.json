@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/extracao-pedida.schema.json",
+  "title": "ExtracaoPedida",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt",
+    "traceId",
+    "unavailabilityRequestId",
+    "freeText",
+    "referenceDate"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "const": "ExtracaoPedida" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "minLength": 1 },
+    "unavailabilityRequestId": { "type": "string", "format": "uuid" },
+    "freeText": { "type": "string", "minLength": 1 },
+    "referenceDate": { "type": "string", "format": "date" }
+  }
+}
