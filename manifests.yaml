@@ -1,0 +1,555 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    environment: dev
+  name: escala-dev
+---
+apiVersion: v1
+data:
+  LOGGING_LEVEL_ROOT: DEBUG
+  SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/elegibilidade
+  SPRING_PROFILES_ACTIVE: dev
+  SPRING_RABBITMQ_HOST: rabbitmq
+kind: ConfigMap
+metadata:
+  name: elegibilidade-worker-config
+  namespace: escala-dev
+---
+apiVersion: v1
+data:
+  LOGGING_LEVEL_ROOT: DEBUG
+  SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/escala
+  SPRING_PROFILES_ACTIVE: dev
+  SPRING_RABBITMQ_HOST: rabbitmq
+kind: ConfigMap
+metadata:
+  name: escala-api-config
+  namespace: escala-dev
+---
+apiVersion: v1
+data:
+  default.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+
+      # browser calls /api/... -> escala-api (prefix stripped), so no CORS is needed
+      location /api/ {
+        proxy_pass http://escala-api:8080/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location / {
+        try_files $uri $uri/ /index.html;
+      }
+    }
+kind: ConfigMap
+metadata:
+  name: web-nginx
+  namespace: escala-dev
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elegibilidade-worker
+  namespace: escala-dev
+spec:
+  ports:
+  - port: 8081
+  selector:
+    app: elegibilidade-worker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: escala-api
+  namespace: escala-dev
+spec:
+  ports:
+  - port: 8080
+  selector:
+    app: escala-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-elegibilidade-worker
+  namespace: escala-dev
+spec:
+  clusterIP: None
+  ports:
+  - port: 5432
+  selector:
+    app: pg-elegibilidade-worker
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-escala-api
+  namespace: escala-dev
+spec:
+  clusterIP: None
+  ports:
+  - port: 5432
+  selector:
+    app: pg-escala-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: escala-dev
+spec:
+  ports:
+  - port: 5672
+  selector:
+    app: rabbitmq
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: escala-dev
+spec:
+  ports:
+  - port: 80
+  selector:
+    app: web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elegibilidade-worker
+  namespace: escala-dev
+spec:
+  selector:
+    matchLabels:
+      app: elegibilidade-worker
+  template:
+    metadata:
+      labels:
+        app: elegibilidade-worker
+    spec:
+      containers:
+      - env:
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: db-elegibilidade
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: db-elegibilidade
+        - name: SPRING_RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: rabbitmq-credentials
+        - name: SPRING_RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: rabbitmq-credentials
+        envFrom:
+        - configMapRef:
+            name: elegibilidade-worker-config
+        image: ghcr.io/diogoc0307/elegibilidade-worker:126667a752222f08d25e8a53829a459270e63be8
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+        name: elegibilidade-worker
+        ports:
+        - containerPort: 8081
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: escala-api
+  namespace: escala-dev
+spec:
+  selector:
+    matchLabels:
+      app: escala-api
+  template:
+    metadata:
+      labels:
+        app: escala-api
+    spec:
+      containers:
+      - env:
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_USER
+              name: db-escala-api
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: POSTGRES_PASSWORD
+              name: db-escala-api
+        - name: SPRING_RABBITMQ_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: rabbitmq-credentials
+        - name: SPRING_RABBITMQ_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: rabbitmq-credentials
+        envFrom:
+        - configMapRef:
+            name: escala-api-config
+        image: ghcr.io/diogoc0307/escala-api:126667a752222f08d25e8a53829a459270e63be8
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+        name: escala-api
+        ports:
+        - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8080
+          initialDelaySeconds: 30
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: escala-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+      - env:
+        - name: RABBITMQ_DEFAULT_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: rabbitmq-credentials
+        - name: RABBITMQ_DEFAULT_PASS
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: rabbitmq-credentials
+        image: rabbitmq:4-alpine
+        name: rabbitmq
+        ports:
+        - containerPort: 5672
+        resources:
+          limits:
+            memory: 384Mi
+          requests:
+            cpu: 50m
+            memory: 192Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: escala-dev
+spec:
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - image: ghcr.io/diogoc0307/escala-web:126667a752222f08d25e8a53829a459270e63be8
+        name: web
+        ports:
+        - containerPort: 80
+        resources:
+          limits:
+            memory: 96Mi
+          requests:
+            cpu: 20m
+            memory: 32Mi
+        volumeMounts:
+        - mountPath: /etc/nginx/conf.d
+          name: nginx-conf
+      volumes:
+      - configMap:
+          name: web-nginx
+        name: nginx-conf
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pg-elegibilidade-worker
+  namespace: escala-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pg-elegibilidade-worker
+  serviceName: pg-elegibilidade-worker
+  template:
+    metadata:
+      labels:
+        app: pg-elegibilidade-worker
+    spec:
+      containers:
+      - env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        envFrom:
+        - secretRef:
+            name: db-elegibilidade
+        image: postgres:17-alpine
+        name: postgres
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          periodSeconds: 10
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: pg-escala-api
+  namespace: escala-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pg-escala-api
+  serviceName: pg-escala-api
+  template:
+    metadata:
+      labels:
+        app: pg-escala-api
+    spec:
+      containers:
+      - env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        envFrom:
+        - secretRef:
+            name: db-escala-api
+        image: postgres:17-alpine
+        name: postgres
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          periodSeconds: 10
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 2Gi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: elegibilidade-worker
+  namespace: escala-dev
+spec:
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 70
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: elegibilidade-worker
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: escala-api
+  namespace: escala-dev
+spec:
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 70
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: escala-api
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: escala-dev
+spec:
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+  maxReplicas: 2
+  metrics:
+  - resource:
+      name: cpu
+      target:
+        averageUtilization: 70
+        type: Utilization
+    type: Resource
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: db-elegibilidade
+  namespace: escala-dev
+spec:
+  encryptedData:
+    POSTGRES_DB: AgBymzjjH4xTAgmYSYny0ViUjvh9cKB2XIlrX+pYa0gXngUWG/ILZ2v89geOyj3P+etBxsSyu6G5JYX/iegjp5YVLdYswf99pWvXLbTgmH4Y7pKgsZASYEe83DfRZ2hZeI3F11GE/HNT8YWa6CT9sufV8KcRMeh/y8R1p+pnyVYSlNlubktBjUrMwkZq3EsWhlU6zQZRkxtTMdTN/ta1IznmtjBA8Oq9azMJWv+yk4OKPYBCf4c9JxC9RUafZlugl7Z3vmbJuTOgqAMcBeWyZQi4iNrPMJdbpiSfrtTZCrD5OdjUkVEOwVnLoZXUKggUKqE7z5BQrk7hON7/WS0SXvXRi8tkb3uFeBRpSWiSoaRz+/7+4PDu8YTh8Mu10USi8WMeY6rLw+3yFnJMZjaLjS3+ahGGZY0NwuS/XrSsH9HUSYmNVDowxfDw0uRyPGjCK53Pl/zHD3izges5Pv26suVA2wx0+PqGsqYRATY4IzrrR7dFzQ90oJtKaJ9A0LunDq/7JHfKLt6QZRvDJvuNCJhBz3MEorgMlJsA0Dz3uFVvB1OHtlHcIgfztq5B3vwPAi1iA385jjk+YAlVrHcwoVCtbyGNuMYEgI98AFOUOAGZ0dc6xldo1Ers5e0TRDAtKImfvoJoIkNwPM6RK/HnhXhfFNPJJ2vOaTQnqZ10c27fvyvBiRsTCg6R5DRSxGu/MENsPZ4wkTEUx9nUJyn1
+    POSTGRES_PASSWORD: AgA6FRCthGVZTFAPcwPjiy4gYVQxFu52R2JXPV/9kWz1kTJboJGudSlbOBXd9QfUgbbxtair1/c46R1PchGI7DxsUxI3IdEJbyi5FplH5CczV9INieLRCAdc7pmICpCyANvYQ/1ZcQZnh7Diom3kkLa4KBYFfIElFQgWTTYFNkAW2edvvJsDyoP7y7FBJAnjyhWLz/uIB2p9Hh7BdB+fmYm21v22p0YxF4pMYRjtr5VMIEn95SoSoZoN4bXBFWuTup5CPmX8oqURXLErKFUZgIXamoDe5gdRnACb/9zZiuxkkZ/DqGoCwF0kAWSO+y89M4JDbyhUPOD9qUzQ3LZ5fl0UaE7GXEdAKdXcotijo0edBsPPRiIadMIRCwBDC4ZPQ0FDKoXK5xTOGJ/3cZa4Pe1wzzTZxaN4b3N1P1nfTnqbOz90wZotehNA31OowFPH66yRFBtgirU19nJjg8dG0jSpjp6u4GYKihc3TKwW8cTAWvYiRnMVfkk7cN1iytN1URVbP5RuByDVQyqJOr6nrPJ/D3/D+Yt4E8KqMbseBC7P7AycAmNDj+qk/07vI0AvsuRTA7HfBSpmjXvenLdwU+vv2FWSRAK7totxFrhRkOdX0wUsr1RoCeGvz/gDbSYWC2XaUMbox4gx1iKo/I8FikrKnISQnV7zNCkA0umcIpncVEm/20heJtFbLjx0JDJUrwRdf1mvRb1pKwiHHP/QXex/4Wv2zclWX+0=
+    POSTGRES_USER: AgBrMZ8KNa/E5JKf39UpeJCZMz/trXa+NosUmfs4cEqT+RhLgwToPQYQclDMijWONtU8ANeTLqtpO1qIxqaAs6numXZINVJo876NqjKq3XJxBeyXH8dLjVYEVpVmiAYPGco9dxmDH+8UdbPPkUZW4YIQeqbXBabrBqbdYukz+QCSiZm6tzEzNMeZWTxeU1WDyceBfaYcJB1WPv6OfsQgJjFyu+xsa6TNuWWYdHGWLhnqYT4e5CIBh1f+vAbI2Nn7BlH4TAed7LWuYfgZzO8tl6VqeFTuoUhhzLzbf/YgfYtGUCqgO1/d0kZf5jWbcQYepvA45Pmxnhf5Ei2qQHf30IbwTyn5/YSzOsInQVpCUdR+Q56HPaUmLUsyx+wyombQ1ObBq0QBoUvVQXDS6lgQs/6Puk5ratDr8KIsKyKw6T+6YMjtgswobV2ADdJxxm07D6iHQpSfh5/DNCvTjbdJQ6ZZDhSd+CqaxitGrK66s+xqeubMdw/MyizQf06WgjY/z63RkIjSMnJ4Vouoq3UpV+aOw1X+19ECM2M3+BPOQBrtG3IYzuiBwoYhORrSktYZCzQ/N/hzf3S5BpMU7YSEKe7LWC/M8eiqiVdntYeRXeNFHdX3vw+/MpnQYeTQf2gfbeQ6kLAIT05DpVjFrRKuOCZDY25Rjn2wWQCTIG3iYzWBIGet3/p7b1l2SduK9YxAQeLEUBfQRbASydgVVJbW
+  template:
+    metadata:
+      name: db-elegibilidade
+      namespace: escala-dev
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: db-escala-api
+  namespace: escala-dev
+spec:
+  encryptedData:
+    POSTGRES_DB: AgCDMP+HQBZlu3IJX1zZue5QCmGWD2suBYd/T0iZV3beeq0AqHsDaa/F0SjJEH8J7IpvSa+YlV4VJJMD47/wkJMLK7Cyb6Smj2Zyp9Nv6RjGCGuDkMyvD4rb7lsfGJG4t2NuLY3jlI/YqlaQ18SxxY5fAEdCiDs2YTpTUS/RMIYh/2WRw456mL+kSlyaXpK0iVziPIrme/WgjvAgw8drZN77aX1nxrVjR6wK0gehZV2LhoXFD36JF0Sl8XwyCfZ469grlX1h6ifPGP6GIJmXLXiXCV3Sf8HSz7UgGxu3WML94QkOEPFxd7Q2nZkXS/zeCZk3LTtwWKlWSMtpUVGJ8ge3vlTOJe9hzz0n+i4rCln7FeNmHK88SAxCD/8PK529WNy8k2C27RC4I9Rar5+EfQZfsnoMub/LGOJNu83deddjPTe/PXnWRlypcBJWeyhcsu9hN6pggEG5jE5e4BphEguw0zQQIGNsN651l5nDuKAGxBbUwjuJc3v/frIdIEZnxzgAajZ5me5rD3ql4m0QqoMG4WYGyWAAkVAWq65KabnZQCYxPIDch/0eIieGCIQaB0bIjkLDHfV7SEkK7Det/zkjAa8v78hbn5u9HyDvi+lpJWI77vQvTkBBC+i7GjzZ2PwyUE0ll8IuCwzP5seGtMjs50BEVivo6CmyP9OVWGyUh5DfisNEMZIpyKUKmBlMjvh5mSvPZYE=
+    POSTGRES_PASSWORD: AgB8/ijAAafxqFRlwJ9Y0jILWw9G0yEC1/BPHXONZ6I4z9a/2ULIYjNckGRM057F4DCf/Ml84JOOvOZqjO/Y+gl9HnKeW6VB3q69XKiS1nePAS5HFcMCq9WCHE4SGo5yKj4PabjrH3KEYlPb7g6/1GEKqcgJ10OIw8UmAEuTNZFDAmnk1L0Tpiwi7mZ7Oz9TXSv6+PTXbwaV8z3wZ9pF04qAxEAO3kcy3U+hxjRe7zwml0bzSTWpAhm0p3zn/Zvhmg+mqrr6kQmdEAhZO2wiWO8SjBvi+Yj8yBKWI66NMSibgVxnW3EhQUMEvJkSKPXMcFGlFvZnqbR3ML/J48cqEgRkoZgMa78q75jCt6eyn4f3D7BLN5viOFA6nceYw59z9U4q04bG2U83wpiP2cTjtSIrwKogd5OfSSO1UmrpvaHqEAOuGxPGxqLJk4xNdYFeBUHLgeH4IBQf6sjVEIngUXn8V+bguEMKBm+wuDEGEyGhFRPKPruLG9kWuk0KH3zd9Zi2F0ZRjDwvx7LwNcasX9O6DI4/EpUcOE7sx25Q4elhifm3yQh8FfuG4xmUjZsjHrnBoHj7ygIcZelt2e6WuA3OfOi2kK9fSfe/Sqs6nQuGQ+6sBKQABq49xyU/XcF+SngeGymKKv/zQUdqL7/vIDzpqV5UyCx0FnhG6yEh0BMZ728OiaSFYKb+uEPbUnFnN9zxmqUGqLmSJhDVEcTmCpDmNnl22csRfXk=
+    POSTGRES_USER: AgCgZd+eVVLeJFfumX2NNWCfYgj6Xjtx8j14Rn1eCpnY5aPLoKhSgHQEAgUQ76sj7zssqQUxSjJYp3U5sE2VIo6xM6h6Mnt4vaIs40yKH8VHNz9isj8Asb4Pxs1ioewHnWMR+W2GmGsfCRuWCceSwvctmRN+LWLjhRYIPBnwnBcQC/+4Usz9jSGEefYCbBIy9pfImo6WHeS96uiGnplSi7bTDEqtSijhSV0RLgoULKpNedQMTDmgl/qKD8pIef3EJfHPz3Yywop0hgb5dbl2xAIzFs/cT0DBYx0RJTpe7NTTMnGy/7wAFH4yJTTLxjZG6XeY3qCvxuDiJzKPdTJPT3DpHrj2jiH3QWIFmfe23gHLYqr05PslX/5A+/XG7xM3DHoogn2OLhzNpgoGFpZFJztA8beB0Nz8+KyYSQ8BQgOPQ5P9sh7Su0aYxSoxT6310cTSzopwMCtAeSHldiVkZKPd+MiGuI1QTqGOjr/Gu24GKnhLwYjgTL9ft+Swzg/3ameHvXybnBOswytqtCWcZR+vz+GVTAw2KFiqIlO3mL3Nu1Wi++VHAF5em2XK4d8uiHU65+2NluoDOE2LpH+drBPgfO/tBWRVFbcqHh+wcSXjUf1h5TMCPk8XN+SWKj1gilHOgVIIrS+We854opPBxKzob+CpXNoLzxttYqgw67TS3wrMrYH/BfNKOMvPYqTqiHLlauQiSpA=
+  template:
+    metadata:
+      name: db-escala-api
+      namespace: escala-dev
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: rabbitmq-credentials
+  namespace: escala-dev
+spec:
+  encryptedData:
+    password: AgAsppUrr5XKdqtdRyPiJTrvQr9W1CZ9eecFc2U9VonY/s4YHVpp0+pkv8vnhtlSyjTlaSGQVfTECa+mlkzFG6tuur+B94HFHM9a93gD+YL2SztA37DDPsQL0bpz/U7wc8UXGllGlDU/ZnOBG85wMt57r+WJIgSvDAIh2+QEifT2fm1Atw0EQ/ipu+rXRe4SR5IpjObC79dSZHpyomc9rfWLYVL8TclU+20OBrH2UrcyubanWgGl+wb7DtUAWkUwDU4uMhrZhjZcCk4C7U+RsHDaJ32gTQqysu1qso2tAivceE7peykiFqSvEQl2CguoLoGrzjeAhef388S8MBztBNPf4jSF4OsM+yjaT+srOg8iprj+A0Iai1VzeJaVXdPtBaOo+5SVIO3izJ3rlVqnVaBlKYTcuXd+/vgQOJeThrqU3i0/7MAhbikdtgMoYt4hw4k6BiKiknS9teuVt1K9v3/5yytxLpRzMhTh1+5ESqqwo/lQMSup/iIL+lhap45msxVR3w18QWxogqD3A1cnQJBPJXdM2ha47r/3m2J1IwcZ4pKrzKJ7D5LqtWeADVGPAiI0TjoBlcY3SSYVT6jswUkrJJwBK+Yw8q93einCXpIEpsd1vHzK74aF4/yhea4QyH0ddzEkNKhCXloF6TWNhIqHNDl6ZXOijrnmaSvP7iq/6xe28HSdXRmC7YQte1QA0mpqjGwit9yZTXRdRUjdN8HId6Fqn5SRz2U=
+    username: AgCEP4B1o4xZy8iJe6d0NB6vXtePdAFPSUr745cWL7mQI0X5ucxYjF2DLfBSOOneopjUzsrnWmVT3dt3kpjULnrIFIe4pQPPKaJ56LDWOauy+n//GzYrJruhs3+PwbyRmus03ZbdMBJCgjA5NILr9RGJDjGWtbzXFSXzwxWDm+SeCA+QwAYXDlHPZ2TZpN8hB3gN0lM5d+PoAk8JimvPz1eabUW3dbTJRI8pIYicillS24YqspHzKuGeBPmczBUecGHPsJWKmahvRa5QAaCFz+LYLPTYyKYKbKX6w/Wv4jzu4d0cDXjI3QeQAcdepS/0PDbXMJxIJi0HsyMZudQHKmLA9Tw++JEgu5cLN5fqBRal9c2+79q4dnrUx7ruttnNedqVmPNYVBkT7EZdyxcm4RUfxSxZEzDSTfRxijWVNcR5ku25Er2yg5Nt+/7yMPtIF6y+oAsTTcchPL0Ho59fWVrL8bnkBFhSRcj8dbO7VrLBWqupTgONDAo8tabyp1jjslckFOf4j5ehiJRXmFl8oMdnMMtP6xqDzu6UJihmFa4tL4z1E6ZK7b5doS7dq1S7P9pfK3z7su8PrZRTQzmtWvxkooGHxmUcDmJWLB3ae+g0bG/Kn65PWqtBAdZEEI+S2J3I5iu71gMtoJmXRPPxC/rf6XVKdpbqbpQXnuraMI/ai3k7Jiuh1S09quJNa8CJaJTZqiMKbGM=
+  template:
+    metadata:
+      name: rabbitmq-credentials
+      namespace: escala-dev
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: web,websecure
+  name: escala
+  namespace: escala-dev
+spec:
+  rules:
+  - host: escala-dev.duckdns.org
+    http:
+      paths:
+      - backend:
+          service:
+            name: web
+            port:
+              number: 80
+        path: /
+        pathType: Prefix
+  tls:
+  - hosts:
+    - escala-dev.duckdns.org
+    secretName: escala-tls
