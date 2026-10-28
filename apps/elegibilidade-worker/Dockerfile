@@ -1,7 +1,7 @@
 # Build context is this folder:  docker build -t ghcr.io/<user>/<service>:latest apps/<service>
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /src
-COPY ../../../../../AppData/Local/Temp .
+COPY . .
 RUN chmod +x mvnw && ./mvnw -B -ntp -DskipTests package
 
 FROM eclipse-temurin:21-jre
