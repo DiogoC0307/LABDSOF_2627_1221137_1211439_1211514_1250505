@@ -17,7 +17,7 @@ Write an ADR when a decision:
 
 Do not write one for routine code choices (naming, a helper library, refactorings) that stay inside one component.
 
-The planned first ADRs (0001–0014, all *Proposed*) are listed on **08 · Architecture Decision Records**. Use those numbers so that both indexes agree. ADR 0001 records the decision to keep ADRs in this folder.
+The index below and **08 · Architecture Decision Records** list the same ADRs. ADR 0001 records the decision to keep ADRs in this folder.
 
 ## Naming
 
@@ -53,8 +53,23 @@ The planned first ADRs (0001–0014, all *Proposed*) are listed on **08 · Archi
 
 ## Index
 
-One row per ADR, newest last. Link each file, e.g. `[0005](0005-use-rabbitmq-as-message-broker.md)`. The table starts empty: until the first ADR file is merged, the planned numbers and titles (0001–0014, all *Proposed*) are on **08 · Architecture Decision Records**. Add a row here when its file exists, with the same number and title.
+One row per ADR, in number order. The Date is the day the decision was taken; each ADR's *Related* section says what that date is based on.
 
 | ADR | Title | Status | Date | Supersedes / superseded by |
 |---|---|---|---|---|
-| [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Proposed | 2026-10-11 | — |
+| [0001](0001-keep-adrs-in-git.md) | Keep architecture decision records in Git | Accepted | 2026-10-02 | — |
+| [0002](0002-split-backend-into-two-independently-deployable-components.md) | Split the backend into two independently deployable components | Accepted | 2026-10-11 | — |
+| [0003](0003-one-postgresql-database-per-component.md) | Give each component its own PostgreSQL database | Accepted | 2026-10-11 | — |
+| [0004](0004-use-a-monorepo.md) | Keep the product in one monorepo | Accepted | 2026-10-04 | — |
+| [0005](0005-use-rabbitmq-as-message-broker.md) | Use RabbitMQ as message broker | Accepted | 2026-10-11 | — |
+| [0006](0006-mock-authentication-and-enforce-roles.md) | Mock authentication and enforce real roles | Accepted | 2026-10-27 | — |
+| [0007](0007-deterministic-eligibility-engine-ai-never-decides.md) | Keep eligibility deterministic; AI never decides | Accepted | 2026-10-12 | — |
+| [0008](0008-events-carry-the-state-the-consumer-needs.md) | Carry the consumer's required state on the event | Accepted | 2026-10-26 | — |
+| [0009](0009-transactional-outbox-and-idempotent-consumers.md) | Use a transactional outbox and idempotent consumers | Accepted | 2026-10-26 | — |
+| [0010](0010-poll-ipma-hourly-and-cache-the-last-valid-value.md) | Poll IPMA hourly and cache the last valid value | Accepted | 2026-10-11 | — |
+| [0011](0011-call-a-language-model-behind-a-feature-flag.md) | Call a language model behind a feature flag | Accepted | 2026-10-26 | — |
+| [0012](0012-store-instants-in-utc.md) | Store instants in UTC and display Europe/Lisbon | Accepted | 2026-10-26 | — |
+| [0013](0013-assume-the-higher-risk-when-ipma-data-is-unusable.md) | Assume the higher risk when IPMA data is unusable | Accepted | 2026-10-11 | — |
+| [0014](0014-keep-operational-rules-as-configuration.md) | Keep operational rules as configuration | Accepted | 2026-10-26 | — |
+| [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Accepted | 2026-10-11 | — |
+| [0016](0016-use-claude-haiku-through-the-claude-code-cli.md) | Use Claude Haiku through the Claude Code CLI for free-text extraction | Proposed | 2026-10-27 | — |
