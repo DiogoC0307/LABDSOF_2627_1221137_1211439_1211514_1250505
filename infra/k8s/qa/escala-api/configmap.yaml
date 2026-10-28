@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: escala-api-config, namespace: escala-qa }
+data:
+  SPRING_PROFILES_ACTIVE: "qa"
+  LOGGING_LEVEL_ROOT: "INFO"
+  SPRING_RABBITMQ_HOST: "rabbitmq"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-escala-api:5432/escala"

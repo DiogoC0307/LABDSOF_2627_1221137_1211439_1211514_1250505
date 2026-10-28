@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: escala-api, namespace: escala-qa }
+spec:
+  selector: { matchLabels: { app: escala-api } }
+  template:
+    metadata: { labels: { app: escala-api } }
+    spec:
+      containers:
+        - name: escala-api
+          image: ghcr.io/diogoc0307/escala-api:latest
+          ports: [{ containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: escala-api-config }
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: db-escala-api, key: POSTGRES_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-escala-api, key: POSTGRES_PASSWORD } }
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: username } }
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: password } }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 30
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8080 }
+            initialDelaySeconds: 60

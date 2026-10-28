@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: escala-dev, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DiogoC0307/LABDSOF_2627_1221137_1211439_1211514_1250505.git
+    targetRevision: deploy/dev
+    path: .
+  destination: { server: https://kubernetes.default.svc, namespace: escala-dev }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }     # DEV: applies by itself, reverts manual kubectl edits
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: escala-qa, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DiogoC0307/LABDSOF_2627_1221137_1211439_1211514_1250505.git
+    targetRevision: deploy/qa
+    path: .
+  destination: { server: https://kubernetes.default.svc, namespace: escala-qa }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: escala-prod, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DiogoC0307/LABDSOF_2627_1221137_1211439_1211514_1250505.git
+    targetRevision: deploy/prod
+    path: .
+  destination: { server: https://kubernetes.default.svc, namespace: escala-prod }
