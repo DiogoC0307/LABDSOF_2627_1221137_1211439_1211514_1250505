@@ -1,0 +1,22 @@
+# DEV: every merge to main builds the images and publishes the manifests to deploy/dev (Argo CD applies them).
+name: Deploy DEV
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # lets you trigger the first run by hand
+
+jobs:
+  build:
+    permissions: { contents: read, packages: write }
+    uses: ./.github/workflows/build-images.yml
+    with:
+      tag_latest: true
+
+  deploy:
+    needs: build
+    permissions: { contents: write }
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: dev
+      overlay: dev
+      tag: ${{ github.sha }}

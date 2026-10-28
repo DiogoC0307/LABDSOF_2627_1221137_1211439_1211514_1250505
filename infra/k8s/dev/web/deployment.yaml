@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: web, namespace: escala-dev }
+spec:
+  selector: { matchLabels: { app: web } }
+  template:
+    metadata: { labels: { app: web } }
+    spec:
+      containers:
+        - name: web
+          image: ghcr.io/diogoc0307/escala-web:latest
+          ports: [{ containerPort: 80 }]
+          resources:
+            requests: { cpu: 20m, memory: 32Mi }
+            limits: { memory: 96Mi }
+          volumeMounts:
+            - { name: nginx-conf, mountPath: /etc/nginx/conf.d }
+      volumes:
+        - name: nginx-conf
+          configMap: { name: web-nginx }

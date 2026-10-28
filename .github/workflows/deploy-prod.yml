@@ -1,0 +1,62 @@
+# PROD: publishing a GitHub Release (tag vX.Y.Z) on a release/X.Y.Z branch promotes the
+# images that QA already tested (nothing is rebuilt) and publishes the manifests to deploy/prod.
+# Argo CD then shows prod as OutOfSync; someone clicks Sync (manual gate).
+name: Deploy PROD
+on:
+  release:
+    types: [published]
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions: { contents: read, packages: write }
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: v
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must look like v1.2.0 (got '$TAG')"; exit 1
+          fi
+          VERSION="${TAG#v}"
+          # git flow rule: a release must come from its own release branch
+          git fetch origin "release/$VERSION" || { echo "::error::Branch release/$VERSION does not exist"; exit 1; }
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" "origin/release/$VERSION"; then
+            echo "::error::Tag $TAG is not on release/$VERSION"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote the tested images (retag, no rebuild)
+        env:
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          set -euo pipefail
+          OWNER=${GITHUB_REPOSITORY_OWNER,,}
+          for i in escala-api elegibilidade-worker escala-web; do
+            SRC="ghcr.io/$OWNER/$i:$GITHUB_SHA"
+            docker buildx imagetools inspect "$SRC" >/dev/null 2>&1 || {
+              echo "::error::No image for commit $GITHUB_SHA. Push this commit to release/$VERSION so QA builds it first."; exit 1; }
+            docker buildx imagetools create -t "ghcr.io/$OWNER/$i:$VERSION" "$SRC"
+          done
+
+  deploy:
+    needs: promote
+    permissions: { contents: write }
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: production     # configure required reviewers on this GitHub Environment
+      overlay: prod
+      tag: ${{ needs.promote.outputs.version }}
