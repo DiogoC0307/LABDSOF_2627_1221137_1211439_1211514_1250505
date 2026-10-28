@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-25 |
-| Status | Proposed |
+| Date | 2026-10-04 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -33,7 +33,9 @@ We will keep one GitHub repository with `apps/web`, `apps/escala-api`, `apps/ele
 
 ## Related
 
-- Jira: SCRUM-20, SCRUM-39
+- Jira: SCRUM-10, SCRUM-20
 - Requirements: —
 - Supersedes: —
 - Other ADRs or pages: 0002
+- Date evidence: SCRUM-10 "Create the monorepo, branch protection and PR template" was created on 2026-10-04.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

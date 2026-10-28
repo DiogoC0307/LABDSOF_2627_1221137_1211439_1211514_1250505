@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: rabbitmq, namespace: escala-qa }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: rabbitmq } }
+  template:
+    metadata: { labels: { app: rabbitmq } }
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:4-alpine
+          ports: [{ containerPort: 5672 }]
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: username } }
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: password } }
+          resources:
+            requests: { cpu: 50m, memory: 192Mi }
+            limits: { memory: 384Mi }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: rabbitmq, namespace: escala-qa }
+spec:
+  selector: { app: rabbitmq }
+  ports: [{ port: 5672 }]

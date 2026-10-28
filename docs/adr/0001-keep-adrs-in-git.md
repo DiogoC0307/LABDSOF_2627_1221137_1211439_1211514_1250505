@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-23 |
-| Status | Proposed |
+| Date | 2026-10-02 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -33,7 +33,9 @@ We will store one Markdown file per decision in `docs/adr/`, numbered and named 
 
 ## Related
 
-- Jira: SCRUM-39
+- Jira: SCRUM-40
 - Requirements: —
 - Supersedes: —
 - Other ADRs or pages: [ADR README](README.md); **08 · Architecture Decision Records**
+- Date evidence: the `docs/adr/` README and template were committed on 2026-10-02 (commit "Realization of templates for the documentation"), and the Confluence page **08 · Architecture Decision Records** was created the same day pointing to them.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

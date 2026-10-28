@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-24 |
-| Status | Proposed |
+| Date | 2026-10-11 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -12,7 +12,7 @@
 
 ## Decision
 
-We will use PostgreSQL for both stores: `escala-db` owned only by `escala-api`, and `elegibilidade-db` owned only by `elegibilidade-worker`. No component reads or writes the other component's database. Cross-service identifiers are carried on events (ADR 0008).
+We will use PostgreSQL for both stores: `escala-db` owned only by `escala-api`, and `elegibilidade-db` owned only by `elegibilidade-worker`. No component reads or writes the other component's database. Cross-service identifiers travel on the events between the two services.
 
 ## Alternatives considered
 
@@ -36,4 +36,6 @@ We will use PostgreSQL for both stores: `escala-db` owned only by `escala-api`, 
 - Jira: SCRUM-39
 - Requirements: RNF09
 - Supersedes: —
-- Other ADRs or pages: 0002, 0008
+- Other ADRs or pages: 0002; later 0008 defines what the events carry
+- Date evidence: ADR 0015 (2026-10-11) states that the two services each keep their own database.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

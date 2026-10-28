@@ -2,13 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-10-03 |
-| Status | Proposed |
+| Date | 2026-10-11 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
 
-The MVP must fetch the municipality's rural fire risk and show how old the value is (RF25, RF29). After **D-00** and finding F7, risk does **not** set required composition (RN10 off; RF27 and RF28 Won't). IPMA still belongs in the worker: `escala-api` must not block roster or swap screens on an external timeout.
+The MVP must fetch the municipality's rural fire risk and show how old the value is (RF25, RF29). After **D-00**, risk does **not** set required composition (RN10 off; RF27 and RF28 Won't). IPMA still belongs in the worker: `escala-api` must not block roster or swap screens on an external timeout.
 
 ## Decision
 
@@ -37,3 +37,5 @@ The MVP must fetch the municipality's rural fire risk and show how old the value
 - Requirements: RF25, RF29, RNF03; RF27/RF28 Won't
 - Supersedes: —
 - Other ADRs or pages: 0013, 0014; **D-00**
+- Date evidence: D-00 (SCRUM-59, 2026-10-11) made IPMA information only; this ADR records where and how it is polled under that decision.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

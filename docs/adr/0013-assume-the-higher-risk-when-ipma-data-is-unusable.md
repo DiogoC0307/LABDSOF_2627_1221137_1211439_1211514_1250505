@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-10-08 |
-| Status | Proposed |
+| Date | 2026-10-11 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -19,7 +19,7 @@ While a cached RCM is younger than `RISK_STALENESS_THRESHOLD` (3 hours), serve i
 | Alternative | Why rejected |
 |---|---|
 | Hide risk entirely when the poll fails | Members and the supervisor would have no badge; RF29 would not be met |
-| Raise required composition when data is stale | RF27/RF28 are Won't; F7 found no fixed composition per risk in either corps |
+| Raise required composition when data is stale | RF27/RF28 are Won't; the corps disagree on whether risk changes the piquete (A4, SCRUM-28; D-00) |
 
 ## Consequences
 
@@ -37,3 +37,5 @@ While a cached RCM is younger than `RISK_STALENESS_THRESHOLD` (3 hours), serve i
 - Requirements: RF25, RF29, RNF03; RF27/RF28 Won't
 - Supersedes: —
 - Other ADRs or pages: 0010, 0014; **D-00**
+- Date evidence: D-00 (SCRUM-59, 2026-10-11) made IPMA information only, which is why stale data raises a warning and never adds slots.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

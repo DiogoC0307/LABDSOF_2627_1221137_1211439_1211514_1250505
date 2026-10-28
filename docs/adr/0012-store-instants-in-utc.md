@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-10-07 |
-| Status | Proposed |
+| Date | 2026-10-26 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -37,3 +37,5 @@ Supports RN05, RN07, RN09 and event contracts.
 - Requirements: RN05, RN07, RN09
 - Supersedes: —
 - Other ADRs or pages: 0008
+- Date evidence: written on 2026-10-26 with the technical design and the event contracts, which use UTC `occurredAt` (SCRUM-39).
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

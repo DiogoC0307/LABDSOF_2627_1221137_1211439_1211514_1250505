@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-24 |
-| Status | Proposed |
+| Date | 2026-10-11 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -37,3 +37,5 @@ We will ship two Spring Boot services: `escala-api` (the published roster and it
 - Requirements: RNF02, RF24, RF36
 - Supersedes: —
 - Other ADRs or pages: 0003, 0004, 0015; **D-00**
+- Date evidence: SCRUM-54 "Setup both Java microservices" was created on 2026-10-11, and ADR 0015 (2026-10-11) already describes two independently deployable components.
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

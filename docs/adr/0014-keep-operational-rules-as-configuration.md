@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-10-09 |
-| Status | Proposed |
+| Date | 2026-10-26 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -37,3 +37,5 @@ Operational thresholds live in configuration (`infra` / environment / a versione
 - Requirements: RN07, RN10, RF23
 - Supersedes: —
 - Other ADRs or pages: 0010, 0013; [Deployment and Operations](../operations/deployment-and-operations.md)
+- Date evidence: written on 2026-10-26 with the technical design, which fixes the defaults listed here (SCRUM-39).
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.

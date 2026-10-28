@@ -1,0 +1,41 @@
+# This service's OWN database (elegibilidade). No other service connects to it.
+apiVersion: v1
+kind: Service
+metadata: { name: pg-elegibilidade-worker, namespace: escala-qa }
+spec:
+  clusterIP: None
+  selector: { app: pg-elegibilidade-worker }
+  ports: [{ port: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: pg-elegibilidade-worker, namespace: escala-qa }
+spec:
+  serviceName: pg-elegibilidade-worker
+  replicas: 1
+  selector:
+    matchLabels: { app: pg-elegibilidade-worker }
+  template:
+    metadata:
+      labels: { app: pg-elegibilidade-worker }
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:17-alpine
+          ports: [{ containerPort: 5432 }]
+          envFrom: [{ secretRef: { name: db-elegibilidade } }]
+          env:
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          readinessProbe:
+            exec: { command: ["sh","-c","pg_isready -U $POSTGRES_USER -d $POSTGRES_DB"] }
+            periodSeconds: 10
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: 2Gi } }

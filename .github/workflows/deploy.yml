@@ -1,0 +1,72 @@
+# Reusable: renders the Kustomize overlay with the given image tag and publishes the final
+# manifests to the branch deploy/<env>. Argo CD (inside the cluster) watches that branch and applies it.
+# No cluster credentials are needed in GitHub.
+name: Publish manifests
+on:
+  workflow_call:
+    inputs:
+      environment:   # GitHub Environment name: dev | qa | production
+        type: string
+        required: true
+      overlay:       # folder under infra/k8s: dev | qa | prod
+        type: string
+        required: true
+      tag:           # image tag to deploy
+        type: string
+        required: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: write          # to push deploy/* branches
+    concurrency:
+      group: manifests-${{ inputs.overlay }}
+      cancel-in-progress: false
+    env:
+      OVERLAY: ${{ inputs.overlay }}
+      TAG: ${{ inputs.tag }}
+      SOURCE_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure kustomize is available
+        run: |
+          if ! command -v kustomize >/dev/null; then
+            curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+            sudo mv kustomize /usr/local/bin/
+          fi
+
+      - name: Set image tags in the overlay (in the runner only)
+        run: |
+          set -euo pipefail
+          OWNER=${GITHUB_REPOSITORY_OWNER,,}
+          cd "infra/k8s/$OVERLAY"
+          for i in escala-api elegibilidade-worker escala-web; do
+            kustomize edit set image "ghcr.io/$OWNER/$i=ghcr.io/$OWNER/$i:$TAG"
+          done
+
+      - name: Render final manifests
+        run: kubectl kustomize "infra/k8s/$OVERLAY" > "$RUNNER_TEMP/manifests.yaml"
+
+      - name: Publish to branch deploy/<env>
+        run: |
+          set -euo pipefail
+          BRANCH="deploy/$OVERLAY"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git fetch origin "$BRANCH"
+            git worktree add -B "$BRANCH" "$RUNNER_TEMP/out" "origin/$BRANCH"
+          else
+            git worktree add --detach "$RUNNER_TEMP/out"
+            git -C "$RUNNER_TEMP/out" checkout --orphan "$BRANCH"
+            git -C "$RUNNER_TEMP/out" rm -rfq .
+          fi
+          cp "$RUNNER_TEMP/manifests.yaml" "$RUNNER_TEMP/out/manifests.yaml"
+          cd "$RUNNER_TEMP/out"
+          git add manifests.yaml
+          if git diff --cached --quiet; then echo "No changes to publish"; exit 0; fi
+          git commit -m "deploy($OVERLAY): $TAG (source $SOURCE_SHA)"
+          git push origin "$BRANCH"

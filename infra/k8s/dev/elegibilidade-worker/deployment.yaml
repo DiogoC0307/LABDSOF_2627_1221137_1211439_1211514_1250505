@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: elegibilidade-worker, namespace: escala-dev }
+spec:
+  selector: { matchLabels: { app: elegibilidade-worker } }
+  template:
+    metadata: { labels: { app: elegibilidade-worker } }
+    spec:
+      containers:
+        - name: elegibilidade-worker
+          image: ghcr.io/diogoc0307/elegibilidade-worker:latest
+          ports: [{ containerPort: 8081 }]
+          envFrom:
+            - configMapRef: { name: elegibilidade-worker-config }
+          env:
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom: { secretKeyRef: { name: db-elegibilidade, key: POSTGRES_USER } }
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom: { secretKeyRef: { name: db-elegibilidade, key: POSTGRES_PASSWORD } }
+            - name: SPRING_RABBITMQ_USERNAME
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: username } }
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: password } }
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 30
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 60

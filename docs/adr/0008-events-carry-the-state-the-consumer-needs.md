@@ -2,8 +2,8 @@
 
 | Field | Value |
 |---|---|
-| Date | 2026-09-30 |
-| Status | Proposed |
+| Date | 2026-10-26 |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -37,3 +37,5 @@ Events are self-contained. `AvaliacaoPedida` carries roster flags, age-limit fla
 - Requirements: RF24, RNF05, RN08
 - Supersedes: —
 - Other ADRs or pages: 0003, 0005, 0009
+- Date evidence: the event schemas in `contracts/events/` and this ADR were written on 2026-10-26 with the technical design (SCRUM-39).
+- Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40.
