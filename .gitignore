@@ -27,3 +27,7 @@ replay_pid*
 # Others
 
 docs-handoff
+
+# IDE
+.idea/
+.cursor/settings.json
