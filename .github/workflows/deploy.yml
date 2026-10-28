@@ -8,7 +8,7 @@ on:
       environment:   # GitHub Environment name: dev | qa | production
         type: string
         required: true
-      overlay:       # folder under infra/k8s/overlays: dev | qa | prod
+      overlay:       # folder under infra/k8s: dev | qa | prod
         type: string
         required: true
       tag:           # image tag to deploy
@@ -42,13 +42,13 @@ jobs:
         run: |
           set -euo pipefail
           OWNER=${GITHUB_REPOSITORY_OWNER,,}
-          cd "infra/k8s/overlays/$OVERLAY"
+          cd "infra/k8s/$OVERLAY"
           for i in escala-api elegibilidade-worker escala-web; do
             kustomize edit set image "ghcr.io/$OWNER/$i=ghcr.io/$OWNER/$i:$TAG"
           done
 
       - name: Render final manifests
-        run: kubectl kustomize "infra/k8s/overlays/$OVERLAY" > "$RUNNER_TEMP/manifests.yaml"
+        run: kubectl kustomize "infra/k8s/$OVERLAY" > "$RUNNER_TEMP/manifests.yaml"
 
       - name: Publish to branch deploy/<env>
         run: |
