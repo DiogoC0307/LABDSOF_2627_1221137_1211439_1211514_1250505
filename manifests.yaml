@@ -7,7 +7,15 @@ metadata:
 ---
 apiVersion: v1
 data:
+  JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
   LOGGING_LEVEL_ROOT: DEBUG
+  LOGGING_PATTERN_LEVEL: '%5p [%X{trace_id:-},%X{span_id:-}]'
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.observability.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_LOGS_EXPORTER: none
+  OTEL_METRICS_EXPORTER: none
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=dev
+  OTEL_SERVICE_NAME: elegibilidade-worker
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/elegibilidade
   SPRING_PROFILES_ACTIVE: dev
   SPRING_RABBITMQ_HOST: rabbitmq
@@ -18,13 +26,582 @@ metadata:
 ---
 apiVersion: v1
 data:
+  JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
   LOGGING_LEVEL_ROOT: DEBUG
+  LOGGING_PATTERN_LEVEL: '%5p [%X{trace_id:-},%X{span_id:-}]'
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo.observability.svc.cluster.local:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_LOGS_EXPORTER: none
+  OTEL_METRICS_EXPORTER: none
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=dev
+  OTEL_SERVICE_NAME: escala-api
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/escala
   SPRING_PROFILES_ACTIVE: dev
   SPRING_RABBITMQ_HOST: rabbitmq
 kind: ConfigMap
 metadata:
   name: escala-api-config
+  namespace: escala-dev
+---
+apiVersion: v1
+data:
+  definitions.json: |
+    {
+      "vhosts": [
+        {
+          "name": "/"
+        }
+      ],
+      "exchanges": [
+        {
+          "name": "escala.events",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "escala.retry",
+          "vhost": "/",
+          "type": "direct",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "escala.dlx",
+          "vhost": "/",
+          "type": "direct",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        }
+      ],
+      "queues": [
+        {
+          "name": "worker.avaliacao-pedida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.extracao-concluida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.risco-atualizado",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        }
+      ],
+      "bindings": [
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida",
+          "destination_type": "queue",
+          "routing_key": "avaliacao.pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.dlq",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida",
+          "destination_type": "queue",
+          "routing_key": "extracao.pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.dlq",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida",
+          "destination_type": "queue",
+          "routing_key": "avaliacao.concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.extracao-concluida",
+          "destination_type": "queue",
+          "routing_key": "extracao.concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.risco-atualizado",
+          "destination_type": "queue",
+          "routing_key": "risco.atualizado",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado",
+          "arguments": {}
+        }
+      ]
+    }
+  setup.sh: |
+    #!/bin/sh
+    # Runs inside the RabbitMQ container right after the broker has started (see compose.yaml and
+    # infra/k8s/<env>/shared/rabbitmq.yaml). It:
+    #   1. creates ONE login per service and limits it to that service's own queues,
+    #   2. imports the topology (exchanges, queues, retry queues, dead-letter queues).
+    # Passwords come from the environment (Kubernetes Secrets / .env), never from this file.
+    # It is safe to run again: existing users get their password and permissions re-applied.
+    set -e
+    until rabbitmqctl await_startup >/dev/null 2>&1; do sleep 2; done
+
+    # create_user <name> <password> <configure-regex> <write-regex> <read-regex>
+    #   configure = create/delete queues      write = publish to exchanges      read = consume from queues
+    create_user() {
+      if rabbitmqctl list_users -q | cut -f1 | grep -qx "$1"; then
+        rabbitmqctl change_password "$1" "$2" >/dev/null
+      else
+        rabbitmqctl add_user "$1" "$2" >/dev/null
+      fi
+      rabbitmqctl set_user_tags "$1" >/dev/null          # no tags: cannot log in to the management UI
+      rabbitmqctl set_permissions -p / "$1" "$3" "$4" "$5" >/dev/null
+      echo "rabbitmq user '$1' ready"
+    }
+
+    # Exchanges a service may publish to (the three exchanges of the topology)
+    EXCHANGES='^(escala\.events|escala\.retry|escala\.dlx)$'
+
+    #           user                          password                          configure   write         read
+    create_user "$ESCALA_API_USER"            "$ESCALA_API_PASSWORD"            '^api\.'    "$EXCHANGES"  '^api\.'
+    create_user "$ELEGIBILIDADE_WORKER_USER"  "$ELEGIBILIDADE_WORKER_PASSWORD"  '^worker\.' "$EXCHANGES"  '^worker\.'
+
+    rabbitmqctl import_definitions /etc/rabbitmq/definitions.json
+    echo "rabbitmq topology imported"
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
   namespace: escala-dev
 ---
 apiVersion: v1
@@ -104,7 +681,10 @@ metadata:
   namespace: escala-dev
 spec:
   ports:
-  - port: 5672
+  - name: amqp
+    port: 5672
+  - name: management
+    port: 15672
   selector:
     app: rabbitmq
 ---
@@ -118,6 +698,30 @@ spec:
   - port: 80
   selector:
     app: web
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backups-pg-elegibilidade-worker
+  namespace: escala-dev
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backups-pg-escala-api
+  namespace: escala-dev
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -149,16 +753,16 @@ spec:
           valueFrom:
             secretKeyRef:
               key: username
-              name: rabbitmq-credentials
+              name: rabbitmq-elegibilidade-worker
         - name: SPRING_RABBITMQ_PASSWORD
           valueFrom:
             secretKeyRef:
               key: password
-              name: rabbitmq-credentials
+              name: rabbitmq-elegibilidade-worker
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:7eb8ee6747d67c32cfe1a7c5ac9e484553786ff0
+        image: ghcr.io/diogoc0307/elegibilidade-worker:322fd5d9ac1695f761e05451920836809f25dd75
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -174,7 +778,7 @@ spec:
           initialDelaySeconds: 30
         resources:
           limits:
-            memory: 512Mi
+            memory: 640Mi
           requests:
             cpu: 100m
             memory: 256Mi
@@ -209,16 +813,16 @@ spec:
           valueFrom:
             secretKeyRef:
               key: username
-              name: rabbitmq-credentials
+              name: rabbitmq-escala-api
         - name: SPRING_RABBITMQ_PASSWORD
           valueFrom:
             secretKeyRef:
               key: password
-              name: rabbitmq-credentials
+              name: rabbitmq-escala-api
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:7eb8ee6747d67c32cfe1a7c5ac9e484553786ff0
+        image: ghcr.io/diogoc0307/escala-api:322fd5d9ac1695f761e05451920836809f25dd75
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -234,7 +838,7 @@ spec:
           initialDelaySeconds: 30
         resources:
           limits:
-            memory: 512Mi
+            memory: 640Mi
           requests:
             cpu: 100m
             memory: 256Mi
@@ -255,7 +859,12 @@ spec:
         app: rabbitmq
     spec:
       containers:
-      - env:
+      - args:
+        - (sh /setup/setup.sh &); exec docker-entrypoint.sh rabbitmq-server
+        command:
+        - /bin/sh
+        - -c
+        env:
         - name: RABBITMQ_DEFAULT_USER
           valueFrom:
             secretKeyRef:
@@ -266,16 +875,61 @@ spec:
             secretKeyRef:
               key: password
               name: rabbitmq-credentials
-        image: rabbitmq:4-alpine
+        - name: ESCALA_API_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: rabbitmq-escala-api
+        - name: ESCALA_API_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: rabbitmq-escala-api
+        - name: ELEGIBILIDADE_WORKER_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: rabbitmq-elegibilidade-worker
+        - name: ELEGIBILIDADE_WORKER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: rabbitmq-elegibilidade-worker
+        image: rabbitmq:4-management-alpine
         name: rabbitmq
         ports:
         - containerPort: 5672
+          name: amqp
+        - containerPort: 15672
+          name: management
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - rabbitmqctl list_queues -q name | grep -q '^worker.avaliacao-pedida$'
+          initialDelaySeconds: 30
+          periodSeconds: 15
+          timeoutSeconds: 15
         resources:
           limits:
-            memory: 384Mi
+            memory: 512Mi
           requests:
             cpu: 50m
-            memory: 192Mi
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /setup/setup.sh
+          name: config
+          readOnly: true
+          subPath: setup.sh
+        - mountPath: /etc/rabbitmq/definitions.json
+          name: config
+          readOnly: true
+          subPath: definitions.json
+      volumes:
+      - configMap:
+          name: rabbitmq-config
+        name: config
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -292,7 +946,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:7eb8ee6747d67c32cfe1a7c5ac9e484553786ff0
+      - image: ghcr.io/diogoc0307/escala-web:322fd5d9ac1695f761e05451920836809f25dd75
         name: web
         ports:
         - containerPort: 80
@@ -353,6 +1007,14 @@ spec:
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: data
+        - mountPath: /backups
+          name: backups
+          readOnly: true
+      volumes:
+      - name: backups
+        persistentVolumeClaim:
+          claimName: backups-pg-elegibilidade-worker
+          readOnly: true
   volumeClaimTemplates:
   - metadata:
       name: data
@@ -406,6 +1068,14 @@ spec:
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
           name: data
+        - mountPath: /backups
+          name: backups
+          readOnly: true
+      volumes:
+      - name: backups
+        persistentVolumeClaim:
+          claimName: backups-pg-escala-api
+          readOnly: true
   volumeClaimTemplates:
   - metadata:
       name: data
@@ -415,6 +1085,140 @@ spec:
       resources:
         requests:
           storage: 2Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-pg-elegibilidade-worker
+  namespace: escala-dev
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: backup-elegibilidade-worker
+        spec:
+          containers:
+          - args:
+            - |
+              set -e
+              FILE="/backups/elegibilidade-$(date +%Y-%m-%d_%H%M).dump"
+              pg_dump -Fc -f "$FILE"
+              echo "backup written: $FILE"
+              # retention: delete dumps older than 7 days (10080 minutes)
+              find /backups -name '*.dump' -mmin +10080 -delete
+              ls -lh /backups
+            command:
+            - /bin/sh
+            - -c
+            env:
+            - name: PGHOST
+              value: pg-elegibilidade-worker
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_USER
+                  name: db-elegibilidade
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_DB
+                  name: db-elegibilidade
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_PASSWORD
+                  name: db-elegibilidade
+            image: postgres:17-alpine
+            name: pg-dump
+            resources:
+              limits:
+                memory: 256Mi
+              requests:
+                cpu: 25m
+                memory: 64Mi
+            volumeMounts:
+            - mountPath: /backups
+              name: backups
+          restartPolicy: Never
+          volumes:
+          - name: backups
+            persistentVolumeClaim:
+              claimName: backups-pg-elegibilidade-worker
+  schedule: 0 3 * * *
+  successfulJobsHistoryLimit: 3
+  timeZone: Europe/Lisbon
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-pg-escala-api
+  namespace: escala-dev
+spec:
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app: backup-escala-api
+        spec:
+          containers:
+          - args:
+            - |
+              set -e
+              FILE="/backups/escala-$(date +%Y-%m-%d_%H%M).dump"
+              pg_dump -Fc -f "$FILE"
+              echo "backup written: $FILE"
+              # retention: delete dumps older than 7 days (10080 minutes)
+              find /backups -name '*.dump' -mmin +10080 -delete
+              ls -lh /backups
+            command:
+            - /bin/sh
+            - -c
+            env:
+            - name: PGHOST
+              value: pg-escala-api
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_USER
+                  name: db-escala-api
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_DB
+                  name: db-escala-api
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: POSTGRES_PASSWORD
+                  name: db-escala-api
+            image: postgres:17-alpine
+            name: pg-dump
+            resources:
+              limits:
+                memory: 256Mi
+              requests:
+                cpu: 25m
+                memory: 64Mi
+            volumeMounts:
+            - mountPath: /backups
+              name: backups
+          restartPolicy: Never
+          volumes:
+          - name: backups
+            persistentVolumeClaim:
+              claimName: backups-pg-escala-api
+  schedule: 0 3 * * *
+  successfulJobsHistoryLimit: 3
+  timeZone: Europe/Lisbon
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -529,6 +1333,34 @@ spec:
       name: rabbitmq-credentials
       namespace: escala-dev
 ---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: rabbitmq-elegibilidade-worker
+  namespace: escala-dev
+spec:
+  encryptedData:
+    password: AgBxzoNUqvElVqB//wzw/msPtPdnI7265aq0/VVsUQjQWoqJD/lJXxlwdZESy9FLdBu2KV5sKzZ9zIRw2UmR4S8x2Fvm0+wlXBoC9XLHsW/urKjHk0JmTPawbM5Vo9lu1VcwCbdz3W0rlSsLUHb32kwx56oRYDrgTd0B9bszC8U/um5Ij8LBxR33maPe8sL+z7/admwVfCJt3XXAORLXXz/OnfLK8R6TwSlcmIY8RD7Yq0U8k2Mg9kR4bJywJdNl2Wmajdy9TpH9quSmlS5PaFo2pJ0mTMIcjWGZcwQxzxoqbjh/y4RWc0gkD1TlmabSYlX1GccdNfgWThRF/aarrx557J5IFJFF48yMdGvAhsLbRzRI42+xlzJfRYuSvXHdU/l1vg9yn4FH4/mpvwmI8Q1deUHYJLZP3pRC/wpqneriaW+UeKXxjWOwSQTmeQUnjqyghDVC5b3B+qEXzceCv9d/m+xsHnWNdOTXIc27QtvaExvAvY9NgY1EWIdqFp3XHMrW717GzMrFtGomqM+pYETS+BEFMrb9ZzsInBlQyuWqf1LKVvUmoKfOyk6PPvdhbzu5lMaSWgtQnEe4jlrR/NJ4aGCQ3wiMijM0aFWCPVzpZPBsUmn3vLW+RByB1GK7wLLtD8Sm6hf9FVOgzIRkZNtJwqYA2w5NbA8a5cv9brpJdSoeH+jn1khayGS9mSw63h9zngleYsU30GUFJkdAHsKfQbnQXMd3NYY=
+    username: AgAymFEko70trY8bgof3GqKFhesPbd6Gr2HDkCoJthUJxs7cjKPJdGN84mJTc7Aiyj/4dhC5GH/zUoecko/xURviiZyIz/wUQxZhRK+cqbwCDFYSLsSgqS4i2kpw/PoqyN3Ab+5uknx+TL1JGOHLelxDUIf3L4PTdxhKHV4wxPMgrbNPuqP2FQbO3gj9oER2/hutzxXNTIBnJyKdQC8RlQabzhu716K9pgdj+1eIOVaSm8sZaYPpRqnyutxpMllwq3548XV6jcWG0PkXp5mRe+BQyWun5S26iIVciMsNxxLb+YnYhgPaL3KP6h/HtEczSMQ4MINVW1bng990dM0tdDN8ie422RamhL3u6kUVkqmFwWi7krrUPp/hg5bJ/hqdSwClWRCJsAc+C1gy13dLrPuNSOskpVMCOfUQM2yD2OYDrLsdy4qJVm1gl5D3oSUgZHiazxt85JbkWoAO5RcrZP8A/c+YoekJQ58mE4D2+x+ZkHRJIGWT1gVDtXfNjND1/7R5lfI5tgXNRxfp5tYHTTN/Qj5xfAo21M+OtFvKj0RSDhIkQMB6vOcTiovhVjqxNiaxaOzmpE9L9/sy3PssqFQcb34Uz1g1Vqp1PHILJ1TiW84zkQNoVP7XRD+ivcX578Oz7940huMEVSeFysUJuu24nmasnD4g89hy5P1mpx2kustsiXIrpWdNJPaquQFZVaqHz5ln/ETU37ECxue7U7j1mcGflQ==
+  template:
+    metadata:
+      name: rabbitmq-elegibilidade-worker
+      namespace: escala-dev
+---
+apiVersion: bitnami.com/v1alpha1
+kind: SealedSecret
+metadata:
+  name: rabbitmq-escala-api
+  namespace: escala-dev
+spec:
+  encryptedData:
+    password: AgAaH0UL5gBwNLKut2osEWXe58X464T/XlKXh3YPooMd7iCPaGk67uLfqPDjGavdMVHiagr4QqhslaqQqYzOPTZ58m/oaJ7uwKWy9RK3sNjyY5tLUdHPUl//sjNdQ9EvUC1SUcUesq+e5InTe0lA5d+bH/V5WzIKpVqODzrucriILV+4EMQqe51TfgIxJUR4VxtRAsQjzcxwLXRYg7UIY3WkrhBdqfAP+DEl2AfGfwLphUwdQXLZUoGWPHpMNS0XNi73YgAPXwDilsS7I56M/TnPlBgpK2DM4na5o754Z+2b/MIZg7A/USmb055ngVbz7ByslG7ON0s5pi5lB1m8W8flCViFn2l58iMOJeSvqo4Vg+JLpL4hYsOhsSjvWPqA8sYbzNfd+SRD/2sm7r0pqgL2913xEKFKENtsb/fTtJzORbnhBuOwunJ/gA/60sZvBsejYr1v85CfAjcP+hpR1tDQCTvtHBSZmlo6eH4kjHoPQH/hPsFYegu2g8PIHE/FGj3aKelK8ILgF4eIPLl6ZEP63BV7JKNbFWtKGYqewQBV8v4P9odVkXTtVc4UTxpK24fzV29YeK7ECJ/U70skWVdnW3Da8A3avH0fDM3pgrvU1DAZ3//QNdwm86ISsO4SGLt1LpR0GRifp4TQsrHVfrHLsjuc8K0Btva1On+fYGggN0Cott6NR1OJ3Vr5TktOgtbxGnNDjPUIXtvSr0L4+36OSbAZ2QUPZUQ=
+    username: AgB0ZNwhQVe4AzQVxm1jIfJTA4aYCHeBRIQX1h3krbuf3pGi/qranTu7JePZOvIxElmBgK+dYcaj1ckr94xjPkiqjx15KGkP6PoJL+gH3IadsXI8I47xPXOHlmYZ/Ed/Lk+muo5UJ6xVBcbCiS5dW5uvG0LnkOV9Lwm2wWG+kcQhfONSB//fGbKHxufBIYgMlYekogDWAfD/SraueMmhqUZREkmdc7aFoXAE+g+f1+sAQeFziAICOSF8cVZXMW0kIbDlsle9NVlg9i0/EEpfwpHRwmKqDo6raDs6jiwg3ASxXrZfU0FJk3BXMBbhUd8bwtzJHPMxUd5y9hKDVmEZevWCQH9tCVMuv8Wr/YlLN8nrEMCDjDQbyeCIRWzNLphMjxLAOIxj4b/Zvv6adMpeaWNMJzdqPisvB97wBwBdIXKIFKhNNjmm6ALyeqs6IParauc6/YcE8wJRO0Rq4W2s/qevfq0TkJpHV0zcmue0FYwYgf2r4sjWhPWRy24SLXa+ufskOl559aheuIsHco+8VpSH+hIDRIzfFG27oYsqxVaFuDuL6uRzgTYI6PTsJ/CSKpLz5lcvvfJ5PEHwKSePjOccSWh9Mf7higxm/18VZHc+IkBGkFbolLjQ6eKG3o5U9RFD60ibEGszAwJ27p+MNCxjBbQIMvt6Nnitw1MgoJjJAymPDaoWmSQMrFvgaih3Rj07L6sTeHLcKX3J
+  template:
+    metadata:
+      name: rabbitmq-escala-api
+      namespace: escala-dev
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -553,3 +1385,72 @@ spec:
   - hosts:
     - escala-dev.duckdns.org
     secretName: escala-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-elegibilidade-worker-from-owner-only
+  namespace: escala-dev
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: elegibilidade-worker
+    - podSelector:
+        matchLabels:
+          app: backup-elegibilidade-worker
+    ports:
+    - port: 5432
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: pg-elegibilidade-worker
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-escala-api-from-owner-only
+  namespace: escala-dev
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: escala-api
+    - podSelector:
+        matchLabels:
+          app: backup-escala-api
+    ports:
+    - port: 5432
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: pg-escala-api
+  policyTypes:
+  - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq-from-services-only
+  namespace: escala-dev
+spec:
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: escala-api
+    - podSelector:
+        matchLabels:
+          app: elegibilidade-worker
+    ports:
+    - port: 5672
+      protocol: TCP
+  podSelector:
+    matchLabels:
+      app: rabbitmq
+  policyTypes:
+  - Ingress
