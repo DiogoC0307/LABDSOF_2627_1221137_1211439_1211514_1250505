@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: pg-elegibilidade-worker-from-owner-only, namespace: escala-qa }
+spec:
+  podSelector: { matchLabels: { app: pg-elegibilidade-worker } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: elegibilidade-worker } }
+        - podSelector: { matchLabels: { app: backup-elegibilidade-worker } }
+      ports:
+        - { protocol: TCP, port: 5432 }

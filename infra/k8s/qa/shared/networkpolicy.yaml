@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: rabbitmq-from-services-only, namespace: escala-qa }
+spec:
+  podSelector: { matchLabels: { app: rabbitmq } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: escala-api } }
+        - podSelector: { matchLabels: { app: elegibilidade-worker } }
+      ports:
+        - { protocol: TCP, port: 5672 }

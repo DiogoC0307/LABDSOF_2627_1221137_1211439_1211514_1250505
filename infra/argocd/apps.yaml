@@ -34,3 +34,16 @@ spec:
     targetRevision: deploy/prod
     path: .
   destination: { server: https://kubernetes.default.svc, namespace: escala-prod }
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata: { name: escala-observability, namespace: argocd }
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/DiogoC0307/LABDSOF_2627_1221137_1211439_1211514_1250505.git
+    targetRevision: main
+    path: infra/k8s/observability
+  destination: { server: https://kubernetes.default.svc, namespace: observability }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
