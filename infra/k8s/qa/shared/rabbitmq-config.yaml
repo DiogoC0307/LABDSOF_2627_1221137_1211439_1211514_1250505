@@ -1,0 +1,560 @@
+# Broker setup: per-service users + permissions (setup.sh) and the topology (definitions.json).
+# Source of truth: infra/rabbitmq/setup.sh and infra/rabbitmq/definitions.json (same in all environments and in compose.yaml).
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: rabbitmq-config, namespace: escala-qa }
+data:
+  setup.sh: |
+    #!/bin/sh
+    # Runs inside the RabbitMQ container right after the broker has started (see compose.yaml and
+    # infra/k8s/<env>/shared/rabbitmq.yaml). It:
+    #   1. creates ONE login per service and limits it to that service's own queues,
+    #   2. imports the topology (exchanges, queues, retry queues, dead-letter queues).
+    # Passwords come from the environment (Kubernetes Secrets / .env), never from this file.
+    # It is safe to run again: existing users get their password and permissions re-applied.
+    set -e
+    until rabbitmqctl await_startup >/dev/null 2>&1; do sleep 2; done
+
+    # create_user <name> <password> <configure-regex> <write-regex> <read-regex>
+    #   configure = create/delete queues      write = publish to exchanges      read = consume from queues
+    create_user() {
+      if rabbitmqctl list_users -q | cut -f1 | grep -qx "$1"; then
+        rabbitmqctl change_password "$1" "$2" >/dev/null
+      else
+        rabbitmqctl add_user "$1" "$2" >/dev/null
+      fi
+      rabbitmqctl set_user_tags "$1" >/dev/null          # no tags: cannot log in to the management UI
+      rabbitmqctl set_permissions -p / "$1" "$3" "$4" "$5" >/dev/null
+      echo "rabbitmq user '$1' ready"
+    }
+
+    # Exchanges a service may publish to (the three exchanges of the topology)
+    EXCHANGES='^(escala\.events|escala\.retry|escala\.dlx)$'
+
+    #           user                          password                          configure   write         read
+    create_user "$ESCALA_API_USER"            "$ESCALA_API_PASSWORD"            '^api\.'    "$EXCHANGES"  '^api\.'
+    create_user "$ELEGIBILIDADE_WORKER_USER"  "$ELEGIBILIDADE_WORKER_PASSWORD"  '^worker\.' "$EXCHANGES"  '^worker\.'
+
+    rabbitmqctl import_definitions /etc/rabbitmq/definitions.json
+    echo "rabbitmq topology imported"
+  definitions.json: |
+    {
+      "vhosts": [
+        {
+          "name": "/"
+        }
+      ],
+      "exchanges": [
+        {
+          "name": "escala.events",
+          "vhost": "/",
+          "type": "topic",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "escala.retry",
+          "vhost": "/",
+          "type": "direct",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        },
+        {
+          "name": "escala.dlx",
+          "vhost": "/",
+          "type": "direct",
+          "durable": true,
+          "auto_delete": false,
+          "internal": false,
+          "arguments": {}
+        }
+      ],
+      "queues": [
+        {
+          "name": "worker.avaliacao-pedida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.avaliacao-pedida"
+          }
+        },
+        {
+          "name": "worker.avaliacao-pedida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "worker.extracao-pedida"
+          }
+        },
+        {
+          "name": "worker.extracao-pedida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.avaliacao-concluida"
+          }
+        },
+        {
+          "name": "api.avaliacao-concluida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.extracao-concluida",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.extracao-concluida"
+          }
+        },
+        {
+          "name": "api.extracao-concluida.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        },
+        {
+          "name": "api.risco-atualizado",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-dead-letter-exchange": "escala.dlx",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.5s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 5000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.30s",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 30000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.retry.2m",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic",
+            "x-message-ttl": 120000,
+            "x-dead-letter-exchange": "",
+            "x-dead-letter-routing-key": "api.risco-atualizado"
+          }
+        },
+        {
+          "name": "api.risco-atualizado.dlq",
+          "vhost": "/",
+          "durable": true,
+          "auto_delete": false,
+          "arguments": {
+            "x-queue-type": "classic"
+          }
+        }
+      ],
+      "bindings": [
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida",
+          "destination_type": "queue",
+          "routing_key": "avaliacao.pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "worker.avaliacao-pedida.dlq",
+          "destination_type": "queue",
+          "routing_key": "worker.avaliacao-pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida",
+          "destination_type": "queue",
+          "routing_key": "extracao.pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "worker.extracao-pedida.dlq",
+          "destination_type": "queue",
+          "routing_key": "worker.extracao-pedida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida",
+          "destination_type": "queue",
+          "routing_key": "avaliacao.concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.avaliacao-concluida.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.avaliacao-concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.extracao-concluida",
+          "destination_type": "queue",
+          "routing_key": "extracao.concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.extracao-concluida.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.extracao-concluida",
+          "arguments": {}
+        },
+        {
+          "source": "escala.events",
+          "vhost": "/",
+          "destination": "api.risco-atualizado",
+          "destination_type": "queue",
+          "routing_key": "risco.atualizado",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.5s",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.5s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.30s",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.30s",
+          "arguments": {}
+        },
+        {
+          "source": "escala.retry",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.retry.2m",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado.retry.2m",
+          "arguments": {}
+        },
+        {
+          "source": "escala.dlx",
+          "vhost": "/",
+          "destination": "api.risco-atualizado.dlq",
+          "destination_type": "queue",
+          "routing_key": "api.risco-atualizado",
+          "arguments": {}
+        }
+      ]
+    }

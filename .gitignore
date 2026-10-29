@@ -27,3 +27,6 @@ replay_pid*
 # Others
 
 docs-handoff
+
+# Local Docker Compose settings
+.env

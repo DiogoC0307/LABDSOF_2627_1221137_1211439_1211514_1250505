@@ -1,0 +1,12 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: pg-escala-api-from-owner-only, namespace: escala-qa }
+spec:
+  podSelector: { matchLabels: { app: pg-escala-api } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector: { matchLabels: { app: escala-api } }
+        - podSelector: { matchLabels: { app: backup-escala-api } }
+      ports:
+        - { protocol: TCP, port: 5432 }

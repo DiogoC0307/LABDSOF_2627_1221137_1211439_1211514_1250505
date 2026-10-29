@@ -34,6 +34,10 @@ spec:
             periodSeconds: 10
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: backups, mountPath: /backups, readOnly: true }
+      volumes:
+        - name: backups
+          persistentVolumeClaim: { claimName: backups-pg-elegibilidade-worker, readOnly: true }
   volumeClaimTemplates:
     - metadata: { name: data }
       spec:

@@ -18,12 +18,12 @@ spec:
             - name: SPRING_DATASOURCE_PASSWORD
               valueFrom: { secretKeyRef: { name: db-elegibilidade, key: POSTGRES_PASSWORD } }
             - name: SPRING_RABBITMQ_USERNAME
-              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: username } }
+              valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: username } }
             - name: SPRING_RABBITMQ_PASSWORD
-              valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: password } }
+              valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: password } }
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 512Mi }
+            limits: { memory: 640Mi }
           readinessProbe:
             httpGet: { path: /actuator/health, port: 8081 }
             initialDelaySeconds: 30

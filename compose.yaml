@@ -1,0 +1,167 @@
+name: escala
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-otel: &otel
+  JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
+  OTEL_JAVAAGENT_ENABLED: ${OTEL_JAVAAGENT_ENABLED:-false}
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_METRICS_EXPORTER: none
+  OTEL_LOGS_EXPORTER: none
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=local
+  LOGGING_PATTERN_LEVEL: "%5p [%X{trace_id:-},%X{span_id:-}]"
+
+services:
+  pg-escala-api:
+    image: postgres:17-alpine
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${ESCALA_DB_NAME:-escala}
+      POSTGRES_USER: ${ESCALA_DB_USER:-escala}
+      POSTGRES_PASSWORD: ${ESCALA_DB_PASSWORD:-escala_local}
+    ports: ["127.0.0.1:${ESCALA_DB_PORT:-5432}:5432"]
+    volumes: [pg-escala-api-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pg-elegibilidade-worker:
+    image: postgres:17-alpine
+    logging: *default-logging
+    environment:
+      POSTGRES_DB: ${ELEGIBILIDADE_DB_NAME:-elegibilidade}
+      POSTGRES_USER: ${ELEGIBILIDADE_DB_USER:-elegibilidade}
+      POSTGRES_PASSWORD: ${ELEGIBILIDADE_DB_PASSWORD:-elegibilidade_local}
+    ports: ["127.0.0.1:${ELEGIBILIDADE_DB_PORT:-5433}:5432"]
+    volumes: [pg-elegibilidade-worker-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    logging: *default-logging
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-escala}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-escala_local}
+      ESCALA_API_USER: ${RABBITMQ_ESCALA_API_USER:-escala-api}
+      ESCALA_API_PASSWORD: ${RABBITMQ_ESCALA_API_PASSWORD:-escala_api_local}
+      ELEGIBILIDADE_WORKER_USER: ${RABBITMQ_WORKER_USER:-elegibilidade-worker}
+      ELEGIBILIDADE_WORKER_PASSWORD: ${RABBITMQ_WORKER_PASSWORD:-elegibilidade_worker_local}
+    entrypoint: ["/bin/sh", "-c", "tr -d '\\r' < /setup/setup.sh > /tmp/setup.sh; (sh /tmp/setup.sh &); exec docker-entrypoint.sh rabbitmq-server"]
+    ports:
+      - "127.0.0.1:${RABBITMQ_PORT:-5672}:5672"
+      - "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"      # management UI
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./infra/rabbitmq/setup.sh:/setup/setup.sh:ro
+      - ./infra/rabbitmq/definitions.json:/etc/rabbitmq/definitions.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmqctl list_queues -q name | grep -q '^worker.avaliacao-pedida$'"]
+      interval: 10s
+      timeout: 15s
+      retries: 12
+      start_period: 20s
+
+  # ---- backend services -----------------------------------------------------------------------
+  escala-api:
+    build: ./apps/escala-api
+    logging: *default-logging
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: escala-api
+      SPRING_PROFILES_ACTIVE: local
+      LOGGING_LEVEL_ROOT: INFO
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/${ESCALA_DB_NAME:-escala}
+      SPRING_DATASOURCE_USERNAME: ${ESCALA_DB_USER:-escala}
+      SPRING_DATASOURCE_PASSWORD: ${ESCALA_DB_PASSWORD:-escala_local}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_ESCALA_API_USER:-escala-api}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_ESCALA_API_PASSWORD:-escala_api_local}
+    ports: ["${ESCALA_API_PORT:-8080}:8080"]
+    depends_on:
+      pg-escala-api: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  elegibilidade-worker:
+    build: ./apps/elegibilidade-worker
+    logging: *default-logging
+    environment:
+      <<: *otel
+      OTEL_SERVICE_NAME: elegibilidade-worker
+      SPRING_PROFILES_ACTIVE: local
+      LOGGING_LEVEL_ROOT: INFO
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/${ELEGIBILIDADE_DB_NAME:-elegibilidade}
+      SPRING_DATASOURCE_USERNAME: ${ELEGIBILIDADE_DB_USER:-elegibilidade}
+      SPRING_DATASOURCE_PASSWORD: ${ELEGIBILIDADE_DB_PASSWORD:-elegibilidade_local}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: "5672"
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_WORKER_USER:-elegibilidade-worker}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_WORKER_PASSWORD:-elegibilidade_worker_local}
+    ports: ["${ELEGIBILIDADE_WORKER_PORT:-8081}:8081"]
+    depends_on:
+      pg-elegibilidade-worker: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  web:
+    build: ./apps/web
+    logging: *default-logging
+    ports: ["${WEB_PORT:-8000}:80"]
+    volumes:
+      - ./infra/compose/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      escala-api: { condition: service_started }
+
+  tempo:
+    profiles: [observability]
+    image: grafana/tempo:2.7.2
+    logging: *default-logging
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0"
+    volumes:
+      - ./infra/observability/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    ports: ["127.0.0.1:3200:3200"]
+
+  grafana:
+    profiles: [observability]
+    image: grafana/grafana:11.6.0
+    logging: *default-logging
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin_local}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [tempo]
+
+volumes:
+  pg-escala-api-data:
+  pg-elegibilidade-worker-data:
+  rabbitmq-data:
+  tempo-data:
+  grafana-data:
