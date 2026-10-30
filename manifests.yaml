@@ -575,6 +575,9 @@ data:
     # Passwords come from the environment (Kubernetes Secrets / .env), never from this file.
     # It is safe to run again: existing users get their password and permissions re-applied.
     set -e
+    # Wait for the broker to create its Erlang cookie. rabbitmqctl runs here as root: if it created the cookie
+    # first, the broker (which runs as the rabbitmq user) could not read it and would fail to boot ("eacces").
+    until [ -s /var/lib/rabbitmq/.erlang.cookie ]; do sleep 1; done
     until rabbitmqctl await_startup >/dev/null 2>&1; do sleep 2; done
 
     # create_user <name> <password> <configure-regex> <write-regex> <read-regex>
@@ -762,7 +765,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:372399364613e1d4407a66744319c99b34227b78
+        image: ghcr.io/diogoc0307/elegibilidade-worker:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -780,7 +783,7 @@ spec:
           limits:
             memory: 640Mi
           requests:
-            cpu: 100m
+            cpu: 50m
             memory: 256Mi
 ---
 apiVersion: apps/v1
@@ -822,7 +825,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:372399364613e1d4407a66744319c99b34227b78
+        image: ghcr.io/diogoc0307/escala-api:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -840,7 +843,7 @@ spec:
           limits:
             memory: 640Mi
           requests:
-            cpu: 100m
+            cpu: 50m
             memory: 256Mi
 ---
 apiVersion: apps/v1
@@ -915,7 +918,7 @@ spec:
           limits:
             memory: 512Mi
           requests:
-            cpu: 50m
+            cpu: 25m
             memory: 256Mi
         volumeMounts:
         - mountPath: /setup/setup.sh
@@ -946,7 +949,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:372399364613e1d4407a66744319c99b34227b78
+      - image: ghcr.io/diogoc0307/escala-web:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
         name: web
         ports:
         - containerPort: 80
@@ -954,7 +957,7 @@ spec:
           limits:
             memory: 96Mi
           requests:
-            cpu: 20m
+            cpu: 10m
             memory: 32Mi
         volumeMounts:
         - mountPath: /etc/nginx/conf.d
@@ -1002,7 +1005,7 @@ spec:
           limits:
             memory: 256Mi
           requests:
-            cpu: 50m
+            cpu: 10m
             memory: 128Mi
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
@@ -1063,7 +1066,7 @@ spec:
           limits:
             memory: 256Mi
           requests:
-            cpu: 50m
+            cpu: 10m
             memory: 128Mi
         volumeMounts:
         - mountPath: /var/lib/postgresql/data
@@ -1139,7 +1142,7 @@ spec:
               limits:
                 memory: 256Mi
               requests:
-                cpu: 25m
+                cpu: 10m
                 memory: 64Mi
             volumeMounts:
             - mountPath: /backups
@@ -1206,7 +1209,7 @@ spec:
               limits:
                 memory: 256Mi
               requests:
-                cpu: 25m
+                cpu: 10m
                 memory: 64Mi
             volumeMounts:
             - mountPath: /backups
