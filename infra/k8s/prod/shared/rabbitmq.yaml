@@ -9,20 +9,45 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:4-alpine
-          ports: [{ containerPort: 5672 }]
+          image: rabbitmq:4-management-alpine   # includes the management UI (port 15672)
+          command: ["/bin/sh", "-c"]
+          args: ["(sh /setup/setup.sh &); exec docker-entrypoint.sh rabbitmq-server"]
+          ports:
+            - { name: amqp, containerPort: 5672 }
+            - { name: management, containerPort: 15672 }
           env:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: username } }
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom: { secretKeyRef: { name: rabbitmq-credentials, key: password } }
+            - name: ESCALA_API_USER
+              valueFrom: { secretKeyRef: { name: rabbitmq-escala-api, key: username } }
+            - name: ESCALA_API_PASSWORD
+              valueFrom: { secretKeyRef: { name: rabbitmq-escala-api, key: password } }
+            - name: ELEGIBILIDADE_WORKER_USER
+              valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: username } }
+            - name: ELEGIBILIDADE_WORKER_PASSWORD
+              valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: password } }
           resources:
-            requests: { cpu: 50m, memory: 192Mi }
-            limits: { memory: 384Mi }
+            requests: { cpu: 50m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            exec: { command: ["/bin/sh", "-c", "rabbitmqctl list_queues -q name | grep -q '^worker.avaliacao-pedida$'"] }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 15
+          volumeMounts:
+            - { name: config, mountPath: /setup/setup.sh, subPath: setup.sh, readOnly: true }
+            - { name: config, mountPath: /etc/rabbitmq/definitions.json, subPath: definitions.json, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: rabbitmq-config }
 ---
 apiVersion: v1
 kind: Service
 metadata: { name: rabbitmq, namespace: escala-prod }
 spec:
   selector: { app: rabbitmq }
-  ports: [{ port: 5672 }]
+  ports:
+    - { name: amqp, port: 5672 }
+    - { name: management, port: 15672 }

@@ -32,3 +32,5 @@ docs-handoff
 .idea/shelf/
 .idea/workspace.xml
 .cursor/settings.json
+# Local Docker Compose settings
+.env
