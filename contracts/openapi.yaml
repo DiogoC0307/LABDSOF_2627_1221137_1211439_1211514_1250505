@@ -49,14 +49,36 @@ paths:
           description: Ready to receive traffic
         "503":
           description: Dependency not ready
-  /piquetes:
+  /api/v1/piquetes:
+    get:
+      tags: [piquetes]
+      summary: List piquetes (walking skeleton, SCRUM-45)
+      operationId: listPiquetes
+      security: []
+      responses:
+        "200":
+          description: Piquetes with their slots
     post:
       tags: [piquetes]
-      summary: Supervisor creates a piquete with its slots
+      summary: Supervisor creates a piquete for a date with one slot
       operationId: createPiquete
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dutyDate]
+              properties:
+                dutyDate:
+                  type: string
+                  format: date
       responses:
         "201":
-          description: Created
+          description: Created; Location points at /api/v1/piquetes/{id}
+        "400":
+          description: dutyDate missing
         "401":
           description: Missing or invalid token
         "403":
