@@ -44,7 +44,7 @@ spec:
                   find /backups -name '*.dump' -mmin +10080 -delete
                   ls -lh /backups
               resources:
-                requests: { cpu: 25m, memory: 64Mi }
+                requests: { cpu: 10m, memory: 64Mi }
                 limits: { memory: 256Mi }
               volumeMounts:
                 - { name: backups, mountPath: /backups }
