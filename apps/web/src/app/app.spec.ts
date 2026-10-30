@@ -93,4 +93,54 @@ describe('App', () => {
       'Could not create the piquete.',
     );
   });
+
+  it('keeps polling while the slot is still PENDING', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush([eligible]);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('ELIGIBLE');
+  });
+
+  it('shows an error when a poll request fails', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush('fail', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
+      'Could not load piquetes.',
+    );
+  });
+
+  it('stops polling after 16 attempts', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    for (let i = 0; i < 16; i++) {
+      await vi.advanceTimersByTimeAsync(1000);
+      http().expectOne('/api/v1/piquetes').flush([pending]);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
+  });
 });
