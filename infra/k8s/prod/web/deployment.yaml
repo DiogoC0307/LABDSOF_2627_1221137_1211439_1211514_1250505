@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: web, namespace: escala-prod }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   selector: { matchLabels: { app: web } }
   template:
     metadata: { labels: { app: web } }

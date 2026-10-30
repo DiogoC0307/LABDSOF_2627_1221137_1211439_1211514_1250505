@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: rabbitmq, namespace: escala-qa }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   replicas: 1
   selector: { matchLabels: { app: rabbitmq } }
   template:

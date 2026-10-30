@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: elegibilidade-worker, namespace: escala-qa }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   selector: { matchLabels: { app: elegibilidade-worker } }
   template:
     metadata: { labels: { app: elegibilidade-worker } }

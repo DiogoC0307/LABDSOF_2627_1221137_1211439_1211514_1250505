@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: tempo, namespace: observability }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   replicas: 1
   strategy: { type: Recreate }        # the volume can only be mounted by one pod
   selector: { matchLabels: { app: tempo } }
@@ -18,8 +19,8 @@ spec:
             - { name: otlp-http, containerPort: 4318 }
             - { name: otlp-grpc, containerPort: 4317 }
           resources:
-            requests: { cpu: 50m, memory: 128Mi }
-            limits: { memory: 384Mi }
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
           readinessProbe:
             httpGet: { path: /ready, port: 3200 }
             initialDelaySeconds: 15

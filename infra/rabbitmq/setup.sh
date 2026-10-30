@@ -6,6 +6,9 @@
 # Passwords come from the environment (Kubernetes Secrets / .env), never from this file.
 # It is safe to run again: existing users get their password and permissions re-applied.
 set -e
+# Wait for the broker to create its Erlang cookie. rabbitmqctl runs here as root: if it created the cookie
+# first, the broker (which runs as the rabbitmq user) could not read it and would fail to boot ("eacces").
+until [ -s /var/lib/rabbitmq/.erlang.cookie ]; do sleep 1; done
 until rabbitmqctl await_startup >/dev/null 2>&1; do sleep 2; done
 
 # create_user <name> <password> <configure-regex> <write-regex> <read-regex>

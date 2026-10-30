@@ -1,3 +1,5 @@
+# Backup of the DATABASE of escala-api only (a pg_dump of that one database): not the service, its code,
+# its settings or any other component. Nightly, kept 7 days.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata: { name: backups-pg-escala-api, namespace: escala-prod }
@@ -12,8 +14,8 @@ spec:
   schedule: "0 3 * * *"          # every day at 03:00
   timeZone: "Europe/Lisbon"
   concurrencyPolicy: Forbid
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       backoffLimit: 1
@@ -37,6 +39,9 @@ spec:
               args:
                 - |
                   set -e
+                  # wait up to 60 s for the database to accept connections; if it never does, say why and fail
+                  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do pg_isready && break; sleep 5; done
+                  pg_isready
                   FILE="/backups/escala-$(date +%Y-%m-%d_%H%M).dump"
                   pg_dump -Fc -f "$FILE"
                   echo "backup written: $FILE"
