@@ -159,7 +159,7 @@ The workflows are in `.github/workflows`: `build-images.yml` (build and push), `
 3. **Release (prod).** On GitHub, Releases, Draft a new release: tag `v1.2.0`, target `release/1.2.0` (the last commit qa tested), Publish. The pipeline checks that the tag is on `release/1.2.0`, retags the exact images qa tested (nothing is rebuilt) and publishes `deploy/prod`. Approve the `production` environment if asked, then click **Sync** on `escala-prod` in Argo CD.
 4. **Finish.** Open a pull request `release/1.2.0` into `main` so the fixes made during qa are not lost, then delete the release branch.
 5. **Hotfix on prod.** Branch `release/1.2.1` from the tag `v1.2.0`, fix, let qa test it, publish `v1.2.1` and merge it back into `main`.
-6. **Rollback.** In Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry.
+6. **Rollback.** In Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available; use Argo CD.
 
 ## Security, backups and observability
 
@@ -196,20 +196,25 @@ Each service connects with its own RabbitMQ user and can only touch its own queu
 | Containers | Passed to the pods as environment variables from the Secrets. They are **not** in a `.env` file on the VM, not in Docker secrets, and not in the images. |
 | Your machine (Docker Compose) | Throwaway defaults in `compose.yaml` or your git-ignored `.env`. |
 
-k3s does not encrypt Secrets at rest by default. Enable it once on the VM (this encrypts the datastore on disk):
+k3s does not encrypt Secrets at rest by default. Enable it once on the VM. This follows the k3s documentation, "Enable Secrets Encryption on an Existing Cluster" (tested on k3s v1.36.5); the order matters, and `reencrypt` is not part of this procedure:
 
 ```bash
 sudo k3s secrets-encrypt enable
+echo 'secrets-encryption: true' | sudo tee -a /etc/rancher/k3s/config.yaml
 sudo systemctl restart k3s
-sudo k3s secrets-encrypt reencrypt
-sudo k3s secrets-encrypt status
+sudo k3s secrets-encrypt status        # expect: Disabled, stage start
+sudo k3s secrets-encrypt rotate-keys   # expect: keys rotated, reencryption finished
+sudo systemctl restart k3s
+sudo k3s secrets-encrypt status        # expect: Enabled, reencrypt_finished
 ```
+
+The encryption key lives on the VM in `/var/lib/rancher/k3s/server/cred/encryption-config.json`; do not delete it, because the Secrets stored in the datastore cannot be read without it.
 
 `infra/scripts/seal-secrets` only creates files that do not exist yet, so running it again never changes the password of a database that is already running. To rotate, run it with `-Force` (`--force` in bash) for that environment, then change the password inside PostgreSQL to match (`ALTER USER ... PASSWORD '...'`), because PostgreSQL sets its password only when its volume is first created. Back up the Sealed Secrets key outside Git; without it the committed files cannot be decrypted on a rebuilt cluster.
 
 ### Database backups
 
-Every database is backed up every night at 03:00 (Europe/Lisbon) by a Kubernetes CronJob, in each environment. A backup is a `pg_dump` in PostgreSQL's custom format, written to a 2 Gi volume (`backups-pg-<service>`), and **dumps older than 7 days are deleted** by the same job. The files are `infra/k8s/<env>/<service>/backup.yaml`.
+Every database is backed up every night at 03:00 (Europe/Lisbon) by a Kubernetes CronJob, in each environment. A backup contains **only the database** of that service (a `pg_dump` of that one database in PostgreSQL's custom format); it does not include the service itself, its code, its configuration, its Secrets or any other component. It is written to a 2 Gi volume (`backups-pg-<service>`), and **dumps older than 7 days are deleted** by the same job. The files are `infra/k8s/<env>/<service>/backup.yaml`.
 
 ```bash
 kubectl -n escala-prod get cronjob                                   # schedule and last run
