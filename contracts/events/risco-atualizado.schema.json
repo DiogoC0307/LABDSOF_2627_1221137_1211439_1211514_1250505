@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/risco-atualizado.schema.json",
+  "title": "RiscoAtualizado",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt",
+    "traceId",
+    "dico",
+    "forecastDate",
+    "rcm",
+    "fetchedAt",
+    "source",
+    "assumedHigher"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "const": "RiscoAtualizado" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "minLength": 1 },
+    "dico": { "type": "string", "pattern": "^[0-9]{4}$" },
+    "forecastDate": { "type": "string", "format": "date" },
+    "rcm": { "type": "integer", "minimum": 1, "maximum": 5 },
+    "fetchedAt": { "type": "string", "format": "date-time" },
+    "source": { "type": "string", "enum": ["IPMA", "SIMULATOR"] },
+    "assumedHigher": { "type": "boolean" },
+    "dataAgeHours": { "type": ["number", "null"], "minimum": 0 }
+  }
+}
