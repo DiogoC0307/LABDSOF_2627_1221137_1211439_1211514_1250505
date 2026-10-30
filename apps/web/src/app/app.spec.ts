@@ -6,7 +6,12 @@ import { App } from './app';
 const pending = {
   id: 'p1',
   dutyDate: '2026-11-05',
-  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'OPEN' }],
+  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'PENDING' }],
+};
+
+const eligible = {
+  ...pending,
+  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'ELIGIBLE' }],
 };
 
 describe('App', () => {
@@ -18,6 +23,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     TestBed.inject(HttpTestingController).verify();
   });
 
@@ -40,7 +46,7 @@ describe('App', () => {
     fixture.detectChanges();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('2026-11-05');
-    expect(text).toContain('OPEN');
+    expect(text).toContain('PENDING');
   });
 
   it('shows an error when the list cannot be loaded', () => {
@@ -53,7 +59,8 @@ describe('App', () => {
     );
   });
 
-  it('creates a piquete and reloads the list', () => {
+  it('creates a piquete and polls until the slot is ELIGIBLE', async () => {
+    vi.useFakeTimers();
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
@@ -65,8 +72,10 @@ describe('App', () => {
     post.flush(pending);
 
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush([eligible]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('OPEN');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('ELIGIBLE');
   });
 
   it('shows an error when create fails', () => {
@@ -83,5 +92,55 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
       'Could not create the piquete.',
     );
+  });
+
+  it('keeps polling while the slot is still PENDING', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush([eligible]);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('ELIGIBLE');
+  });
+
+  it('shows an error when a poll request fails', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    http().expectOne('/api/v1/piquetes').flush('fail', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
+      'Could not load piquetes.',
+    );
+  });
+
+  it('stops polling after 16 attempts', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne('/api/v1/piquetes').flush([pending]);
+
+    for (let i = 0; i < 16; i++) {
+      await vi.advanceTimersByTimeAsync(1000);
+      http().expectOne('/api/v1/piquetes').flush([pending]);
+    }
+    await vi.advanceTimersByTimeAsync(1000);
   });
 });
