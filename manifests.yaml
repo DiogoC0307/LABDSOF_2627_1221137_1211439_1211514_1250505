@@ -732,6 +732,7 @@ metadata:
   name: elegibilidade-worker
   namespace: escala-dev
 spec:
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: elegibilidade-worker
@@ -765,7 +766,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
+        image: ghcr.io/diogoc0307/elegibilidade-worker:463d0a07b02cc60516b31f88bb05d9872332f2f1
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -783,7 +784,7 @@ spec:
           limits:
             memory: 640Mi
           requests:
-            cpu: 50m
+            cpu: 100m
             memory: 256Mi
 ---
 apiVersion: apps/v1
@@ -792,6 +793,7 @@ metadata:
   name: escala-api
   namespace: escala-dev
 spec:
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: escala-api
@@ -825,7 +827,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
+        image: ghcr.io/diogoc0307/escala-api:463d0a07b02cc60516b31f88bb05d9872332f2f1
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -843,7 +845,7 @@ spec:
           limits:
             memory: 640Mi
           requests:
-            cpu: 50m
+            cpu: 100m
             memory: 256Mi
 ---
 apiVersion: apps/v1
@@ -853,6 +855,7 @@ metadata:
   namespace: escala-dev
 spec:
   replicas: 1
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: rabbitmq
@@ -918,7 +921,7 @@ spec:
           limits:
             memory: 512Mi
           requests:
-            cpu: 25m
+            cpu: 50m
             memory: 256Mi
         volumeMounts:
         - mountPath: /setup/setup.sh
@@ -940,6 +943,7 @@ metadata:
   name: web
   namespace: escala-dev
 spec:
+  revisionHistoryLimit: 0
   selector:
     matchLabels:
       app: web
@@ -949,7 +953,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:fd6d56f2e8376cce506ed1e9047c68a78aa77e2f
+      - image: ghcr.io/diogoc0307/escala-web:463d0a07b02cc60516b31f88bb05d9872332f2f1
         name: web
         ports:
         - containerPort: 80
@@ -957,7 +961,7 @@ spec:
           limits:
             memory: 96Mi
           requests:
-            cpu: 10m
+            cpu: 20m
             memory: 32Mi
         volumeMounts:
         - mountPath: /etc/nginx/conf.d
@@ -1096,7 +1100,7 @@ metadata:
   namespace: escala-dev
 spec:
   concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       backoffLimit: 1
@@ -1109,6 +1113,9 @@ spec:
           - args:
             - |
               set -e
+              # wait up to 60 s for the database to accept connections; if it never does, say why and fail
+              for i in 1 2 3 4 5 6 7 8 9 10 11 12; do pg_isready && break; sleep 5; done
+              pg_isready
               FILE="/backups/elegibilidade-$(date +%Y-%m-%d_%H%M).dump"
               pg_dump -Fc -f "$FILE"
               echo "backup written: $FILE"
@@ -1142,7 +1149,7 @@ spec:
               limits:
                 memory: 256Mi
               requests:
-                cpu: 10m
+                cpu: 25m
                 memory: 64Mi
             volumeMounts:
             - mountPath: /backups
@@ -1153,7 +1160,7 @@ spec:
             persistentVolumeClaim:
               claimName: backups-pg-elegibilidade-worker
   schedule: 0 3 * * *
-  successfulJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
   timeZone: Europe/Lisbon
 ---
 apiVersion: batch/v1
@@ -1163,7 +1170,7 @@ metadata:
   namespace: escala-dev
 spec:
   concurrencyPolicy: Forbid
-  failedJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
       backoffLimit: 1
@@ -1176,6 +1183,9 @@ spec:
           - args:
             - |
               set -e
+              # wait up to 60 s for the database to accept connections; if it never does, say why and fail
+              for i in 1 2 3 4 5 6 7 8 9 10 11 12; do pg_isready && break; sleep 5; done
+              pg_isready
               FILE="/backups/escala-$(date +%Y-%m-%d_%H%M).dump"
               pg_dump -Fc -f "$FILE"
               echo "backup written: $FILE"
@@ -1209,7 +1219,7 @@ spec:
               limits:
                 memory: 256Mi
               requests:
-                cpu: 10m
+                cpu: 25m
                 memory: 64Mi
             volumeMounts:
             - mountPath: /backups
@@ -1220,7 +1230,7 @@ spec:
             persistentVolumeClaim:
               claimName: backups-pg-escala-api
   schedule: 0 3 * * *
-  successfulJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 1
   timeZone: Europe/Lisbon
 ---
 apiVersion: autoscaling/v2
