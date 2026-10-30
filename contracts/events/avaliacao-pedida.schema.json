@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/avaliacao-pedida.schema.json",
+  "title": "AvaliacaoPedida",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt",
+    "traceId",
+    "purpose",
+    "assignmentId",
+    "slot",
+    "candidate"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "const": "AvaliacaoPedida" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "minLength": 1 },
+    "purpose": {
+      "type": "string",
+      "enum": ["SWAP", "COVER", "ASSIGNMENT"]
+    },
+    "assignmentId": { "type": "string", "format": "uuid" },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slotId", "start", "end", "requiredCertification", "requiredLicenceClass"],
+      "properties": {
+        "slotId": { "type": "string", "format": "uuid" },
+        "start": { "type": "string", "format": "date-time" },
+        "end": { "type": "string", "format": "date-time" },
+        "requiredCertification": { "type": ["string", "null"] },
+        "requiredLicenceClass": { "type": ["string", "null"] }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "memberId",
+        "inActiveRoster",
+        "withinAgeLimit",
+        "certifications",
+        "licenceClasses",
+        "unavailabilities",
+        "otherAssignments"
+      ],
+      "properties": {
+        "memberId": { "type": "string", "format": "uuid" },
+        "inActiveRoster": { "type": "boolean" },
+        "withinAgeLimit": { "type": "boolean" },
+        "certifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "expiresOn"],
+            "properties": {
+              "type": { "type": "string" },
+              "expiresOn": { "type": "string", "format": "date" }
+            }
+          }
+        },
+        "licenceClasses": { "type": "array", "items": { "type": "string" } },
+        "unavailabilities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            }
+          }
+        },
+        "otherAssignments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["start", "end"],
+            "properties": {
+              "start": { "type": "string", "format": "date-time" },
+              "end": { "type": "string", "format": "date-time" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

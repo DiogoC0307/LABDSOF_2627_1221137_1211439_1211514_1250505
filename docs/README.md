@@ -99,7 +99,7 @@ The map has one row for each of the 39 files under `confluence/`. Create the con
 | [05-product-backlog.md](confluence/2-product/05-product-backlog/05-product-backlog.md) | 2 · Product | 05 · Product Backlog | Sprint 1 · #5 Product Backlog | Yes, as *Product Backlog – Template*: merge and rename |
 | [product-roadmap.md](confluence/2-product/05-product-backlog/product-roadmap.md) | 05 · Product Backlog | Product Roadmap (GO) | Sprint 1 · #5 Product Backlog (child page) | No |
 | [06-ai-opportunity-assessment.md](confluence/3-responsible-ai/06-ai-opportunity-assessment.md) | 3 · Responsible AI | 06 · Responsible AI Opportunity Assessment | Sprint 1 · #6 Responsible AI Opportunity Assessment | No |
-| [07-technical-design.md](confluence/4-architecture-and-security/07-technical-design.md) | 4 · Architecture and Security | 07 · Technical Design | Sprint 1 · #7 Technical Design | No |
+| [architecture/technical-design.md](architecture/technical-design.md) | 4 · Architecture and Security | 07 · Technical Design | Sprint 1 · #7 Technical Design | Yes, as *07 · Technical Design*: paste this Git file |
 | [08-architecture-decision-records.md](confluence/4-architecture-and-security/08-architecture-decision-records.md) | 4 · Architecture and Security | 08 · Architecture Decision Records | Sprint 1 · #8 Architecture Decision Records | No |
 | [09-security-and-privacy.md](confluence/4-architecture-and-security/09-security-and-privacy.md) | 4 · Architecture and Security | 09 · Security and Privacy Assessment | Sprint 1 · #9 Security and Privacy Assessment | No |
 | [10-walking-skeleton.md](confluence/4-architecture-and-security/10-walking-skeleton.md) | 4 · Architecture and Security | 10 · Walking Skeleton | Sprint 1 · #10 Walking Skeleton | No |
@@ -120,7 +120,7 @@ Assignment §9: *"Teams should prefer documentation generated from or maintained
 | Document | What it holds | Why in Git (§9 / §12) | Confluence counterpart |
 |---|---|---|---|
 | [adr/README.md](adr/README.md), [adr/0000-adr-template.md](adr/0000-adr-template.md) and `adr/NNNN-*.md` | One file per architecture decision | Written the day the decision is taken and reviewed with the code it affects; §12 "Architecture documentation" | **08 · Architecture Decision Records** (index) |
-| [architecture/technical-design.md](architecture/technical-design.md) | Full technical design: C4 views, data model, event contracts, sequences (Mermaid) | Diagrams as code, updated with the code; §12 "Architecture documentation" | **07 · Technical Design** (summary) |
+| [architecture/technical-design.md](architecture/technical-design.md) | Technical design (source of truth): C4 views, data model, API, async workflows | Diagrams as code, updated with the code; §12 "Architecture documentation" | **07 · Technical Design** (paste of this file) |
 | [testing/test-strategy.md](testing/test-strategy.md) | Test types, test case convention, boundary cases, what remains untested | Tied to the CI stages and the test code; §12 "Test and quality evidence" | Linked from **Definition of Done (DoD)** and **07 · Technical Design** |
 | [operations/deployment-and-operations.md](operations/deployment-and-operations.md) | Run, configure, deploy, roll back; runbook for degraded modes | Commands must match the repository; §12 "Deployment instructions" | **10 · Walking Skeleton**, **07 · Technical Design** |
 | `contracts/openapi.yaml`, `contracts/events/` (repository, outside `docs/`) | API and event contracts | Maintained next to the code that implements them; §12 "API documentation" | **07 · Technical Design** (API outline) |
@@ -134,7 +134,7 @@ Assignment §9: *"Teams should prefer documentation generated from or maintained
 3. **Vision:** **04 · Product Vision** and its children (**Questions and Effective Answers**, **Product Vision Board**, **Personas**, **User Journeys**, **MVP, Success Criteria and Ethical Engagement**), then **Product Roadmap (GO)**.
 4. **Requirements:** **Requirements and Quality Attributes**.
 5. **Backlog:** **05 · Product Backlog**.
-6. **Design:** **06 · Responsible AI Opportunity Assessment**, **07 · Technical Design**, **08 · Architecture Decision Records**, **09 · Security and Privacy Assessment**, plus the Git [technical design](architecture/technical-design.md) and the [ADRs](adr/README.md).
+6. **Design:** **06 · Responsible AI Opportunity Assessment**, Git [technical design](architecture/technical-design.md) (paste to **07 · Technical Design**), **08 · Architecture Decision Records**, **09 · Security and Privacy Assessment**, and the [ADRs](adr/README.md).
 7. **Test strategy:** [Test Strategy](testing/test-strategy.md) (Git).
 
 - **In parallel from day 1:** **10 · Walking Skeleton** and [Deployment and Operations](operations/deployment-and-operations.md) (Git).

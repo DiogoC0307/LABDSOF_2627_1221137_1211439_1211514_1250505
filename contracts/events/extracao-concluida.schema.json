@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/extracao-concluida.schema.json",
+  "title": "ExtracaoConcluida",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt",
+    "traceId",
+    "requestEventId",
+    "unavailabilityRequestId",
+    "proposedType",
+    "method"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "const": "ExtracaoConcluida" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "minLength": 1 },
+    "requestEventId": { "type": "string", "format": "uuid" },
+    "unavailabilityRequestId": { "type": "string", "format": "uuid" },
+    "proposedType": {
+      "type": "string",
+      "enum": ["UNAVAILABLE", "PARTIAL", "NOT_AN_UNAVAILABILITY"]
+    },
+    "proposedStart": { "type": ["string", "null"], "format": "date-time" },
+    "proposedEnd": { "type": ["string", "null"], "format": "date-time" },
+    "method": { "type": "string", "enum": ["MODEL", "BASELINE", "FALLBACK"] },
+    "latencyMs": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}

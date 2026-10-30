@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/avaliacao-concluida.schema.json",
+  "title": "AvaliacaoConcluida",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "eventId",
+    "type",
+    "schemaVersion",
+    "occurredAt",
+    "traceId",
+    "requestEventId",
+    "assignmentId",
+    "result",
+    "violatedRules",
+    "engineVersion"
+  ],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": { "const": "AvaliacaoConcluida" },
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "traceId": { "type": "string", "minLength": 1 },
+    "requestEventId": { "type": "string", "format": "uuid" },
+    "assignmentId": { "type": "string", "format": "uuid" },
+    "result": { "type": "string", "enum": ["ELIGIBLE", "INELIGIBLE"] },
+    "violatedRules": { "type": "array", "items": { "type": "string" } },
+    "engineVersion": { "type": "string", "minLength": 1 }
+  }
+}

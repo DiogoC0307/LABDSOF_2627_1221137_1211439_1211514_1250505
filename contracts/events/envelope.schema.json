@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://escala.local/contracts/events/envelope.schema.json",
+  "title": "Escala event envelope",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["eventId", "type", "schemaVersion", "occurredAt", "traceId"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Idempotency key for this event"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "AvaliacaoPedida",
+        "AvaliacaoConcluida",
+        "ExtracaoPedida",
+        "ExtracaoConcluida",
+        "RiscoAtualizado"
+      ]
+    },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC instant (ADR 0012)"
+    },
+    "traceId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Same value as HTTP header X-Trace-Id (RF37)"
+    }
+  }
+}

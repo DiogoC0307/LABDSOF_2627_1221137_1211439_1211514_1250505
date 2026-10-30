@@ -24,7 +24,7 @@ legend bottom left
 endlegend
 
 ' =====================================================================
-' escala-api — what the piquete needs
+' escala-api — published roster and its changes (D-00)
 ' =====================================================================
 
 package "Personnel & Qualifications" #E3F2FD {
@@ -134,6 +134,8 @@ package "Roster & Slots" #E3F2FD {
         + version: String
         --
         configuration, not code
+        RN10 default off: unused
+        for slot counts in MVP
     }
 
     class Piquete {
@@ -208,8 +210,8 @@ package "Roster & Slots" #E3F2FD {
         + fetchedAt: Instant
         + assumedHigher: Boolean
         --
-        read model fed by RiscoAtualizado
-        stale = higher level
+        display read model only
+        never adds or removes slots
     }
 }
 
@@ -246,6 +248,39 @@ package "Unavailability & Coverage" #E3F2FD {
     enum DeclarationSource {
         FORM
         FREE_TEXT
+    }
+
+    class SwapRequest {
+        + id: UUID
+        + status: SwapStatus
+        + evaluationState: EvaluationState
+        + supervisorApprovalRequired: Boolean
+        --
+        D-01 / RN11 still open
+        applied only after ELIGIBLE
+    }
+
+    enum SwapStatus {
+        REQUESTED
+        ACCEPTED
+        CHECK_PENDING
+        APPLIED
+        REJECTED
+        CANCELLED
+    }
+
+    class PresenceConfirmation {
+        + id: UUID
+        + outcome: PresenceOutcome
+        + confirmedAt: Instant
+        --
+        24 h before the shift
+        CANNOT opens a cover request
+    }
+
+    enum PresenceOutcome {
+        COMING
+        CANNOT
     }
 
     class CoverRequest {
@@ -288,7 +323,7 @@ package "Unavailability & Coverage" #E3F2FD {
         COVER_REQUEST_OPENED
         ASSIGNMENT_CONFIRMED
         ASSIGNMENT_CANCELLED
-        COMPOSITION_BELOW_REQUIRED
+        COVER_REQUEST_NEEDED
         CERTIFICATION_EXPIRING
     }
 }
@@ -318,13 +353,14 @@ package "Audit" #E3F2FD {
 }
 
 ' =====================================================================
-' elegibilidade-worker — who can fill it
+' elegibilidade-worker — function checks, extraction, observed risk
 ' =====================================================================
 
 package "Eligibility" #FFF3E0 {
     class EligibilityEvaluation {
         + id: UUID
         + requestEventId: UUID
+        + purpose: CheckPurpose
         + assignmentId: UUID
         + memberId: UUID
         + result: EligibilityResult
@@ -333,6 +369,12 @@ package "Eligibility" #FFF3E0 {
         --
         deterministic rules, no AI
         requestEventId unique = idempotency
+    }
+
+    enum CheckPurpose {
+        SWAP
+        COVER
+        ASSIGNMENT
     }
 
     class ViolatedRule {
@@ -419,6 +461,8 @@ Member "1" *-- "0..*" DrivingLicence : holds >
 Member "1" *-- "0..*" ServiceHoursEntry : accumulates >
 Member "1" *-- "0..*" Unavailability : declares >
 Member "1" -- "0..*" Application : submits >
+Member "1" -- "0..*" SwapRequest : requests or answers >
+Member "1" -- "0..*" PresenceConfirmation : confirms >
 Member "1" -- "0..*" Assignment : receives >
 Member "1" -- "0..*" Notification : receives >
 Member "1" -- "0..*" AuditRecord : authors >
@@ -427,8 +471,10 @@ Vehicle "0..*" --> "1" VehicleType : of type >
 CompositionRule "0..*" --> "1" VehicleType : for >
 
 Piquete "1" *-- "1..*" Slot : composed of >
-Piquete "0..*" --> "0..1" DailyRisk : planned for risk of >
+Piquete "0..*" --> "0..1" DailyRisk : shows risk of >
 Slot "0..*" --> "1" Vehicle : crews >
+Slot "1" -- "0..*" SwapRequest : offered from >
+Slot "1" -- "0..*" PresenceConfirmation : presence for >
 Slot "0..*" --> "0..1" CertificationType : requires >
 Slot "1" -- "0..*" Assignment : filled by >
 Slot "1" -- "0..*" CoverRequest : opened for >
