@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: alloy, namespace: observability }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   replicas: 1
   selector: { matchLabels: { app: alloy } }
   template:
@@ -19,7 +20,7 @@ spec:
           ports:
             - { name: http, containerPort: 12345 }
           resources:
-            requests: { cpu: 10m, memory: 96Mi }
+            requests: { cpu: 25m, memory: 96Mi }
             limits: { memory: 256Mi }
           readinessProbe:
             httpGet: { path: /-/ready, port: 12345 }

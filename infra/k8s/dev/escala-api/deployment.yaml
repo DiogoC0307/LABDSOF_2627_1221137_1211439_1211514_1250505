@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: escala-api, namespace: escala-dev }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   selector: { matchLabels: { app: escala-api } }
   template:
     metadata: { labels: { app: escala-api } }
@@ -22,7 +23,7 @@ spec:
             - name: SPRING_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: rabbitmq-escala-api, key: password } }
           resources:
-            requests: { cpu: 50m, memory: 256Mi }
+            requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 640Mi }
           readinessProbe:
             httpGet: { path: /actuator/health, port: 8080 }

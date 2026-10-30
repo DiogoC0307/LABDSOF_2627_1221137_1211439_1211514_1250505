@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata: { name: elegibilidade-worker, namespace: escala-qa }
 spec:
+  revisionHistoryLimit: 0      # keep only the ReplicaSet that has pods (rollback is done with Argo CD / Git)
   selector: { matchLabels: { app: elegibilidade-worker } }
   template:
     metadata: { labels: { app: elegibilidade-worker } }
@@ -22,7 +23,7 @@ spec:
             - name: SPRING_RABBITMQ_PASSWORD
               valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: password } }
           resources:
-            requests: { cpu: 50m, memory: 256Mi }
+            requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 640Mi }
           readinessProbe:
             httpGet: { path: /actuator/health, port: 8081 }
