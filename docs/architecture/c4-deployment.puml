@@ -8,7 +8,7 @@ rectangle "GitHub Actions" as CI {
   rectangle "main: build images, deploy" as MAIN
 }
 
-rectangle "Image registry\n(planned: GitHub Container Registry)" as REG
+rectangle "Image registry\nGitHub Container Registry" as REG
 
 node "Docker Compose host\n(developer laptop / evaluation machine)" as HOST {
   component "web" as WEB
@@ -18,7 +18,7 @@ node "Docker Compose host\n(developer laptop / evaluation machine)" as HOST {
   database "elegibilidade-db" as WDB
   queue "RabbitMQ" as MQ
   component "ipma-sim" as SIM
-  component "Prometheus" as PROM
+  component "Tempo" as TEMPO
   component "Grafana" as GRAF
 }
 
@@ -31,9 +31,9 @@ API --> ADB
 WK --> WDB
 API <--> MQ
 WK <--> MQ
-PROM --> API : scrape metrics
-PROM --> WK
-GRAF --> PROM
+API --> TEMPO : OTLP when agent enabled
+WK --> TEMPO
+GRAF --> TEMPO
 WK --> IPMA : default profile
 WK ..> SIM : evaluation profile
 
