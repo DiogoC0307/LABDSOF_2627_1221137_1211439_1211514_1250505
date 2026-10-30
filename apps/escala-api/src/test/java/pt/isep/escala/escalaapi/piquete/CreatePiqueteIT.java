@@ -39,6 +39,12 @@ class CreatePiqueteIT {
 	}
 
 	@Test
+	void postWithoutDutyDateIsBadRequest() throws Exception {
+		mockMvc.perform(post("/api/v1/piquetes").contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void postCreatesPiqueteWithOneSlotAndLocation() throws Exception {
 		mockMvc.perform(post("/api/v1/piquetes")
 						.contentType(MediaType.APPLICATION_JSON)
