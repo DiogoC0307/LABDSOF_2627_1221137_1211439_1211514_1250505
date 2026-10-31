@@ -73,3 +73,5 @@ One row per ADR, in number order. The Date is the day the decision was taken; ea
 | [0014](0014-keep-operational-rules-as-configuration.md) | Keep operational rules as configuration | Accepted | 2026-10-26 | — |
 | [0015](0015-implement-elegibilidade-worker-in-java-with-spring-boot.md) | Implement elegibilidade-worker in Java with Spring Boot | Accepted | 2026-10-11 | — |
 | [0016](0016-use-claude-haiku-through-the-claude-code-cli.md) | Use Claude Haiku through the Claude Code CLI for free-text extraction | Proposed | 2026-10-27 | — |
+| [0017](0017-build-the-client-as-an-angular-pwa.md) | Build the client as an Angular PWA | Proposed | 2026-10-31 | — |
+| [0018](0018-run-docker-compose-for-evaluation-and-kubernetes-with-argo-cd-for-team-environments.md) | Run Docker Compose for evaluation and Kubernetes with Argo CD for the team environments | Proposed | 2026-10-31 | — |
