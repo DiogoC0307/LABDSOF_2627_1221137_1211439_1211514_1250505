@@ -11,6 +11,7 @@
           "/index.csr.html",
           "/index.html",
           "/manifest.webmanifest",
+          "/icons/**",
           "/*.css",
           "/*.js"
         ]
@@ -22,6 +23,18 @@
       "updateMode": "prefetch",
       "resources": {
         "files": ["/**/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2)"]
+      }
+    }
+  ],
+  "dataGroups": [
+    {
+      "name": "piquetes-api",
+      "urls": ["/api/v1/piquetes"],
+      "cacheConfig": {
+        "strategy": "freshness",
+        "maxSize": 16,
+        "maxAge": "7d",
+        "timeout": "3s"
       }
     }
   ]

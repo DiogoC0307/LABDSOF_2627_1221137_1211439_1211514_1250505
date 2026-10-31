@@ -6,11 +6,24 @@ import { App } from './app';
 const pending = {
   id: 'p1',
   dutyDate: '2026-11-05',
-  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'OPEN' }],
+  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'PENDING' }],
 };
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function todaysPiquete(status = 'ELIGIBLE') {
+  return {
+    id: 'today',
+    dutyDate: todayIso(),
+    slots: [{ id: 's-today', role: 'CREW_MEMBER', status }],
+  };
+}
 
 describe('App', () => {
   beforeEach(async () => {
+    localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -19,18 +32,31 @@ describe('App', () => {
 
   afterEach(() => {
     TestBed.inject(HttpTestingController).verify();
+    localStorage.clear();
   });
 
   function http(): HttpTestingController {
     return TestBed.inject(HttpTestingController);
   }
 
-  it('should render the rosters heading', () => {
+  it('should render today\'s piquete heading', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent).toContain('Rosters');
+    expect((fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent).toContain("Today's piquete");
+  });
+
+  it('TC-SCRUM-46-01 lists today\'s date, slot and evaluation status', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
+    fixture.detectChanges();
+    const card = (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Today\'s piquete"]');
+    expect(card?.textContent).toContain(todayIso());
+    expect(card?.textContent).toContain('CREW_MEMBER');
+    expect(card?.textContent).toContain('Evaluation');
+    expect(card?.textContent).toContain('ELIGIBLE');
   });
 
   it('lists piquetes returned by the API', () => {
@@ -40,7 +66,7 @@ describe('App', () => {
     fixture.detectChanges();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('2026-11-05');
-    expect(text).toContain('OPEN');
+    expect(text).toContain('PENDING');
   });
 
   it('shows an error when the list cannot be loaded', () => {
@@ -53,12 +79,24 @@ describe('App', () => {
     );
   });
 
+  it('shows the last loaded roster when the list cannot be loaded', () => {
+    localStorage.setItem('escala.lastPiquetes', JSON.stringify([todaysPiquete('PENDING')]));
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush('fail', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Showing the last loaded roster');
+    expect(text).toContain('PENDING');
+    expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
+  });
+
   it('creates a piquete and reloads the list', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
 
-    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     const post = http().expectOne('/api/v1/piquetes');
     expect(post.request.method).toBe('POST');
     expect(post.request.body.dutyDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -66,7 +104,7 @@ describe('App', () => {
 
     http().expectOne('/api/v1/piquetes').flush([pending]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('OPEN');
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('PENDING');
   });
 
   it('shows an error when create fails', () => {
@@ -74,7 +112,7 @@ describe('App', () => {
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
 
-    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush('fail', {
       status: 500,
       statusText: 'Server Error',
@@ -83,5 +121,24 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
       'Could not create the piquete.',
     );
+  });
+
+  it('TC-SCRUM-46-02 offers install when the browser fires beforeinstallprompt', async () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+
+    const prompt = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
+      prompt: async () => undefined,
+    });
+    window.dispatchEvent(prompt);
+    fixture.detectChanges();
+
+    const install = (fixture.nativeElement as HTMLElement).querySelector('.install');
+    expect(install?.textContent).toContain('Install Escala');
+    (install as HTMLButtonElement).click();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.install')).toBeNull();
   });
 });
