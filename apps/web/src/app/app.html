@@ -1,7 +1,37 @@
 <main class="page">
   <h1>Rosters</h1>
   <p class="lead">Create a <em>piquete</em>; the slot starts PENDING and becomes ELIGIBLE after evaluation (SCRUM-47).</p>
+  <header class="top">
+    <h1>Today's piquete</h1>
+    @if (canInstall()) {
+      <button type="button" class="install" (click)="install()">Install Escala</button>
+    }
+  </header>
+  <p class="lead">Date, slot and evaluation on a phone-sized screen (SCRUM-46).</p>
 
+  @if (offline()) {
+    <p class="notice">Showing the last loaded roster. You are offline.</p>
+  }
+
+  @if (todayPiquete(); as piquete) {
+    <article class="card" aria-label="Today's piquete">
+      <p class="date">{{ piquete.dutyDate }}</p>
+      @for (slot of piquete.slots; track slot.id) {
+        <p class="slot">
+          <span class="label">Slot</span>
+          <span>{{ slot.role }}</span>
+        </p>
+        <p class="slot">
+          <span class="label">Evaluation</span>
+          <span class="status">{{ slot.status }}</span>
+        </p>
+      } @empty {
+        <p class="empty">No slot on today's piquete.</p>
+      }
+    </article>
+  } @else {
+    <p class="empty">No piquete for today.</p>
+  }
   <form (ngSubmit)="create()">
     <label>
       Date
@@ -14,6 +44,7 @@
     <p class="error" role="alert">{{ error() }}</p>
   }
 
+  <h2>All piquetes</h2>
   <ul class="list">
     @for (piquete of piquetes(); track piquete.id) {
       <li>
