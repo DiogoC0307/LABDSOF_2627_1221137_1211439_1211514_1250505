@@ -25,6 +25,9 @@ class Slot {
 	@Column(nullable = false)
 	private SlotStatus status;
 
+	@Column(nullable = false, unique = true)
+	private UUID assignmentId;
+
 	@ManyToOne(optional = false)
 	@JoinColumn(name = "piquete_id")
 	private Piquete piquete;
@@ -32,10 +35,11 @@ class Slot {
 	protected Slot() {
 	}
 
-	Slot(UUID id, SlotRole role, SlotStatus status) {
+	Slot(UUID id, SlotRole role, SlotStatus status, UUID assignmentId) {
 		this.id = id;
 		this.role = role;
 		this.status = status;
+		this.assignmentId = assignmentId;
 	}
 
 	UUID getId() {
@@ -48,6 +52,14 @@ class Slot {
 
 	SlotStatus getStatus() {
 		return status;
+	}
+
+	UUID getAssignmentId() {
+		return assignmentId;
+	}
+
+	void markEligible() {
+		this.status = SlotStatus.ELIGIBLE;
 	}
 
 	void setPiquete(Piquete piquete) {

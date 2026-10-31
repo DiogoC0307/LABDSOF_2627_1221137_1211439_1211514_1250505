@@ -5,7 +5,7 @@
       <button type="button" class="install" (click)="install()">Install Escala</button>
     }
   </header>
-  <p class="lead">Date, slot and evaluation on a phone-sized screen (SCRUM-46).</p>
+  <p class="lead">Date, slot and evaluation on a phone-sized screen. A new slot starts PENDING and becomes ELIGIBLE after evaluation.</p>
 
   @if (offline()) {
     <p class="notice">Showing the last loaded roster. You are offline.</p>
@@ -30,7 +30,6 @@
   } @else {
     <p class="empty">No piquete for today.</p>
   }
-
   <form (ngSubmit)="create()">
     <label>
       Date
