@@ -29,7 +29,11 @@ const LAST_PIQUETES_KEY = 'escala.lastPiquetes';
 export class App implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private deferredInstall: BeforeInstallPromptEvent | null = null;
-  private readonly onBeforeInstall = (event: Event) => this.captureInstallPrompt(event);
+  private readonly onBeforeInstall = (event: Event): void => {
+    event.preventDefault();
+    this.deferredInstall = event as BeforeInstallPromptEvent;
+    this.canInstall.set(true);
+  };
 
   protected readonly piquetes = signal<Piquete[]>([]);
   protected readonly error = signal<string | null>(null);
@@ -87,12 +91,6 @@ export class App implements OnInit, OnDestroy {
         this.error.set('Could not load piquetes.');
       },
     });
-  }
-
-  private captureInstallPrompt(event: Event): void {
-    event.preventDefault();
-    this.deferredInstall = event as BeforeInstallPromptEvent;
-    this.canInstall.set(true);
   }
 
   private readCachedPiquetes(): Piquete[] | null {
