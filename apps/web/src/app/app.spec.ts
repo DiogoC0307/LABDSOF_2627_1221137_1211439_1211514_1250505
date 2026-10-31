@@ -45,7 +45,7 @@ describe('App', () => {
     return TestBed.inject(HttpTestingController);
   }
 
-  it('should render today\'s piquete heading', () => {
+  it("should render today's piquete heading", () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
@@ -53,7 +53,7 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent).toContain("Today's piquete");
   });
 
-  it('TC-SCRUM-46-01 lists today\'s date, slot and evaluation status', () => {
+  it("TC-SCRUM-46-01 lists today's date, slot and evaluation status", () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
@@ -85,8 +85,6 @@ describe('App', () => {
     );
   });
 
-  it('creates a piquete and polls until the slot is ELIGIBLE', async () => {
-    vi.useFakeTimers();
   it('shows the last loaded roster when the list cannot be loaded', () => {
     localStorage.setItem('escala.lastPiquetes', JSON.stringify([todaysPiquete('PENDING')]));
     const fixture = TestBed.createComponent(App);
@@ -99,7 +97,8 @@ describe('App', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')).toBeNull();
   });
 
-  it('creates a piquete and reloads the list', () => {
+  it('creates a piquete and polls until the slot is ELIGIBLE', async () => {
+    vi.useFakeTimers();
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
@@ -115,7 +114,6 @@ describe('App', () => {
     http().expectOne('/api/v1/piquetes').flush([eligible]);
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('ELIGIBLE');
-    expect((fixture.nativeElement as HTMLElement).textContent).toContain('PENDING');
   });
 
   it('shows an error when create fails', () => {
@@ -139,7 +137,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
-    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
 
@@ -156,7 +154,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
-    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
 
@@ -173,7 +171,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
-    (fixture.nativeElement as HTMLElement).querySelector('button')?.click();
+    (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
 
@@ -182,6 +180,9 @@ describe('App', () => {
       http().expectOne('/api/v1/piquetes').flush([pending]);
     }
     await vi.advanceTimersByTimeAsync(1000);
+    http().expectNone('/api/v1/piquetes');
+  });
+
   it('TC-SCRUM-46-02 offers install when the browser fires beforeinstallprompt', async () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();

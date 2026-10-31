@@ -92,6 +92,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/${ESCALA_DB_NAME:-escala}
       SPRING_DATASOURCE_USERNAME: ${ESCALA_DB_USER:-escala}
       SPRING_DATASOURCE_PASSWORD: ${ESCALA_DB_PASSWORD:-escala_local}
+      SPRING_RABBITMQ_DYNAMIC: "false"
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_ESCALA_API_USER:-escala-api}
@@ -118,6 +119,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/${ELEGIBILIDADE_DB_NAME:-elegibilidade}
       SPRING_DATASOURCE_USERNAME: ${ELEGIBILIDADE_DB_USER:-elegibilidade}
       SPRING_DATASOURCE_PASSWORD: ${ELEGIBILIDADE_DB_PASSWORD:-elegibilidade_local}
+      SPRING_RABBITMQ_DYNAMIC: "false"
       SPRING_RABBITMQ_HOST: rabbitmq
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_WORKER_USER:-elegibilidade-worker}

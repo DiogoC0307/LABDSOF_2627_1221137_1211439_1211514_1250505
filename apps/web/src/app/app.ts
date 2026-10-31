@@ -109,6 +109,7 @@ export class App implements OnInit, OnDestroy {
         error: () => this.error.set('Could not load piquetes.'),
       });
     }, 1000);
+  }
   private captureInstallPrompt(event: Event): void {
     event.preventDefault();
     this.deferredInstall = event as BeforeInstallPromptEvent;

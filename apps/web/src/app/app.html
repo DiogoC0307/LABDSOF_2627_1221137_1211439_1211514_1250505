@@ -1,13 +1,11 @@
 <main class="page">
-  <h1>Rosters</h1>
-  <p class="lead">Create a <em>piquete</em>; the slot starts PENDING and becomes ELIGIBLE after evaluation (SCRUM-47).</p>
   <header class="top">
     <h1>Today's piquete</h1>
     @if (canInstall()) {
       <button type="button" class="install" (click)="install()">Install Escala</button>
     }
   </header>
-  <p class="lead">Date, slot and evaluation on a phone-sized screen (SCRUM-46).</p>
+  <p class="lead">Date, slot and evaluation on a phone-sized screen. A new slot starts PENDING and becomes ELIGIBLE after evaluation.</p>
 
   @if (offline()) {
     <p class="notice">Showing the last loaded roster. You are offline.</p>
