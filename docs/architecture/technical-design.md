@@ -6,10 +6,10 @@
 | Owner | Pedro Costa |
 | Contributors | Diogo Pereira, Diogo Sousa, Diogo Costa |
 | Deliverable | Sprint 1 · #7 Technical Design |
-| Sources | Assignment §6, §7.1.2 #7; D-00; **04 · Product Vision** |
+| Sources | Assignment §6, §7.1.2 #7; D-00; **04 · Product Vision**; **08 · Architecture Decision Records** |
 | Confluence page | **07 · Technical Design** (paste of this file; export diagrams from the PlantUML next to it) |
 | Jira | SCRUM-39 |
-| Last updated | 2026-10-30 |
+| Last updated | 2026-10-31 |
 
 This is the technical design of Escala. Decisions are in the [ADR index](../adr/README.md). REST and events: [`contracts/`](../../contracts/). Diagrams as code: [`c4-system-context.puml`](c4-system-context.puml), [`c4-containers.puml`](c4-containers.puml), [`c4-deployment.puml`](c4-deployment.puml), [`domain_model.puml`](domain_model.puml). Confluence does not render Mermaid; export those PlantUML files when pasting **07 · Technical Design**.
 
@@ -19,19 +19,19 @@ Escala is a mobile roster for members of one volunteer fire corps: they see thei
 
 ## Technology selection
 
-Why these technologies, not others. Each row is an accepted ADR except 0016 (*Proposed* until SCRUM-38). Same table as **High Level System Architecture**.
+Why these technologies, not others. Each row is an accepted ADR, except 0016 (*Proposed* until SCRUM-38) and 0017 and 0018 (drafts, merged through a pull request like the other ADRs). Same table as **High Level System Architecture**.
 
 | Choice | Why it fits Escala | Rejected | ADR |
 |---|---|---|---|
-| Angular PWA | Roster on the phone without an app store; last-loaded roster readable offline (RNF06) | Native apps (two stores) | — |
+| Angular PWA | Roster on the phone without an app store; last-loaded roster readable offline (RNF06) | Native apps (two stores) | 0017 (draft) |
 | Two Spring Boot Java 21 services | Roster writes stay up when a check or IPMA call is slow; same language on both backends | Monolith; Python worker | 0002, 0015 |
 | PostgreSQL, one database per service | Each service owns its data; no FKs across the queue | Shared database | 0003 |
 | RabbitMQ + outbox | At-least-once, retries 5 s / 30 s / 2 min, DLQ; 202 without waiting (RNF02) | Sync REST between services; Kafka (ops cost) | 0005, 0009 |
 | IPMA open data, hourly cache | Fire risk as information only | Using RCM to size the *piquete* (RN10 off) | 0010, 0013 |
-| Claude Haiku via CLI, `AI_ENABLED` | Extraction of unavailability only; evaluation turns it off | AI that decides swaps or cover | 0007, 0011, 0016 |
-| Docker Compose for evaluation | One command on a staff laptop (§12) | Kubernetes as the evaluation contract | 07 · Technical Design |
+| Claude Haiku via CLI, `AI_ENABLED` | Extraction of unavailability only; the `evaluation` profile turns it off | AI that decides swaps or cover | 0007, 0011, 0016 |
+| Docker Compose for evaluation | One command on a staff laptop (§12); Kubernetes with Argo CD stays the team's demo and release host | Kubernetes as the evaluation contract | 0018 (draft) |
 
-**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. Profile `evaluation` adds `ipma-sim` and sets `AI_ENABLED=false`. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
+**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` that adds `ipma-sim` and sets `AI_ENABLED=false` is planned [TODO: not in `compose.yaml` yet; with the simulator, SCRUM-43]. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
 
 ## System context
 
@@ -95,7 +95,7 @@ No component reads another component's database ([ADR 0003](../adr/0003-one-post
 | `escala-api` | Published schedule, members, unavailability, swaps, presence, cover, audit; DailyRisk display read model | `escala-db` | `web`; RabbitMQ | Sync REST; async events |
 | `elegibilidade-worker` | Function checks (RF21), extraction (RF31, ADR 0016), cached RCM (RF25, RF29) | `elegibilidade-db` | RabbitMQ; IPMA; Claude CLI | Async events; sync HTTP / local process |
 | `web` | Member and supervisor screens; roster offline (RNF06) | None | `escala-api` | Sync REST |
-| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile) | None | worker | Sync HTTP |
+| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile; still to build, SCRUM-43) | None | worker | Sync HTTP |
 
 Split by question: published roster versus slow or external work. If the worker is down, `escala-api` still accepts unavailability, swap requests and cover accepts; applying a swap or filling a cover waits for a valid check (RF24).
 
@@ -103,7 +103,7 @@ Split by question: published roster versus slow or external work. If the worker 
 
 | Workflow | Trigger | Result | Why async |
 |---|---|---|---|
-| Function check | `AvaliacaoPedida` (`SWAP` / `COVER` / `ASSIGNMENT`) | `AvaliacaoConcluida` | 202 without waiting (RNF02); schedule changes only after `ELIGIBLE` (RF24) |
+| Function check | `AvaliacaoPedida` (`SWAP` / `COVER` / `ASSIGNMENT`) | `AvaliacaoConcluida` | Product path: 202 without waiting (RNF02); schedule changes only after `ELIGIBLE` (RF24). Walking skeleton `POST /api/v1/piquetes` returns 201 + `Location` |
 | Extraction | `ExtracaoPedida` | `ExtracaoConcluida` | Model may be down; form stays up (RF35) |
 | Risk update | Hourly poll | `RiscoAtualizado` | Display only; does not change slots |
 
@@ -130,6 +130,8 @@ sequenceDiagram
   end
 ```
 
+**Eligibility flow (outbox, idempotency, DLQ):** the walking-skeleton `POST /api/v1/piquetes` returns **201** + `Location`; **202** is the later contract for swaps and cover. The API writes pending state and an outbox row in one transaction; the outbox publishes `AvaliacaoPedida`; the worker ignores a duplicate `eventId` or stores the result and publishes `AvaliacaoConcluida`; failures retry after 5 s, 30 s and 2 min, then the dead-letter queue.
+
 ## Reliability of messaging
 
 | §6.3 | Mechanism |
@@ -152,7 +154,7 @@ Endpoints: RCM `rcm-d{0,1,2}.json`; warnings `warnings_www.json`. Poll hourly by
 | Incomplete | DICO missing | Keep last value for our municipality |
 | Invalid | Bad JSON or RCM not 1–5 | Reject; keep last valid |
 
-Simulator: `tools/ipma-sim`, `IPMA_SIM_MODE=ok\|unavailable\|delayed\|incomplete\|invalid` (tests and Compose profile `evaluation`, §12).
+Simulator: `tools/ipma-sim`, `IPMA_SIM_MODE=ok` / `unavailable` / `delayed` / `incomplete` / `invalid`, for tests and the Compose profile `evaluation` (§12) [TODO: not built yet, SCRUM-43].
 
 ## Degraded modes
 
@@ -190,7 +192,7 @@ erDiagram
 
 Consistency is strong inside each database and eventual between services (visible states). Free text is deleted after confirmation (RNF09). No names, contacts or date of birth leave `escala-db`; free text leaves once in `ExtracaoPedida`.
 
-**D-01** (supervisor approval of swaps) and **D-02** (nobody accepts cover / exceptional assignment) stay open on the **Investor Decision Log**.
+**D-01** (SCRUM-50) and **D-02** (SCRUM-51) are decided in Jira; keep the wording from the **Investor Decision Log**.
 
 ## API outline
 
@@ -199,11 +201,11 @@ Consistency is strong inside each database and eventual between services (visibl
 - Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)); health endpoints stay open
 - Header: `X-Trace-Id` (RF37)
 
-Walking skeleton (SCRUM-45): `POST /api/v1/piquetes` (201 + `Location`) · `GET /api/v1/piquetes`. Product API: `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Liveness/readiness: `/actuator/health` (RF36).
+Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API: `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Liveness/readiness: `/actuator/health` (RF36).
 
 ## Deployment view
 
-Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation: `ipma-sim` (`--profile evaluation`). Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672). Runbook: [Deployment and Operations](../operations/deployment-and-operations.md).
+Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation profile with `ipma-sim`: still to build (SCRUM-43). Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672). Compose sets `SPRING_RABBITMQ_DYNAMIC=false`; topology comes from `infra/rabbitmq/setup.sh` (the `escala-api` user cannot declare exchanges). Runbook: [Deployment and Operations](../operations/deployment-and-operations.md).
 
 ```mermaid
 flowchart TB
@@ -221,11 +223,11 @@ flowchart TB
   reg --> host
 ```
 
-Kubernetes overlays under `infra/k8s` are the team demo host. Teaching-staff evaluation is Docker Compose.
+Kubernetes overlays under `infra/k8s` are the team demo host (GitHub Actions, GHCR, Argo CD; `https://escala-dev.duckdns.org`, `escala-qa.duckdns.org`, `escala-prod.duckdns.org`). Teaching-staff evaluation is Docker Compose.
 
 ## Observability and SLIs
 
-- Logs: JSON stdout, `X-Trace-Id` / `traceId` (RF37); never contacts or free text
+- Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text
 - Health: `/actuator/health` (RF36); readiness via the same actuator when datasource and broker are wired
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - Metrics: checks, DLQ, IPMA age, extraction fallbacks, time-to-fill (RF38)
@@ -236,8 +238,8 @@ Kubernetes overlays under `infra/k8s` are the team demo host. Teaching-staff eva
 ## Done when
 
 - [x] §7.1.2 #7 covered: system context, containers, data model, API, async workflow, IPMA, deployment
-- [x] Content matches D-00 (UJ1 / UJ3 / UJ6); D-01 and D-02 left open
+- [x] Content matches D-00 (UJ1 / UJ3 / UJ6); D-01 (SCRUM-50) and D-02 (SCRUM-51) decided in Jira; keep Investor Decision Log wording
 - [x] This file pasted to Confluence **07 · Technical Design**
-- [ ] PlantUML re-exported (deployment, domain model)
+- [x] PlantUML exported on Confluence (deployment, domain model)
 - [ ] Reviewed by another team member
 - [ ] Status set to Done
