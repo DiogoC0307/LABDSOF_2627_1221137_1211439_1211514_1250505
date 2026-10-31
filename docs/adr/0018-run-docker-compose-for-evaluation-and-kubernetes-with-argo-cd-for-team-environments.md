@@ -8,7 +8,7 @@
 
 ## Context
 
-The teaching staff must be able to run the whole product on their own machine with documented instructions (assignment §12), and the walking skeleton needs a containerised deployment from Sprint 1 (§7.1.2 #10). The team also needs shared environments where every merge is deployed, a release candidate can be checked before the sprint review, and a release can be rolled back (§8.4, §8.5). These are two different needs: a reproducible one-command run on a laptop, and continuous deployment to hosted environments.
+The walking skeleton needs a containerised deployment from Sprint 1 (§7.1.2 #10). The team also needs shared environments where every merge is deployed, a release candidate can be checked before the sprint review, and a release can be rolled back (§8.4, §8.5). These are two different needs: a reproducible one-command run on a laptop, and continuous deployment to hosted environments.
 
 ## Decision
 

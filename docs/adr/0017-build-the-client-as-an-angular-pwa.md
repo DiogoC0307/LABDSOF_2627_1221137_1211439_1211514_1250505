@@ -10,8 +10,6 @@
 
 Escala's members check their shifts, say when they cannot serve, swap and accept cover requests on their own phones, which are a mix of Android and iPhone. The supervisor and the station computers use the same screens on a desktop browser. Members often check the roster where the signal is weak, so the last loaded roster must stay readable offline (RNF06). The corps has no budget or process for publishing and updating apps in two stores, and the team has three sprints.
 
-The client has been an Angular project since the repository was created (`apps/web`, Angular 21), but no ADR recorded why.
-
 ## Decision
 
 We will build one client, `apps/web`, as an Angular Progressive Web App: installable from the browser on Android and iOS, with a service worker (`@angular/service-worker`, `ngsw-config.json`) that caches the app shell and the last roster for offline reading. The same app serves the member, supervisor and station views. It talks only to `escala-api`, over REST/HTTPS (ADR 0002, ADR 0006).
