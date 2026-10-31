@@ -1,30 +1,78 @@
 :host {
   display: block;
+  min-height: 100dvh;
   font-family: system-ui, sans-serif;
   color: #1a1a1a;
+  background: #f4f6f8;
 }
 
 .page {
-  max-width: 28rem;
+  box-sizing: border-box;
+  width: min(100%, 24rem);
   margin: 0 auto;
-  padding: 1.25rem;
+  padding: 1rem 1rem 2rem;
+}
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+h1,
+h2 {
+  margin: 0 0 0.5rem;
 }
 
 h1 {
-  font-size: 1.5rem;
-  margin: 0 0 0.5rem;
+  font-size: 1.375rem;
+}
+
+h2 {
+  font-size: 1rem;
+  margin-top: 1.5rem;
 }
 
 .lead {
   margin: 0 0 1rem;
   color: #444;
+  font-size: 0.95rem;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #d5dde5;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.date {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.slot {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.label {
+  color: #555;
+}
+
+.status {
+  font-weight: 600;
 }
 
 form {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.75rem;
-  align-items: end;
   margin-bottom: 1rem;
 }
 
@@ -38,6 +86,7 @@ label {
 input,
 button {
   font: inherit;
+  min-height: 2.75rem;
   padding: 0.5rem 0.75rem;
 }
 
@@ -46,6 +95,13 @@ button {
   color: #fff;
   border: 0;
   border-radius: 0.25rem;
+}
+
+.install {
+  flex-shrink: 0;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.875rem;
 }
 
 .list {
@@ -63,10 +119,19 @@ button {
 }
 
 .empty,
+.error,
+.notice {
+  margin: 0 0 1rem;
+}
+
+.empty {
+  color: #555;
+}
+
 .error {
   color: #8a1f1f;
 }
 
-.error {
-  margin: 0 0 1rem;
+.notice {
+  color: #0b5cab;
 }
