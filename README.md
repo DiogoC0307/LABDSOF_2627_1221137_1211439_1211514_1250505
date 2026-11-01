@@ -1,10 +1,10 @@
 # Escala
 
-**Escala is a shared shift schedule for fire stations that mix professional firefighters, volunteers and cadets: it always shows who is on shift and lets members manage their availability, swaps and shift extensions themselves.**
+**Escala is a mobile roster for the members of a volunteer fire corps: they see their shifts, say when they cannot serve, swap shifts and confirm their presence, and when someone cannot come, only colleagues who are free and qualified are asked to cover.**
 
 Escala is the product of LABDSOF 2026/27 (MSc in Computer Engineering, ISEP).
 
-> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The repository holds documentation only; there is no application code to run yet.
+> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The walking skeleton runs end to end (pull requests #36, #40 and #41): `POST /api/v1/piquetes` creates a slot in state `PENDING`, `escala-api` publishes `AvaliacaoPedida` through its outbox, `elegibilidade-worker` answers `AvaliacaoConcluida` (for now it always answers that the member is eligible) and the slot becomes `ELIGIBLE`. It runs with Docker Compose on your machine and is deployed on Kubernetes in dev, where `GET /api/v1/piquetes` currently answers `404` because the nginx in front of `escala-api` strips the `/api` prefix [TODO: keep the prefix in the Kubernetes nginx or change the controller path, Diogo Costa].
 
 ## The problem
 
@@ -18,11 +18,11 @@ The station's weekly schedule is built in Excel, printed and posted at the stati
 
 | User group | Main features |
 |---|---|
-| Professional firefighters, volunteers and cadets | Define their unavailability in advance; check their schedule on the phone and get notified of every change that affects them; request shift swaps among themselves |
-| Professional firefighters | Register shift extensions and off-hours call-outs after the emergency, for the supervisor to approve |
-| Supervisor | Build the weekly schedule with each member's availability, minimum hours and weekly limit in view; automatic checks for unavailability, unfilled roles, overlapping shifts and hours above the limit; publish changes without reprinting; see every change in the change log |
+| Members of the corps | See their shifts on the phone; say when they cannot serve, in their own words (AI reads the text and the member confirms it; a form is always available); swap shifts with each other; confirm their presence. When someone cannot come, only colleagues who are free and qualified are asked to cover |
+| Supervisor | Build and publish the schedule; is informed of every swap and every cover; approving swaps is optional, per corps |
 | Station chief | See who is on shift and who is available, to plan training sessions |
-| Dispatchers | On-shift board showing who is on shift at any moment |
+
+Out of scope: dispatch and call-outs, and statutory hours. Shift extensions (a Should) and an on-shift board (a Could) are planned for later, not for the first version.
 
 Escala complements the station's existing dispatch app and does not integrate with it: it shows who is on shift, never who was dispatched.
 
@@ -30,7 +30,7 @@ The user journeys, personas and the rest of the product documentation are in the
 
 ## Architecture
 
-This is the planned architecture; only the empty skeletons of the components exist so far.
+The three components exist and run together in the walking skeleton (see the status above). The table shows what each one is for; so far the worker only answers evaluations, always with *eligible*.
 
 ![Escala high-level system architecture](docs/architecture/high_level_system_architecture.png)
 
@@ -46,19 +46,27 @@ The two backend services are deployed independently. The full design is in [docs
 
 ## Repository layout
 
-One monorepo, one folder per deployable component. The top-level folders exist from the start; `contracts/`, `tools/` and `infra/` are still empty, and each sub-folder marked *(planned)* is created by the first pull request that needs it.
+One monorepo, one folder per deployable component. `tools/` is still empty, and each sub-folder marked *(planned)* is created by the first pull request that needs it.
 
 ```
 .
 ├── apps/
-│   ├── escala-api/             Spring Boot 4 (Java 21, Maven), port 8080   (skeleton)
-│   ├── elegibilidade-worker/   Spring Boot 4 (Java 21, Maven), port 8081   (skeleton)
-│   └── web/                    Angular 21 PWA, port 4200                   (skeleton)
-├── contracts/                  openapi.yaml and events/                    (empty)
+│   ├── escala-api/             Spring Boot 4 (Java 21, Maven), port 8080   (walking skeleton)
+│   ├── elegibilidade-worker/   Spring Boot 4 (Java 21, Maven), port 8081   (walking skeleton)
+│   └── web/                    Angular 21 PWA, port 4200 (8000 in Compose) (walking skeleton)
+├── contracts/                  openapi.yaml and events/ (JSON Schema of the envelope and the five events)
 ├── tools/
-│   └── ipma-sim/               IPMA simulator container                    (planned)
-├── infra/                      Docker Compose, Prometheus, Grafana         (empty)
-├── docs/                       ADRs, technical design, test strategy, operations, reports
+│   └── ipma-sim/               IPMA simulator container                    (planned, SCRUM-43)
+├── infra/
+│   ├── compose/                nginx.conf of the web container in Compose
+│   ├── rabbitmq/               setup.sh (users, permissions) and definitions.json (exchanges, queues)
+│   ├── observability/          Tempo and Grafana settings for the Compose profile `observability`
+│   ├── k8s/                    Kustomize manifests: dev, qa, prod and observability
+│   ├── argocd/                 Argo CD applications and ingress
+│   ├── cluster/                cluster-wide settings (certificate issuer)
+│   └── scripts/                seal-secrets, db-access, rabbitmq-ui (.sh and .ps1)
+├── compose.yaml                one command to run everything locally
+├── docs/                       ADRs, technical design, test strategy, operations, security, reports
 ├── .github/                    CODEOWNERS, pull request template, workflows
 └── README.md
 ```
@@ -116,7 +124,7 @@ npm run test:ci          # unit tests (Vitest) with coverage in coverage/web
 npm start                # dev server on :4200
 ```
 
-The continuous integration pipeline is [.github/workflows/ci.yml](.github/workflows/build.yml): it builds, tests and analyses the three components with SonarQube on every pull request and push to `main`. Its stages are described in [.github/workflows/README.md](.github/workflows/README.md). Test types, tools and the test-case convention are in [docs/testing/test-strategy.md](docs/testing/test-strategy.md).
+The continuous integration pipeline is [.github/workflows/build.yml](.github/workflows/build.yml): it builds, tests and analyses the three components with SonarQube on every pull request and push to `main`. Its `security` job also scans the history for secrets (gitleaks), checks the dependencies (`npm audit`, OSV-Scanner) and writes a CycloneDX SBOM; it does not fail the build yet. Its stages are described in [.github/workflows/README.md](.github/workflows/README.md). Test types, tools and the test-case convention are in [docs/testing/test-strategy.md](docs/testing/test-strategy.md).
 
 ## Environments and deployment
 
@@ -269,6 +277,7 @@ flowchart LR
 To try tracing on your machine (no logs locally, only traces):
 
 ```powershell
+$env:JAVA_TOOL_OPTIONS = "-javaagent:/otel/opentelemetry-javaagent.jar"
 $env:OTEL_JAVAAGENT_ENABLED = "true"
 docker compose --profile observability up --build -d
 ```

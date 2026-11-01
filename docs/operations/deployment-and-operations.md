@@ -3,177 +3,216 @@
 | Field | Value |
 |---|---|
 | Status | Draft |
-| Owner | [TODO: name] |
-| Contributors | [TODO: names] |
+| Owner | Diogo Costa |
+| Contributors | Diogo Pereira, Pedro Costa (from the git history of `infra/`, `.github/` and the Dockerfiles) |
 | Deliverable | Sprint 1 · #10 Walking Skeleton (Containerized deployment); Sprint 2 · #11 CI/CD pipeline; Final submission · #3 Deployment instructions |
 | Sources | Assignment §6.7, §6.8, §8.4, §8.5, §9, §11, §12 |
 | Confluence page | **10 · Walking Skeleton**, **07 · Technical Design** |
-| Last updated | YYYY-MM-DD |
+| Last updated | 2026-11-01 |
 
 > **ℹ️ About this document.** How to run, configure, deploy, roll back and operate Escala, plus the runbook for its degraded modes. It is the "Deployment and operation guide" of assignment §9 and the "Deployment instructions" of §12: the teaching staff follow it to run the product, and the team follows it on demo day. The architecture behind it is in the [Technical Design](../architecture/technical-design.md); the tests that prove the runbook are in the [Test Strategy](../testing/test-strategy.md). Keep the quick start in the [repository README](../../README.md) identical to [Run locally](#run-locally).
 
 ## Environments
 
-> **ℹ️ Guidance.** §8.4 asks for "Environment-specific configuration". List every environment, which profile it runs and who uses it. Every environment uses synthetic data only (§11); no real corps member appears in any of them.
+Every environment uses synthetic data only (§11); no real corps member appears in any of them. The repository has no seed data yet: a database starts empty and is filled through the API [TODO: synthetic seed data for the demo and for the teaching staff, Diogo Costa].
 
-| Environment | Where it runs | Profile | Data | Used by | URL |
-|---|---|---|---|---|---|
-| Local | Developer laptop, Docker Compose | `default` or `evaluation` | Synthetic seed | Developers | `http://localhost:[TODO: port]` |
-| CI | GitHub Actions runners | `evaluation` [TODO: confirm] | Synthetic seed and test fixtures | Pipeline | — |
-| Deployed | [TODO: host or provider] | `default` | Synthetic seed | Team, investors at the sprint reviews | [TODO: URL] |
-| Evaluation | Teaching staff machine, Docker Compose, offline | `evaluation` | Synthetic seed | Teaching staff (§12) | `http://localhost:[TODO: port]` |
+| Environment | Where it runs | Spring profile | Used by | URL |
+|---|---|---|---|---|
+| Local | Developer laptop, Docker Compose (`compose.yaml`) | `local` (set by Compose); `ide` when a service is run from the IDE | Developers | http://localhost:8000 |
+| CI | GitHub Actions runners | none: nothing is deployed; the integration tests start their own PostgreSQL and RabbitMQ with Testcontainers | Pipeline | — |
+| dev | Kubernetes (k3s, one VM), namespace `escala-dev` | `dev` | The team; every merge to `main` is deployed here | https://escala-dev.duckdns.org |
+| qa | same cluster, namespace `escala-qa` | `qa` | Release candidates, tested before the Sprint Review (Definition of Done) | https://escala-qa.duckdns.org |
+| prod | same cluster, namespace `escala-prod` | `prod` | Published releases | https://escala-prod.duckdns.org |
+| Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (SCRUM-43) | Teaching staff (§12) | http://localhost:8000 |
+
+Each environment has its own databases, RabbitMQ and secrets; nothing is shared between them. The worker is internal and has no public URL. Argo CD is at https://escala-argocd.duckdns.org and Grafana at https://escala-grafana.duckdns.org.
 
 ## Prerequisites
 
-> **ℹ️ Guidance.** List only what a clean machine needs, with minimum versions. Aim for the evaluation environment to need nothing but Docker and Git: build every image with a multi-stage Dockerfile so no JDK or Node.js is needed on the host (§8.4 "Reproducible builds") [TODO: confirm].
+A clean machine needs only Docker and Git: every image is built with a multi-stage Dockerfile (JDK 21 for the Java services, Node.js 24 for the web app), so no JDK or Node.js is needed on the host.
 
-- Docker [TODO: minimum version] with Docker Compose v2 [TODO: minimum version]
+- Docker with Docker Compose v2. Tested on 2026-11-01 with Docker 29.9.2 and Docker Compose v5.6.1 on Windows 11 [TODO: minimum Docker and Compose versions, Diogo Costa]
 - Git
-- Free ports: [TODO: list, e.g. web, `escala-api`, RabbitMQ management, Grafana]
-- Memory and disk for the whole stack: [TODO: measured, e.g. after `docker stats`]
-- Development only: JDK [TODO: Java version] (`escala-api`, `elegibilidade-worker`), Node.js [TODO: version] (`apps/web`)
+- Free ports (all of them can be changed in `.env`, see [Configuration](#configuration)): 8000 (web), 8080 (`escala-api`), 8081 (`elegibilidade-worker`), 5432 and 5433 (PostgreSQL), 5672 and 15672 (RabbitMQ). With the Compose profile `observability`, also 3000 (Grafana) and 3200 (Tempo), which are fixed in `compose.yaml`. On Windows, Hyper-V can reserve 5672: set `RABBITMQ_PORT=5673`.
+- Memory and disk for the whole stack: [TODO: measured with `docker stats` and `docker system df`, Diogo Costa]
+- Development only: JDK 21 (`escala-api`, `elegibilidade-worker`), Node.js 22.12+ or 24+ (`apps/web`)
 
 ## Run locally
 
-> **ℹ️ Guidance.** One command, from a clean clone, starts everything: web, `escala-api`, `elegibilidade-worker`, both databases, RabbitMQ, the IPMA simulator, Prometheus and Grafana. Test it on a machine where it has never run, and write down what "working" looks like so the reader can check it.
+One command, from a clean clone, starts the web app, both backend services, both databases and RabbitMQ:
 
 ```bash
-git clone [TODO: repository URL] && cd [TODO: folder]
-[TODO: the one command, e.g. docker compose --profile evaluation up --build]
+git clone https://github.com/DiogoC0307/LABDSOF_2627_1221137_1211439_1211514_1250505.git && cd LABDSOF_2627_1221137_1211439_1211514_1250505
+docker compose up --build
 ```
 
-It works when:
+The first build takes several minutes. It works when:
 
-- `GET /health/ready` answers ready on `escala-api` and `elegibilidade-worker` (RF36): [TODO: URLs]
-- the PWA opens at `http://localhost:[TODO: port]` and shows today's *piquete* from the seed data
-- Grafana opens at `http://localhost:[TODO: port]` with the Escala dashboard
+- `docker compose ps` shows every service as healthy
+- `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`. RF36 names `/health/ready`; the services expose Spring Boot Actuator's `/actuator/health` [TODO: align the endpoint name with RF36, Diogo Costa]
+- the walking skeleton works. Create a piquete and look at its slot a few seconds later:
+
+  ```bash
+  curl -X POST http://localhost:8000/api/v1/piquetes -H 'Content-Type: application/json' -d '{"dutyDate":"2026-11-01"}'   # slot status: PENDING
+  curl http://localhost:8000/api/v1/piquetes                                                                               # a few seconds later: ELIGIBLE
+  ```
+
+  The PWA at http://localhost:8000 shows the same list.
+- optional, Grafana at http://localhost:3000 (user `admin`) with the Compose profile `observability`, see [Observability](#observability) [TODO: Grafana dashboard for Escala (RF39) does not exist yet, Diogo Costa]
 
 Stop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.
 
 ## Configuration
 
-> **ℹ️ Guidance.** One row per environment variable, matching `.env.example` exactly. Never write a secret value here: a secret's default is "— (secret)" and its handling is in [Secrets handling](#secrets-handling). Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration too (ADR 0014): name the file that holds them [TODO: path].
+The Compose variables are in `.env.example`; copy it to `.env` to change them (`.env` is git-ignored). All of them are optional: `compose.yaml` has the same defaults. A password's default is "— (secret)": the throwaway local value is in `.env.example`, and it must never be used outside your machine. The handling of real secrets is in [Secrets handling](#secrets-handling).
 
 | Variable | Purpose | Required | Default |
 |---|---|---|---|
-| [TODO: variable] | [TODO: purpose] | [TODO: Yes / No] | [TODO: default, or "— (secret)"] |
+| `ESCALA_DB_NAME`, `ESCALA_DB_USER` | Database name and user of `escala-api` | No | `escala`, `escala` |
+| `ESCALA_DB_PASSWORD` | Password of the `escala-api` database | No | — (secret) |
+| `ESCALA_DB_PORT` | Host port of that database | No | `5432` |
+| `ELEGIBILIDADE_DB_NAME`, `ELEGIBILIDADE_DB_USER` | Database name and user of `elegibilidade-worker` | No | `elegibilidade`, `elegibilidade` |
+| `ELEGIBILIDADE_DB_PASSWORD` | Password of the `elegibilidade-worker` database | No | — (secret) |
+| `ELEGIBILIDADE_DB_PORT` | Host port of that database | No | `5433` |
+| `RABBITMQ_USER` | RabbitMQ admin login, for people and the management UI | No | `escala` |
+| `RABBITMQ_PASSWORD` | Password of the RabbitMQ admin login | No | — (secret) |
+| `RABBITMQ_ESCALA_API_USER`, `RABBITMQ_WORKER_USER` | One RabbitMQ login per service (it may only touch that service's queues) | No | `escala-api`, `elegibilidade-worker` |
+| `RABBITMQ_ESCALA_API_PASSWORD`, `RABBITMQ_WORKER_PASSWORD` | Passwords of those logins | No | — (secret) |
+| `RABBITMQ_PORT`, `RABBITMQ_UI_PORT` | Host ports of AMQP and of the management UI | No | `5672`, `15672` |
+| `WEB_PORT`, `ESCALA_API_PORT`, `ELEGIBILIDADE_WORKER_PORT` | Host ports of the web app and of the two services | No | `8000`, `8080`, `8081` |
+| `OTEL_JAVAAGENT_ENABLED` | Switches the OpenTelemetry Java agent on (profile `observability`) | No | `false` |
+| `JAVA_TOOL_OPTIONS` | Must carry `-javaagent:/otel/opentelemetry-javaagent.jar` to load the agent; empty otherwise | No | empty |
+| `GRAFANA_PASSWORD` | Password of the Grafana `admin` user (profile `observability`) | No | — (secret) |
 
-> **✏️ Example (illustrative — replace).**
-> | Variable | Purpose | Required | Default |
-> |---|---|---|---|
-> | `ESCALA_PROFILE` | `default` or `evaluation` (see [Profiles](#profiles)) | No | `default` |
-> | `IPMA_BASE_URL` | IPMA open-data base URL; the `evaluation` profile points it at `tools/ipma-sim` | No | `https://api.ipma.pt/open-data` |
-> | `IPMA_DICO` | Municipality (DICO code) whose RCM is read | No | [TODO: DICO] |
-> | `RISK_STALENESS_THRESHOLD` | Age of IPMA data after which the higher risk level is assumed (ADR 0013) | No | [TODO: hours] |
-> | `AI_ENABLED` | Feature flag; `false` turns AI off and keeps the form flow (RF35) | No | `true` (`false` in `evaluation`) |
-> | `RETRY_DELAYS` | Retry queue delays before the dead-letter queue | No | `5s,30s,2m` |
-> | `ESCALA_DB_PASSWORD` | Password of `escala-db`, used by `escala-api` only | Yes | — (secret) |
-> | `LLM_API_KEY` | Language-model key, worker only; needed only if ADR 0011 chooses a hosted model | No | — (secret) |
+Compose and the Kubernetes ConfigMaps (`infra/k8s/<env>/<service>/configmap.yaml`) configure the services with Spring Boot environment variables:
+
+| Variable | Purpose | Compose | Kubernetes |
+|---|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | Spring profile | `local` | `dev`, `qa` or `prod` |
+| `LOGGING_LEVEL_ROOT` | Log level | `INFO` | `DEBUG` in dev, `INFO` in qa, `WARN` in prod |
+| `SPRING_DATASOURCE_URL` | JDBC URL of the service's own database | set | set in the ConfigMap |
+| `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Database login | from `.env` | from the Secret `db-escala-api` or `db-elegibilidade` |
+| `SPRING_RABBITMQ_HOST`, `SPRING_RABBITMQ_PORT` | Broker address | `rabbitmq`, `5672` | `rabbitmq` (host) |
+| `SPRING_RABBITMQ_USERNAME`, `SPRING_RABBITMQ_PASSWORD` | The service's own RabbitMQ login | from `.env` | from the Secret `rabbitmq-escala-api` or `rabbitmq-elegibilidade-worker` |
+| `SPRING_RABBITMQ_DYNAMIC` | `false`: the service does not declare exchanges or queues; they come from `infra/rabbitmq/definitions.json` | `false` | — |
+| `OTEL_*`, `LOGGING_PATTERN_LEVEL` | OpenTelemetry agent settings and the `[trace_id,span_id]` log pattern | see `compose.yaml` | see the ConfigMaps |
+
+The database schema is created and updated by Hibernate when a service starts (`spring.jpa.hibernate.ddl-auto=update`); each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
 
 ## Secrets handling
 
-> **ℹ️ Guidance.** §8.4 asks for "Secure secret handling", and RNF07 requires no secrets in the repository, checked in CI. Explain here the deploy-time steps; the policy and threat analysis are on **09 · Security and Privacy Assessment**. §11: "Security controls must not be disabled solely to simplify the demonstration." — the `evaluation` profile keeps them on.
+Policy and threat analysis are on **09 · Security and Privacy Assessment**; this section is the deploy-time part.
 
-- **Local and evaluation:** `.env` is git-ignored; `.env.example` is committed with placeholders only. [TODO: how a reader creates `.env`, e.g. copy it and set local passwords]
-- **CI/CD and deployed:** secrets live in GitHub Actions secrets [TODO: or environment secrets] and reach the containers as environment variables at deploy time; they never appear in logs.
-- **Repository check:** a secret scanner runs in CI and fails the build on any finding ([TODO: tool]).
-- **Separation:** each component has its own database credentials; the language-model key exists only in the worker's environment.
+- **Local and evaluation:** `.env` is git-ignored; `.env.example` is committed with throwaway local values only. Copy it to `.env` if you need to change a value.
+- **Kubernetes:** passwords are random and different per environment. Git holds only **encrypted** Sealed Secrets files (`sealed-secret*.yaml`), created by `infra/scripts/seal-secrets` (`.sh` and `.ps1`); the Sealed Secrets controller in the cluster turns them into Kubernetes Secrets, which reach the pods as environment variables. They are not in a `.env` file on the VM, not in Docker secrets and not in the images.
+- **GitHub Actions:** the SonarQube analysis uses the repository secrets `SONAR_TOKEN` and `SONAR_HOST_URL`; pushing images to GHCR uses the workflow's `GITHUB_TOKEN`. The pipeline holds no cluster credentials (Argo CD pulls from Git).
+- **Repository check:** the `security` job of `build.yml` runs gitleaks over the history. It only reports for now and does not fail the build [TODO: make it fail the build on a real finding (RNF07, SCRUM-20), Diogo Costa].
+- **Separation:** each component has its own database login and its own RabbitMQ login. [TODO: how the Claude Code CLI of the worker is authenticated, once ADR 0016 is accepted, Diogo Costa]
+- **Encryption at rest:** k3s does not encrypt Secrets at rest by default; the procedure to enable it is in the [README](../../README.md#where-the-passwords-are-stored). [TODO: has it been enabled on the VM, Diogo Costa]
 - **Leak:** rotate the secret at once, redeploy, and record a Jira issue labelled `risk`.
 
 | Secret | Used by | Stored in | Rotation |
 |---|---|---|---|
-| [TODO: secret name, never its value] | [TODO: component] | [TODO: where] | [TODO: when and how] |
+| `db-escala-api` | `escala-api` and its PostgreSQL | Sealed Secret in git; Secret in the environment's namespace | `seal-secrets -Force`, then `ALTER USER … PASSWORD …` in PostgreSQL ([README](../../README.md#where-the-passwords-are-stored)) |
+| `db-elegibilidade` | `elegibilidade-worker` and its PostgreSQL | same | same |
+| `rabbitmq-escala-api`, `rabbitmq-elegibilidade-worker` | the matching service and the broker | same | [TODO: when and how, Diogo Costa] |
+| `rabbitmq-credentials` | RabbitMQ admin login | same | [TODO: when and how, Diogo Costa] |
+| `grafana-admin` | Grafana `admin` | same, in the namespace `observability` | [TODO: when and how, Diogo Costa] |
+| `SONAR_TOKEN`, `SONAR_HOST_URL` | `build.yml` | GitHub Actions secrets | [TODO: when and how, Diogo Costa] |
 
 ## Profiles
 
-> **ℹ️ Guidance.** §12 asks for enough information "to inspect, deploy, execute, and evaluate the product". The `evaluation` profile uses the IPMA simulator and the AI fallback so the teaching staff can run everything offline. Say how a profile is selected and what changes; nothing else may differ between profiles.
+Spring profiles select the settings of a service:
+
+| Profile | Used when | Source |
+|---|---|---|
+| `ide` | A service is started from the IDE or with `./mvnw spring-boot:run` and no other profile is active | `application-ide.properties` in each service: localhost defaults and `spring.rabbitmq.dynamic=false` |
+| `local` | Docker Compose | `SPRING_PROFILES_ACTIVE` in `compose.yaml` |
+| `dev`, `qa`, `prod` | Kubernetes | the ConfigMap of each service |
+
+Compose has one profile, `observability`: it adds Tempo and Grafana. To try tracing on your machine:
+
+```powershell
+$env:JAVA_TOOL_OPTIONS = "-javaagent:/otel/opentelemetry-javaagent.jar"
+$env:OTEL_JAVAAGENT_ENABLED = "true"
+docker compose --profile observability up --build -d
+```
+
+The product-level profiles of §12 are not built yet. Selecting a profile and switching the IPMA simulator mode will be documented when they exist:
 
 | Profile | IPMA source | AI | Network needed | Used for |
 |---|---|---|---|---|
-| `default` | Live IPMA open data, polled hourly with cache | [TODO: model per ADR 0011]; form fallback when down or off | Yes | Deployed environment, sprint reviews |
-| `evaluation` | `tools/ipma-sim` | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
+| `default` | Live IPMA open data, polled hourly with cache (ADR 0010) | [TODO: model per ADR 0016, once it is accepted, Diogo Pereira]; form fallback when down or off | Yes | Deployed environment, sprint reviews |
+| `evaluation` | `tools/ipma-sim` (SCRUM-43) | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
 
-- How to select a profile: [TODO: e.g. `ESCALA_PROFILE`, a Compose profile or an override file]
-- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command]
+- How to select a profile: [TODO: a Compose profile or an override file, once SCRUM-43 is done, Diogo Costa]
+- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command, once SCRUM-43 is done, Diogo Costa]
 
 ## CI/CD pipeline
 
-> **ℹ️ Guidance.** §8.5: "The pipeline should provide rapid and visible feedback when a change introduces a defect." Keep the stages below and name the tool and the report of each. Tag every image with the commit SHA and the release tag, so any earlier version can be redeployed ([Rollback](#rollback)).
-
 ```mermaid
 flowchart LR
-  subgraph PR["Every pull request"]
-    B["build"] --> T["tests"] --> S["static analysis"] --> D["dependency check"]
+  subgraph PR["Every pull request and push to main (build.yml)"]
+    B["build"] --> T["tests"] --> S["static analysis"]
+    SEC["security job: secrets, dependencies, SBOM (reports only)"]
   end
-  subgraph MAIN["Merge to main"]
-    I["image"] --> P["deploy"]
+  subgraph DEPLOY["Deploy workflows"]
+    I["image (GHCR)"] --> P["manifests on deploy/env"] --> A["Argo CD applies"]
   end
-  D --> I
+  PR -.-> I
 ```
 
 | Stage | What it does | Tool | Report |
 |---|---|---|---|
-| build | Compiles and packages `escala-api`, `elegibilidade-worker` and `apps/web` | [TODO: e.g. Maven / Gradle, npm] | Build log |
-| tests | Unit, integration and contract tests ([Test Strategy](../testing/test-strategy.md)) | [TODO: tools] | Test and coverage reports [TODO: link] |
-| static analysis | Static analysis and secret scanning (RNF07) | [TODO: tools] | [TODO: link] |
-| dependency check | Known vulnerabilities in dependencies and base images | [TODO: tool] | [TODO: link] |
-| image | Builds and pushes one image per component; end-to-end tests run against these images [TODO: confirm] | Docker; registry [TODO: which] | Image tags |
-| deploy | Deploys the new tags to the deployed environment, then checks `/health/ready` | [TODO: how] | Deploy log with the deployed tag |
+| build | Compiles and packages `escala-api`, `elegibilidade-worker` and `apps/web` | Maven wrapper (Java 21); npm (Node.js 24) | Build log |
+| tests | Unit and integration tests ([Test Strategy](../testing/test-strategy.md)) | JUnit with Testcontainers, JaCoCo; Vitest with coverage | Artefacts `escala-api-reports`, `elegibilidade-worker-reports`, `web-reports` on each run |
+| static analysis | Code quality and coverage | SonarQube | SonarQube [TODO: links to the SonarQube projects, once the project-key problem in the [workflows README](../../.github/workflows/README.md#sonarqube-configuration) is fixed, Diogo Costa] |
+| dependency check and secret scan | `npm audit`, OSV-Scanner on the lockfile and on the Maven SBOMs, gitleaks; CycloneDX SBOMs; reports only | `security` job of `build.yml` | Job summary and artefacts `security-reports` and `sbom` |
+| image | Builds and pushes one image per component to GHCR, tagged with the commit SHA | `build-images.yml` (Docker Buildx) | Image tags in GHCR |
+| deploy | Renders the manifests of the environment and publishes them to the branch `deploy/<env>`, which Argo CD applies | `deploy.yml`, Kustomize, Argo CD | The commit on `deploy/<env>`: `deploy(<env>): <tag> (source <sha>)` |
 
-- Workflow file: `.github/workflows/[TODO: file].yml`
-- Triggers: [TODO: confirm the split above between pull requests and `main`]
+- Workflow files and their triggers: [`.github/workflows/README.md`](../../.github/workflows/README.md)
+- The end-to-end tests do not run in the pipeline yet [TODO: end-to-end tests in the pipeline, Diogo Sousa, see the Test Strategy].
 
 ## Deploy
 
-> **ℹ️ Guidance.** §8.4 asks for "Automated deployment where feasible". Describe the automatic path first, then the manual command for when the pipeline cannot run. A deploy is finished only when both services answer ready and the running tag is recorded.
+The automatic path:
 
-1. Merge to `main`; the pipeline builds, tests and pushes the images tagged [TODO: tag scheme].
-2. The deploy stage updates the deployed environment: [TODO: mechanism].
-3. Database migrations run [TODO: how and when; each component migrates only its own database].
-4. Smoke check: `/health/ready` on both services, then open today's piquete in the PWA.
-5. Record the deployed tag: [TODO: where, e.g. the release notes or the Jira version].
+1. Merge to `main`. The workflow *Deploy DEV* builds the three images and tags them with the commit SHA (and `latest`). A `release/X.Y.Z` branch deploys to qa with the tag `X.Y.Z-rc.<run number>`; publishing a GitHub Release `vX.Y.Z` deploys to prod with the images that qa tested, retagged `X.Y.Z`.
+2. The pipeline renders `infra/k8s/<env>` with the new tag and pushes `manifests.yaml` to the branch `deploy/<env>`. Argo CD, in the cluster, watches that branch and applies it. dev and qa sync by themselves; prod waits for a click on **Sync** in Argo CD (and for the approval of the GitHub Environment `production`, if enabled).
+3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. There is no migration tool yet [TODO: migration tool and the rule that every migration works with the previous version, Diogo Costa].
+4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`. On dev this step currently fails after the health check, because `GET /api/v1/piquetes` answers `404` (see the [README](../../README.md)).
+5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
-Manual deploy of a given tag:
-
-```bash
-[TODO: one command, e.g. ESCALA_TAG=<tag> docker compose pull && ESCALA_TAG=<tag> docker compose up -d]
-```
+There is no one-command manual deploy of an arbitrary tag. The workflows can be started by hand only for dev (*Deploy DEV* has `workflow_dispatch`); to put an older version back, use [Rollback](#rollback). The release steps (cutting a release, fixing what qa finds, hotfixes) are in the [README](../../README.md#releasing-git-flow).
 
 ## Rollback
 
-> **ℹ️ Guidance.** §8.4 asks for "A documented rollback or recovery approach", and RNF08 asks for one documented command. A rollback redeploys the previous image tag; it does not undo database migrations, so every migration must also work with the previous version [TODO: confirm]. Rehearse the rollback before each review.
+A rollback redeploys a previous version; it does not undo database changes, because the schema is updated by Hibernate and not by reversible migrations.
 
-```bash
-[TODO: one command, e.g. ESCALA_TAG=<previous-tag> docker compose up -d]
-```
-
-- Roll back when: [TODO: e.g. `/health/ready` fails after a deploy, or a principal journey breaks]
-- Find the previous tag: [TODO: where]
-- After a rollback: check `/health/ready`, check the dead-letter queue is empty, and open a Jira Bug.
+- **prod:** in Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available.
+- **dev:** `git revert` the merge commit in a new pull request; the merge to `main` redeploys dev.
+- **qa:** push the revert or the fix to the `release/X.Y.Z` branch; qa redeploys.
+- Roll back when: `/api/actuator/health` fails after a deploy, or the walking skeleton check in [Deploy](#deploy) fails.
+- After a rollback: check the health endpoint, check the dead-letter queue is empty, and open a Jira Bug.
+- [TODO: has a rollback been rehearsed on the deployed environment, and how long does it take; RNF08 asks for one documented command, Diogo Costa]
 
 ## Observability
 
-> **ℹ️ Guidance.** §6.7 asks for "Structured application logs", "Health checks", "Relevant metrics", "Correlation or trace identifiers" and "Error reporting". Give the place to look for each, the two SLIs with their targets, and the alerts with their first action. Same list as **07 · Technical Design**; this document adds the commands and links.
-
-- **Dashboard:** Grafana — [TODO: link] (RF39)
-- **Logs:** structured, with one trace ID from `web` through `escala-api` and the event to `elegibilidade-worker` (RF37). Read them with `docker compose logs -f escala-api` (or any other service name) [TODO: or the log tool used in the deployed environment].
-- **Health:** `/health` and `/health/ready` on both services (RF36).
-- **Metrics:** exposed to Prometheus (RF38) — [TODO: main metrics].
-- **Error reporting:** [TODO: how errors reach the team, e.g. error-rate panel and alerts below]
-- **SLI 1:** eligibility evaluation p95 latency; target < 5 s (RNF01).
-- **SLI 2:** % of requests evaluated without manual intervention; target [TODO: %].
+- **Dashboard:** Grafana at https://escala-grafana.duckdns.org shows traces and logs for all environments (log in as `admin`; the password is in the Secret `grafana-admin`). [TODO: an Escala dashboard (RF39), Diogo Costa]
+- **Traces:** the OpenTelemetry Java agent in both Java images records HTTP requests, database queries and RabbitMQ publish and consume, and carries the trace across RabbitMQ from one service to the other. Tempo keeps them 7 days. In Grafana: Explore, Tempo, Search by service name (`escala-api` or `elegibilidade-worker`).
+- **Logs:** Grafana Alloy collects the logs of every pod in the `escala-*` namespaces and sends them to Loki, which keeps them 90 days. Log lines carry `[trace_id,span_id]`, so Grafana jumps from a log line to its trace. With Docker Compose, read them with `docker compose logs -f escala-api` (or any other service name); they rotate at 10 Mi and 5 files per container.
+- **Health:** `/actuator/health` on both services, with the groups `liveness` and `readiness`; Kubernetes probes use it.
+- **Metrics:** none are exposed yet: only the `health` endpoint is exposed (`management.endpoints.web.exposure.include=health`) [TODO: Prometheus metrics (RF38), Diogo Costa].
+- **Error reporting:** [TODO: how errors reach the team, e.g. an error-rate panel and alerts, Diogo Costa]
+- **SLI 1:** eligibility evaluation p95 latency; target < 5 s (RNF01). It is not measured yet.
+- **SLI 2:** % of requests evaluated without manual intervention; target [TODO: %, Diogo Pereira].
 
 | Alert | Condition | Notified | First action |
 |---|---|---|---|
-| [TODO: alert] | [TODO: condition] | [TODO: who, which channel] | [TODO: runbook row or command] |
+| [TODO: define the alerts, their conditions, who is notified and the first action of each, Diogo Costa] | — | — | — |
 
-> **✏️ Example (illustrative — replace).**
-> | Alert | Condition | Notified | First action |
-> |---|---|---|---|
-> | Worker not ready | `elegibilidade-worker` `/health/ready` fails for [TODO: minutes] | Team channel [TODO: which] | Runbook: worker down |
-> | Stale fire risk | Age of the IPMA data served > staleness threshold | Team channel | Runbook: IPMA down |
-> | Dead letters | Dead-letter queue size > 0 | Team channel | Inspect the message, fix, then replay [TODO: how] |
-> | Slow evaluations | Eligibility evaluation p95 ≥ 5 s for [TODO: minutes] | Team channel | Check the worker's metrics and queue depth |
+No alerts exist yet. They should at least cover: worker not ready, stale fire risk, dead letters and slow evaluations (see the runbook below).
 
 ## Runbook — degraded modes
 
@@ -181,12 +220,13 @@ Manual deploy of a given tag:
 
 | Scenario | How to trigger (for the demo) | Expected behaviour | Recovery |
 |---|---|---|---|
-| IPMA down | Switch `tools/ipma-sim` to *unavailable* [TODO: command], or `docker compose stop ipma-sim` | The last RCM value is shown with its age (RF29); beyond the staleness threshold ([TODO: hours]), the higher risk level is assumed (ADR 0013) | Restore the simulator mode or start it; after the next poll [TODO: or a forced poll], the age resets and the real level is shown again |
-| AI down | Turn the AI feature flag off (RF35) [TODO: how], or make the model unreachable [TODO: how] | Form fallback: the free-text box is replaced by the unavailability form; explanations use template text per rule code | Turn the flag on or restore the model; free text is offered again, still with human confirmation |
-| Worker down | `docker compose stop elegibilidade-worker` | Evaluations stay "pending"; confirmation is blocked (RF24); the API still accepts requests (RNF02) | `docker compose start elegibilidade-worker`; queued requests are processed, evaluations move from "pending" to "evaluated"; check the dead-letter queue is empty |
+| IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable* (SCRUM-43), Diogo Costa] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after SCRUM-43 |
+| AI down | [TODO: the AI feature flag (ADR 0011) does not exist yet, Diogo Costa] | Form fallback: the free-text box is replaced by the unavailability form (RF35). Planned, not built yet | Planned, after the flag exists |
+| Worker down | `docker compose stop elegibilidade-worker` | Tested on Compose on 2026-11-01: the API keeps accepting requests (`POST /api/v1/piquetes` answers `201`), the slot stays `PENDING` and the request waits in the queue `worker.avaliacao-pedida` | `docker compose start elegibilidade-worker`: the waiting request is processed and the slot became `ELIGIBLE` within 9 seconds in that test. Check the dead-letter queue is empty |
 
-- The other §6.5 cases (delayed, incomplete, invalid IPMA data) are reproduced with the simulator modes; their expected behaviour is in the [Technical Design](../architecture/technical-design.md).
-- Demo recordings: [TODO: links]
+- The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once SCRUM-43 is done.
+- The "worker down" scenario was tried on Compose only, not on Kubernetes.
+- Demo recordings: [TODO: links, Diogo Pereira]
 
 ## Known limitations in the evaluation environment
 
@@ -194,19 +234,12 @@ Manual deploy of a given tag:
 
 | Functionality | Why it cannot run there | Evidence provided |
 |---|---|---|
-| [TODO: functionality] | [TODO: reason] | [TODO: recording, logs, report] |
-
-> **✏️ Example (illustrative — replace).**
-> | Functionality | Why it cannot run there | Evidence provided |
-> |---|---|---|
-> | Live IPMA data | The `evaluation` profile runs offline with `tools/ipma-sim` | Recording of the deployed environment reading live RCM; worker logs with the IPMA source cited |
-> | AI extraction with a hosted model (only if ADR 0011 chooses a hosted API) | Needs network access and an API key | The `evaluation` profile uses the form fallback; recorded demo and the AI evaluation report |
-> | Automated deploy stage | Runs only in GitHub Actions, against the deployed environment | Link to a green pipeline run and its deploy log |
+| [TODO: list what cannot run in the evaluation environment and the evidence that replaces it, Diogo Costa] | — | — |
 
 ## Done when
 - [ ] Someone who did not write it ran the *Run locally* command from a clean clone with the `evaluation` profile, then ran it again with the network disconnected once the images were built, and every check under *It works when* passed both times
 - [ ] The *Configuration* table matches `.env.example`, and no secret value appears in this document or the repository
-- [ ] The rollback command was rehearsed on the deployed environment and restored the previous image tag
+- [ ] The rollback was rehearsed on the deployed environment and restored the previous version
 - [ ] Each runbook scenario was triggered and recovered at least once, with the behaviour and messages on **07 · Technical Design**
 - [ ] Reviewed by another team member
 - [ ] Guidance and example blocks removed
