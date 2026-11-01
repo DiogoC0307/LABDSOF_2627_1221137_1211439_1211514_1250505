@@ -42,7 +42,7 @@ Source: [`c4-system-context.puml`](c4-system-context.puml).
 
 ## Containers
 
-Source: [`c4-containers.puml`](c4-containers.puml), [`high_level_system_architecture.puml`](high_level_system_architecture.puml). No arrow crosses into another component's database.
+Source: [`c4-containers.puml`](c4-containers.puml). No arrow crosses into another component's database.
 
 ![Escala — Containers (C4 level 2)](c4-containers.png)
 
@@ -162,6 +162,7 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 
 - Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text
 - Health: `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` (RF36; through the web proxy `/api/actuator/...`). Today `/actuator/health` reports DOWN when RabbitMQ is down, but the readiness group does not yet include the database or the broker, and the Kubernetes probes use `/actuator/health`. Both are fixed in SCRUM-88 (Sprint 2).
+
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - Metrics: checks, DLQ, IPMA age, extraction fallbacks, time-to-fill (RF38)
 - Dashboard: Grafana `http://localhost:3000` (RF39)
