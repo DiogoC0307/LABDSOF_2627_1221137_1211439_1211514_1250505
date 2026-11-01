@@ -7,11 +7,12 @@ useDefault = true
 # Keep them narrow (path and, where possible, the line pattern), so a real secret in any other file is still reported.
 
 # 1. The SonarCloud project key passed on the command line in build.yml is an identifier, not a secret
-#    (2 findings). Only that exact line in that exact file.
+#    (2 findings), and .github/workflows/README.md quotes the same line when it documents the shared-key problem
+#    (1 finding). Only those exact lines in those two files.
 [[allowlists]]
-description = "SonarCloud project key in .github/workflows/build.yml"
+description = "SonarCloud project key in the workflow and in its README"
 condition = "AND"
-paths = ['''\.github/workflows/build\.yml$''']
+paths = ['''\.github/workflows/build\.yml$''', '''\.github/workflows/README\.md$''']
 regexTarget = "line"
 regexes = ['''-Dsonar\.projectKey=''']
 
