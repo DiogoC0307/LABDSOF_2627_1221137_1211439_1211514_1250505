@@ -3,8 +3,10 @@
 | Field | Value |
 |---|---|
 | Date | 2026-10-31 |
-| Status | Proposed |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
+
+Accepted on 2026-11-01 by the team.
 
 ## Context
 
