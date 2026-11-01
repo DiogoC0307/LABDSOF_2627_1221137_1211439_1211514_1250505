@@ -1,4 +1,12 @@
-import { Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 
@@ -24,6 +32,7 @@ const LAST_PIQUETES_KEY = 'escala.lastPiquetes';
   selector: 'app-root',
   imports: [FormsModule],
   templateUrl: './app.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App implements OnInit, OnDestroy {
