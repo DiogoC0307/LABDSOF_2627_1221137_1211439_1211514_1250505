@@ -53,7 +53,7 @@ One monorepo, one folder per deployable component. `tools/` is still empty, and 
 ├── apps/
 │   ├── escala-api/             Spring Boot 4 (Java 21, Maven), port 8080   (walking skeleton)
 │   ├── elegibilidade-worker/   Spring Boot 4 (Java 21, Maven), port 8081   (walking skeleton)
-│   └── web/                    Angular 21 PWA, port 4200 (8000 in Compose) (walking skeleton)
+│   └── web/                    Angular 22 PWA, port 4200 (8000 in Compose) (walking skeleton)
 ├── contracts/                  openapi.yaml and events/ (JSON Schema of the envelope and the five events)
 ├── tools/
 │   └── ipma-sim/               IPMA simulator container                    (planned, SCRUM-43)
@@ -110,7 +110,7 @@ Environments, configuration, deployment and rollback are described in [docs/oper
 
 ## How to build and test
 
-Prerequisites for development: JDK 21 and Node.js 22.12+ or 24+.
+Prerequisites for development: JDK 21 and Node.js 22.22.3+ or 24.15+ (the minimum of Angular 22).
 
 ```bash
 # Backend services (run in apps/escala-api or apps/elegibilidade-worker)

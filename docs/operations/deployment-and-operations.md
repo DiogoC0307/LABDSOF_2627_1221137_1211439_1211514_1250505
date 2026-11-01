@@ -35,7 +35,7 @@ A clean machine needs only Docker and Git: every image is built with a multi-sta
 - Git
 - Free ports (all of them can be changed in `.env`, see [Configuration](#configuration)): 8000 (web), 8080 (`escala-api`), 8081 (`elegibilidade-worker`), 5432 and 5433 (PostgreSQL), 5672 and 15672 (RabbitMQ). With the Compose profile `observability`, also 3000 (Grafana) and 3200 (Tempo), which are fixed in `compose.yaml`. On Windows, Hyper-V can reserve 5672: set `RABBITMQ_PORT=5673`.
 - Memory and disk for the whole stack: [TODO: measured with `docker stats` and `docker system df`, Diogo Costa]
-- Development only: JDK 21 (`escala-api`, `elegibilidade-worker`), Node.js 22.12+ or 24+ (`apps/web`)
+- Development only: JDK 21 (`escala-api`, `elegibilidade-worker`), Node.js 22.22.3+ or 24.15+ (`apps/web`, the minimum of Angular 22)
 
 ## Run locally
 
