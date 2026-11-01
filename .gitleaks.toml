@@ -1,0 +1,26 @@
+title = "Escala gitleaks configuration"
+
+[extend]
+useDefault = true
+
+# Every exemption below is a verified false positive of the default generic-api-key rule.
+# Keep them narrow (path and, where possible, the line pattern), so a real secret in any other file is still reported.
+
+# 1. The SonarCloud project key passed on the command line in build.yml is an identifier, not a secret
+#    (2 findings). Only that exact line in that exact file.
+[[allowlists]]
+description = "SonarCloud project key in .github/workflows/build.yml"
+condition = "AND"
+paths = ['''\.github/workflows/build\.yml$''']
+regexTarget = "line"
+regexes = ['''-Dsonar\.projectKey=''']
+
+# 2. Sealed Secrets are encrypted by design: the values under spec.encryptedData are ciphertext that only the
+#    cluster's controller can decrypt (13 findings), so committing them is the intended workflow. Matched by path.
+#    They are produced by infra/scripts/seal-secrets.
+[[allowlists]]
+description = "Sealed Secrets manifests (encrypted values)"
+paths = ['''infra/k8s/.*sealed-secret[^/]*\.yaml$''']
+
+# Not exempted on purpose: manifests.yaml. That file exists only on the generated deploy/* branches, so the CI job
+# does not scan them (it scans only the history of the checked-out commit, see the gitleaks step in build.yml).
