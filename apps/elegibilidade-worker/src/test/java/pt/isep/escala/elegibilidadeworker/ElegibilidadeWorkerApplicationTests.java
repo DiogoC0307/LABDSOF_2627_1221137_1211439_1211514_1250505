@@ -8,7 +8,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
 @Testcontainers
 class ElegibilidadeWorkerApplicationTests {
 

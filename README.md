@@ -104,7 +104,7 @@ docker compose down                     # stop, keep the data
 docker compose down -v                  # stop and delete the databases and the broker's data
 ```
 
-To work on a service from your IDE, start only the infrastructure with `docker compose up -d pg-escala-api pg-elegibilidade-worker rabbitmq` and run `./mvnw spring-boot:run` or `npm start` as described below. If port 5432 is already used on your machine, set `ESCALA_DB_PORT=5434` (or similar) in `.env`.
+To work on a service from your IDE, start only the infrastructure with `docker compose up -d pg-escala-api pg-elegibilidade-worker rabbitmq`, then run `./mvnw spring-boot:run` in the service folder (or the Spring Boot run configuration of your IDE) with no extra flags, or `npm start` for the web app as described below. When no Spring profile is active, a service uses the profile `ide` (`src/main/resources/application-ide.properties`), which points at the throwaway values of that infrastructure on `localhost` (the same as `.env.example`) and sets `spring.rabbitmq.dynamic=false`, because the per-service RabbitMQ logins may not declare exchanges or queues. Environment variables override it. If you changed a host port in `.env` (for example `ESCALA_DB_PORT=5434` because port 5432 is already used), pass the same port to the service, e.g. `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5434/escala`; for RabbitMQ use `SPRING_RABBITMQ_PORT`.
 
 Environments, configuration, deployment and rollback are described in [docs/operations/deployment-and-operations.md](docs/operations/deployment-and-operations.md).
 
