@@ -1,0 +1,4 @@
+- `escala-threat-model.json` is the threat model and `escala-threat-model-report.pdf` is its report.
+- `dfd-1-application-data-flow.svg` and `dfd-2-delivery-and-operations.svg` are its two data-flow diagrams.
+- The model is edited in OWASP Threat Dragon v2 (open the JSON file there).
+- Confluence page "09 · Security and Privacy Assessment" summarises it (threats T-01 to T-14).
