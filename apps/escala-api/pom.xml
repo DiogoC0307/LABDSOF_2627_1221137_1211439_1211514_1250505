@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
+		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>pt.isep.escala</groupId>
@@ -15,6 +15,10 @@
 	<description>Escala - escala-api</description>
 	<properties>
 		<java.version>21</java.version>
+		<!-- Spring Boot 4.1.2 still manages amqp-client 5.30.0, which has known vulnerabilities (OSV: four HIGH, GHSA-68mj-5wr7-6fgg, GHSA-6g32-pxv4-2wfj,
+		     GHSA-93j5-89vc-pph4 and GHSA-jh4v-gfqj-7rhx, and three MEDIUM, GHSA-7822-rcf6-97fx, GHSA-cqgh-8p3p-mx4m and GHSA-h6w7-qmcm-q6xr).
+		     5.37.0 is the latest release on Maven Central and has none of them. Remove this override when the Spring Boot version we use manages 5.37.0 or later. -->
+		<rabbit-amqp-client.version>5.37.0</rabbit-amqp-client.version>
 		<jacoco.version>0.8.15</jacoco.version>
 		<sonar.projectKey>escala-escala-api</sonar.projectKey>
 		<sonar.projectName>escala-escala-api</sonar.projectName>
