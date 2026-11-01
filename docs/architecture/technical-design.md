@@ -42,7 +42,7 @@ Source: [`c4-system-context.puml`](c4-system-context.puml).
 
 ## Containers
 
-Source: [`c4-containers.puml`](c4-containers.puml), [`high_level_system_architecture.puml`](high_level_system_architecture.puml). No arrow crosses into another component's database.
+Source: [`c4-containers.puml`](c4-containers.puml). No arrow crosses into another component's database.
 
 ![Escala — Containers (C4 level 2)](c4-containers.png)
 
