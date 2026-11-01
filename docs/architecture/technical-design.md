@@ -2,14 +2,14 @@
 
 | Field | Value |
 |---|---|
-| Status | In review |
+| Status | Done |
 | Owner | Pedro Costa |
 | Contributors | Diogo Pereira, Diogo Sousa, Diogo Costa |
 | Deliverable | Sprint 1 · #7 Technical Design |
 | Sources | Assignment §6, §7.1.2 #7; D-00; **04 · Product Vision**; **08 · Architecture Decision Records** |
 | Confluence page | **07 · Technical Design** (paste of this file; export diagrams from the PlantUML next to it) |
 | Jira | SCRUM-39 |
-| Last updated | 2026-10-31 |
+| Last updated | 2026-11-01 |
 
 This is the technical design of Escala. Decisions are in the [ADR index](../adr/README.md). REST and events: [`contracts/`](../../contracts/). Diagrams as code: [`c4-system-context.puml`](c4-system-context.puml), [`c4-containers.puml`](c4-containers.puml), [`c4-deployment.puml`](c4-deployment.puml), [`domain_model.puml`](domain_model.puml). Confluence does not render Mermaid; export those PlantUML files when pasting **07 · Technical Design**.
 
@@ -19,17 +19,17 @@ Escala is a mobile roster for members of one volunteer fire corps: they see thei
 
 ## Technology selection
 
-Why these technologies, not others. Each row is an accepted ADR, except 0016 (*Proposed* until SCRUM-38) and 0017 and 0018 (drafts, merged through a pull request like the other ADRs). Same table as **High Level System Architecture**.
+Why these technologies, not others. Each row is an accepted ADR, except 0016 (*Proposed* until SCRUM-38). Same table as **High Level System Architecture**.
 
 | Choice | Why it fits Escala | Rejected | ADR |
 |---|---|---|---|
-| Angular PWA | Roster on the phone without an app store; last-loaded roster readable offline (RNF06) | Native apps (two stores) | 0017 (draft) |
+| Angular PWA | Roster on the phone without an app store; last-loaded roster readable offline (RNF06) | Native apps (two stores) | 0017 |
 | Two Spring Boot Java 21 services | Roster writes stay up when a check or IPMA call is slow; same language on both backends | Monolith; Python worker | 0002, 0015 |
 | PostgreSQL, one database per service | Each service owns its data; no FKs across the queue | Shared database | 0003 |
 | RabbitMQ + outbox | At-least-once, retries 5 s / 30 s / 2 min, DLQ; 202 without waiting (RNF02) | Sync REST between services; Kafka (ops cost) | 0005, 0009 |
 | IPMA open data, hourly cache | Fire risk as information only | Using RCM to size the *piquete* (RN10 off) | 0010, 0013 |
 | Claude Haiku via CLI, `AI_ENABLED` | Extraction of unavailability only; the `evaluation` profile turns it off | AI that decides swaps or cover | 0007, 0011, 0016 |
-| Docker Compose for evaluation | One command on a staff laptop (§12); Kubernetes with Argo CD stays the team's demo and release host | Kubernetes as the evaluation contract | 0018 (draft) |
+| Docker Compose for evaluation | One command on a staff laptop (§12); Kubernetes with Argo CD stays the team's demo and release host | Kubernetes as the evaluation contract | 0018 |
 
 **Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` that adds `ipma-sim` and sets `AI_ENABLED=false` is planned [TODO: not in `compose.yaml` yet; with the simulator, SCRUM-43]. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
 
@@ -192,7 +192,7 @@ erDiagram
 
 Consistency is strong inside each database and eventual between services (visible states). Free text is deleted after confirmation (RNF09). No names, contacts or date of birth leave `escala-db`; free text leaves once in `ExtracaoPedida`.
 
-**D-01** (SCRUM-50) and **D-02** (SCRUM-51) are decided in Jira; keep the wording from the **Investor Decision Log**.
+**D-01** (supervisor informed of swaps by default; approval per corps) and **D-02** (nobody accepts a cover: supervisor escalation and exceptional assignment with a reason) were decided by the PO on 2026-10-31 (SCRUM-50, SCRUM-51); see the **Investor Decision Log**.
 
 ## API outline
 
@@ -238,8 +238,8 @@ Kubernetes overlays under `infra/k8s` are the team demo host (GitHub Actions, GH
 ## Done when
 
 - [x] §7.1.2 #7 covered: system context, containers, data model, API, async workflow, IPMA, deployment
-- [x] Content matches D-00 (UJ1 / UJ3 / UJ6); D-01 (SCRUM-50) and D-02 (SCRUM-51) decided in Jira; keep Investor Decision Log wording
+- [x] Content matches D-00 (UJ1 / UJ3 / UJ6); D-01 and D-02 decided (SCRUM-50, SCRUM-51)
 - [x] This file pasted to Confluence **07 · Technical Design**
 - [x] PlantUML exported on Confluence (deployment, domain model)
-- [ ] Reviewed by another team member
-- [ ] Status set to Done
+- [x] Reviewed by another team member
+- [x] Status set to Done
