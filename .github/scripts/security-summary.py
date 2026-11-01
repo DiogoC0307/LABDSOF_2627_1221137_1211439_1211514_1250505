@@ -93,10 +93,10 @@ def main(folder):
 
     gitleaks = load(folder / "gitleaks.json")
     if gitleaks is None:
-        table.append(("gitleaks", "full history", "no report", ""))
+        table.append(("gitleaks", "history of HEAD", "no report", ""))
     else:
         by_rule = Counter(f["RuleID"] for f in gitleaks)
-        table.append(("gitleaks", "full history", len(gitleaks),
+        table.append(("gitleaks", "history of HEAD", len(gitleaks),
                       ", ".join(f"{n} {r}" for r, n in by_rule.most_common()) or "none"))
 
     for label, name in (("production deps", "npm-audit-prod.json"), ("all deps", "npm-audit-all.json")):

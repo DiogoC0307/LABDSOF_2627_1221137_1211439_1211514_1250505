@@ -138,7 +138,7 @@ jobs:
       - name: Prepare reports folder
         run: mkdir -p reports
 
-      - name: Secrets (gitleaks, full history)
+      - name: Secrets (gitleaks, history of the checked-out commit)
         continue-on-error: true
         run: |
           base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
