@@ -776,7 +776,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:f469b09799cb5ee54324a7d52d663f001928a407
+        image: ghcr.io/diogoc0307/elegibilidade-worker:c55ff200a32944e2586a2c9879713dd4367ca1d0
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -837,7 +837,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:f469b09799cb5ee54324a7d52d663f001928a407
+        image: ghcr.io/diogoc0307/escala-api:c55ff200a32944e2586a2c9879713dd4367ca1d0
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -963,7 +963,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:f469b09799cb5ee54324a7d52d663f001928a407
+      - image: ghcr.io/diogoc0307/escala-web:c55ff200a32944e2586a2c9879713dd4367ca1d0
         name: web
         ports:
         - containerPort: 80
