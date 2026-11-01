@@ -50,6 +50,7 @@ The first build takes several minutes. It works when:
 
 - `docker compose ps` shows every service as healthy
 - `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`. RF36 names `/health/ready`; the services expose Spring Boot Actuator's `/actuator/health` [TODO: align the endpoint name with RF36, Diogo Costa]
+- `GET http://localhost:8000/api/actuator/health` answers the same through the web nginx; it is the same path as on Kubernetes (`https://escala-<env>.duckdns.org/api/actuator/health`)
 - the walking skeleton works. Create a piquete and look at its slot a few seconds later:
 
   ```bash
@@ -180,7 +181,7 @@ The automatic path:
 
 1. Merge to `main`. The workflow *Deploy DEV* builds the three images and tags them with the commit SHA (and `latest`). A `release/X.Y.Z` branch deploys to qa with the tag `X.Y.Z-rc.<run number>`; publishing a GitHub Release `vX.Y.Z` deploys to prod with the images that qa tested, retagged `X.Y.Z`.
 2. The pipeline renders `infra/k8s/<env>` with the new tag and pushes `manifests.yaml` to the branch `deploy/<env>`. Argo CD, in the cluster, watches that branch and applies it. dev and qa sync by themselves; prod waits for a click on **Sync** in Argo CD (and for the approval of the GitHub Environment `production`, if enabled).
-3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. There is no migration tool yet [TODO: migration tool and the rule that every migration works with the previous version, Diogo Costa].
+3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. Hibernate creates tables and columns, but it never changes a constraint that already exists: when an enum gets new values, a database that already exists keeps rejecting them. This is what broke `POST /api/v1/piquetes` on dev on 2026-11-01 (see the [Runbook](#runbook--degraded-modes)). There is no migration tool yet [TODO: migration tool and the rule that every migration works with the previous version, Diogo Costa].
 4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
@@ -192,10 +193,11 @@ A rollback redeploys a previous version; it does not undo database changes, beca
 
 - **prod:** in Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available.
 - **dev:** `git revert` the merge commit in a new pull request; the merge to `main` redeploys dev.
-- **qa:** push the revert or the fix to the `release/X.Y.Z` branch; qa redeploys.
+- **qa:** push the revert or the fix to the `release/X.Y.Z` branch; qa redeploys. Argo CD can also roll qa back, but `escala-qa` has auto-sync with `selfHeal` (`infra/argocd/apps.yaml`; `escala-prod` has none), so turn them off first and on again afterwards.
 - Roll back when: `/api/actuator/health` fails after a deploy, or the walking skeleton check in [Deploy](#deploy) fails.
 - After a rollback: check the health endpoint, check the dead-letter queue is empty, and open a Jira Bug.
-- [TODO: has a rollback been rehearsed on the deployed environment, and how long does it take; RNF08 asks for one documented command, Diogo Costa]
+- **Rehearsed on qa on 2026-11-01** (Diogo Pereira, in Argo CD): auto-sync and `selfHeal` off, History and rollback to the previous revision (`0.2.0-rc.2`), then back to `0.3.0-rc.3` with auto-sync and `selfHeal` on again. Rolling back took a little over a minute and less than a minute and a half (timed by hand). While rolled back, `/api/actuator/health` answered `200`, `GET /api/v1/piquetes` answered `404` (the nginx of the old version) and the PWA bundle was not the one of `0.3.0`. After rolling forward, `GET /api/v1/piquetes` answered `200` and a new piquete went from `PENDING` to `ELIGIBLE` in 3 seconds. The image tags of the pods were not captured.
+- Not rehearsed on prod. [TODO: one documented command for a rollback (RNF08); the rehearsal needed several steps in Argo CD, Diogo Costa]
 
 ## Observability
 
@@ -226,6 +228,7 @@ No alerts exist yet. They should at least cover: worker not ready, stale fire ri
 
 - The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once SCRUM-43 is done.
 - The "worker down" scenario was tried on Compose only, not on Kubernetes.
+- **Seen on dev, 2026-11-01: `POST /api/v1/piquetes` answers `500` while `GET` and the health check answer `200`.** The log of `escala-api` (Grafana, Loki) showed `new row for relation "slot" violates check constraint "slot_status_check"`: the dev database was created when a slot status had three values (`OPEN`, `PROPOSED`, `FILLED`) and `ddl-auto=update` did not change the constraint when `PENDING` and `ELIGIBLE` were added. Fixed in Argo CD, not in Git: delete the PVC `data-pg-escala-api-0` and the pod `pg-escala-api-0` of `escala-dev` (the data of dev was test data only), then delete the pod of `escala-api` so it creates the tables again. Afterwards `POST` answered `201` and the slot went from `PENDING` to `ELIGIBLE` in 3 seconds. qa and prod were not affected: version `0.2.0` had no `slot` table. The missing migration tool is the TODO in [Deploy](#deploy).
 - Demo recordings: [TODO: links, Diogo Pereira]
 
 ## Known limitations in the evaluation environment
@@ -239,7 +242,7 @@ No alerts exist yet. They should at least cover: worker not ready, stale fire ri
 ## Done when
 - [ ] Someone who did not write it ran the *Run locally* command from a clean clone with the `evaluation` profile, then ran it again with the network disconnected once the images were built, and every check under *It works when* passed both times
 - [ ] The *Configuration* table matches `.env.example`, and no secret value appears in this document or the repository
-- [ ] The rollback was rehearsed on the deployed environment and restored the previous version
+- [x] The rollback was rehearsed on a deployed environment (qa, 2026-11-01) and restored the previous version; prod was not rehearsed
 - [ ] Each runbook scenario was triggered and recovered at least once, with the behaviour and messages on **07 · Technical Design**
 - [ ] Reviewed by another team member
 - [ ] Guidance and example blocks removed
