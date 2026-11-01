@@ -28,9 +28,9 @@ replay_pid*
 
 docs-handoff
 
-# IDE (keep tracked IntelliJ project files; ignore local junk)
-.idea/shelf/
-.idea/workspace.xml
+# IDE and OS files: local to each machine, never committed
+.idea/
 .cursor/settings.json
+.DS_Store
 # Local Docker Compose settings
 .env
