@@ -4,7 +4,7 @@
 
 Escala is the product of LABDSOF 2026/27 (MSc in Computer Engineering, ISEP).
 
-> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The walking skeleton runs end to end (pull requests #36, #40 and #41): `POST /api/v1/piquetes` creates a slot in state `PENDING`, `escala-api` publishes `AvaliacaoPedida` through its outbox, `elegibilidade-worker` answers `AvaliacaoConcluida` (for now it always answers that the member is eligible) and the slot becomes `ELIGIBLE`. It runs with Docker Compose on your machine and is deployed on Kubernetes in dev, where `GET /api/v1/piquetes` currently answers `404` because the nginx in front of `escala-api` strips the `/api` prefix [TODO: keep the prefix in the Kubernetes nginx or change the controller path, Diogo Costa].
+> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The walking skeleton runs end to end (pull requests #36, #40 and #41): `POST /api/v1/piquetes` creates a slot in state `PENDING`, `escala-api` publishes `AvaliacaoPedida` through its outbox, `elegibilidade-worker` answers `AvaliacaoConcluida` (for now it always answers that the member is eligible) and the slot becomes `ELIGIBLE`. It runs with Docker Compose on your machine and is deployed on Kubernetes in dev.
 
 ## The problem
 
