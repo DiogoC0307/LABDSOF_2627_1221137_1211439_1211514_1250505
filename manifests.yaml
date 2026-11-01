@@ -18,6 +18,7 @@ data:
   OTEL_SERVICE_NAME: elegibilidade-worker
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/elegibilidade
   SPRING_PROFILES_ACTIVE: prod
+  SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_RABBITMQ_HOST: rabbitmq
 kind: ConfigMap
 metadata:
@@ -37,6 +38,7 @@ data:
   OTEL_SERVICE_NAME: escala-api
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/escala
   SPRING_PROFILES_ACTIVE: prod
+  SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_RABBITMQ_HOST: rabbitmq
 kind: ConfigMap
 metadata:
@@ -614,9 +616,17 @@ data:
       listen 80;
       root /usr/share/nginx/html;
 
-      # browser calls /api/... -> escala-api (prefix stripped), so no CORS is needed
+      # browser calls /api/... -> escala-api, so no CORS is needed. The /api prefix is kept (the controllers are
+      # mapped under /api/v1, as in Docker Compose); only the Actuator is served by the service at /actuator.
+      location /api/actuator/ {
+        proxy_pass http://escala-api:8080/actuator/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
       location /api/ {
-        proxy_pass http://escala-api:8080/;
+        proxy_pass http://escala-api:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -766,7 +776,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:0.2.0
+        image: ghcr.io/diogoc0307/elegibilidade-worker:0.3.0
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -827,7 +837,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:0.2.0
+        image: ghcr.io/diogoc0307/escala-api:0.3.0
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -953,7 +963,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:0.2.0
+      - image: ghcr.io/diogoc0307/escala-web:0.3.0
         name: web
         ports:
         - containerPort: 80
