@@ -18,6 +18,7 @@ data:
   OTEL_SERVICE_NAME: elegibilidade-worker
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-elegibilidade-worker:5432/elegibilidade
   SPRING_PROFILES_ACTIVE: dev
+  SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_RABBITMQ_HOST: rabbitmq
 kind: ConfigMap
 metadata:
@@ -37,6 +38,7 @@ data:
   OTEL_SERVICE_NAME: escala-api
   SPRING_DATASOURCE_URL: jdbc:postgresql://pg-escala-api:5432/escala
   SPRING_PROFILES_ACTIVE: dev
+  SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_RABBITMQ_HOST: rabbitmq
 kind: ConfigMap
 metadata:
@@ -774,7 +776,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:cf4c2a9044cc191f3cb1d9ec7b80771f402d4793
+        image: ghcr.io/diogoc0307/elegibilidade-worker:a70ed0baaae48f700ddcd798f7ee0ecbe03c048f
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -835,7 +837,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:cf4c2a9044cc191f3cb1d9ec7b80771f402d4793
+        image: ghcr.io/diogoc0307/escala-api:a70ed0baaae48f700ddcd798f7ee0ecbe03c048f
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -961,7 +963,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:cf4c2a9044cc191f3cb1d9ec7b80771f402d4793
+      - image: ghcr.io/diogoc0307/escala-web:a70ed0baaae48f700ddcd798f7ee0ecbe03c048f
         name: web
         ports:
         - containerPort: 80
