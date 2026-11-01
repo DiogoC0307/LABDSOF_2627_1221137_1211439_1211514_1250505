@@ -115,10 +115,24 @@ Test cases with a `TC-` ID today, both in `apps/web/src/app/app.spec.ts` (story 
 | Coverage report | CI `tests` stage | Same artefacts (JaCoCo HTML for the Java services, `coverage/` for `apps/web`) and SonarQube [TODO: link to the SonarQube projects, Diogo Sousa] |
 | Static analysis and dependency check reports | SonarQube step and `security` job of `build.yml` | SonarQube [TODO: link, Diogo Sousa]; job summary and artefacts `security-reports` and `sbom` of the run |
 | End-to-end report (screenshots on failure) | CI `image` stage [TODO: confirm] | [TODO: link] |
-| Recorded manual functional tests | Team members | [TODO: where, e.g. Jira story comments] |
+| Recorded manual functional tests | Team members | The smoke tests of 2026-11-01 are in [Manual smoke tests](#manual-smoke-tests) below [TODO: where the others are recorded, e.g. Jira story comments, Diogo Sousa] |
 | Performance results | [TODO: stage or person] | [TODO: link] |
 | Resilience and degraded-mode demonstration | Runbook in [Deployment and Operations](../operations/deployment-and-operations.md) | [TODO: recording or CI run link] |
 | AI evaluation results | Dataset runner | **06 · Responsible AI Opportunity Assessment** [TODO: link to the report] |
+
+## Manual smoke tests
+
+These checks were run by hand with `curl` after each deployment and are not part of the pipeline. Each one is `GET /api/actuator/health`, `GET /api/v1/piquetes`, then `POST /api/v1/piquetes` and polling the list until the slot is `ELIGIBLE`. They are not linked to Jira test cases yet.
+
+| Date (UTC) | Environment | Version | Result |
+|---|---|---|---|
+| 2026-11-01 19:20 | dev | `014f83b` | `POST` answered `201`, the slot went from `PENDING` to `ELIGIBLE` in 3 s. Before the fix of the dev database, the `POST`s at 17:41, 17:42 and 18:50 answered `500` (see the [runbook](../operations/deployment-and-operations.md#runbook--degraded-modes)) |
+| 2026-11-01 19:35 | qa | `0.3.0-rc.3` | `201`; `ELIGIBLE` in 3 s |
+| 2026-11-01 19:46 | prod | `0.3.0` | `201`; `ELIGIBLE` in 3 s. The date used was `2099-01-01`, and that test piquete is still in prod |
+| 2026-11-01 20:07 | qa | `0.3.0-rc.3`, after rolling back and forward | `201`; `ELIGIBLE` in 3 s |
+| 2026-11-01 | Docker Compose, branch of pull request #58 (Angular 22) | local build | Headless Chrome: the page renders, the form creates a piquete, the slot goes `PENDING` then `ELIGIBLE`, the list updates, the service worker registers; no console errors, exceptions or failed requests |
+
+The `security` job of `build.yml` on `main` (run 41332211653, commit `014f83b`) reported gitleaks 0, `npm audit` 0 (production and all dependencies) and OSV-Scanner 0.
 
 ## What remains untested and why
 
