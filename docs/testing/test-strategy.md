@@ -3,12 +3,12 @@
 | Field | Value |
 |---|---|
 | Status | Draft |
-| Owner | [TODO: name] |
-| Contributors | [TODO: names] |
+| Owner | Diogo Sousa |
+| Contributors | Diogo Pereira (from the git history of this file) |
 | Deliverable | Sprint 2 · #10 Automated unit, integration, and relevant end-to-end tests; Final submission · #7 Test and quality evidence |
 | Sources | Assignment §8.3, §9, §11, §12; Deck (Analysis → Design → Test plan → Code → Test execution; Definition of Ready; Definition of Done) |
 | Confluence page | — (linked from **Definition of Done (DoD)** and **07 · Technical Design**) |
-| Last updated | YYYY-MM-DD |
+| Last updated | 2026-11-01 |
 
 > **ℹ️ About this document.** How Escala is tested: which risks drive the tests, which test types run where, how test cases are named and traced, and where the evidence lives. It is the "Test strategy and evidence" of assignment §9 and answers §8.3; developers, reviewers and the teaching staff read it next to the [Technical Design](../architecture/technical-design.md) and [Deployment and Operations](../operations/deployment-and-operations.md).
 
@@ -43,27 +43,43 @@ flowchart LR
 
 | Type | What it covers | Tool | CI stage | Owner |
 |---|---|---|---|---|
-| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | e.g. JUnit 5 (`escala-api`, `elegibilidade-worker`), [TODO: tool] (`apps/web`) | tests | [TODO: name] |
-| Integration | Each service with its real PostgreSQL and RabbitMQ: transactional outbox, idempotency key, retries 5 s / 30 s / 2 min then DLQ, free text deleted after confirmation (RNF09) | e.g. Testcontainers | tests | [TODO: name] |
+| Unit | Eligibility rules RN01–RN10 (positive, negative, boundary); date and hour calculations; IPMA response parsing; extraction post-processing | JUnit Jupiter (`escala-api`, `elegibilidade-worker`); Vitest with jsdom (`apps/web`, run with `ng test`) | tests | [TODO: name, Diogo Sousa] |
+| Integration | Each service with its real PostgreSQL and RabbitMQ: transactional outbox, idempotency key, retries 5 s / 30 s / 2 min then DLQ, free text deleted after confirmation (RNF09) | Testcontainers (PostgreSQL 17 and RabbitMQ 4.0 containers), Awaitility | tests | [TODO: name, Diogo Sousa] |
 | Contract | API ↔ worker event schemas (`AvaliacaoPedida`, `AvaliacaoConcluida`, `ExtracaoPedida`, `ExtracaoConcluida`, `RiscoAtualizado`) against `contracts/events/`; REST endpoints against `contracts/openapi.yaml` | [TODO: schema validator used in both test suites] | tests | [TODO: name] |
 | End-to-end | Principal journey J1 on the Docker Compose stack: declared unavailability → gap → eligible candidates → confirmation; confirmation blocked without a valid evaluation (RF24) | [TODO: browser test tool] | image (runs against the built images) [TODO: confirm] | [TODO: name] |
-| Security | Static analysis; dependency check; secret scanning (RNF07); role checks on every endpoint, e.g. nobody confirms their own application | [TODO: static analysis tool]; [TODO: dependency checker]; [TODO: secret scanner] | static analysis; dependency check | [TODO: name] |
+| Security | Static analysis; dependency check; secret scanning (RNF07); role checks on every endpoint, e.g. nobody confirms their own application | SonarQube (static analysis); `npm audit` and OSV-Scanner (dependencies); gitleaks (secrets). The last three are in the `security` job of `build.yml`, which only reports for now | static analysis; `security` job | [TODO: name, Diogo Sousa] |
 | Performance | Eligibility evaluation p95 < 5 s (RNF01); unavailability accepted with 202 in < 500 ms (RNF02) | [TODO: load-test tool] | [TODO: scheduled, or manual before the Sprint 3 review] | [TODO: name] |
 | Resilience | IPMA simulator modes (unavailable, delayed, incomplete, invalid); worker stopped → evaluations "pending", confirmation blocked; AI off → form fallback | IPMA simulator (`tools/ipma-sim`), Docker Compose | [TODO: stage, e.g. nightly] | [TODO: name] |
 | AI evaluation | Extraction on the 60-case synthetic dataset, compared with the non-AI baseline [TODO: Java baseline — decision pending (SCRUM-54)], against the acceptance criteria on **06 · Responsible AI Opportunity Assessment** (start/end exact ≥ 95%, type ≥ 90%, adverse handled 100%, p95 latency < 4 s) | Dataset runner [TODO: path] | [TODO: when the prompt, model or dataset changes] | [TODO: name] |
 
+### Coverage target
+
+At least 70% of the lines of new code, measured with JaCoCo (Java services) and Vitest with lcov (`apps/web`) and reported by SonarQube. This is the quality bar of the Definition of Done. [TODO: the 70% threshold is not set in the SonarQube quality gate yet (an open item on the Definition of Done page), Diogo Sousa]
+
+### Tests that exist today
+
+| Component | Test class | Tests | What it checks |
+|---|---|---|---|
+| `escala-api` | `EscalaApiApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
+| `escala-api` | `CreatePiqueteIT` | 2 | Creating a piquete through the API (integration, Testcontainers) |
+| `elegibilidade-worker` | `ElegibilidadeWorkerApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
+| `elegibilidade-worker` | `AvaliacaoPedidaIT` | 1 | An `AvaliacaoPedida` event sent through RabbitMQ is answered with an `AvaliacaoConcluida` that is `ELIGIBLE` and carries the same trace ID |
+| `apps/web` | `app.spec.ts` | 11 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt |
+
+Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01. The Java tests do not carry a `TC-` ID yet.
+
 ## Test case convention
 
-- **ID:** `TC-<story>-<n>`, e.g. `TC-SCRUM-999-01`, `TC-SCRUM-999-02`.
+- **ID:** `TC-SCRUM-<key>-nn`, e.g. `TC-SCRUM-46-01`, `TC-SCRUM-46-02`.
 - **Format:** Given/When/Then, written in the Jira story's acceptance criteria before coding (DoR: "a test plan and test cases are outlined").
 - **Coverage:** every business rule (`RN`) gets at least one positive, one negative and one **boundary** test case.
-- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story (e.g. `@DisplayName("TC-SCRUM-999-03 …")`, `def test_tc_esc_31_03_…`).
+- **Traceability:** the TC IDs are linked in Jira; each automated test carries its TC ID in its name, so a CI report can be traced back to the story. In `apps/web` the ID starts the test name, e.g. `it('TC-SCRUM-46-01 lists today's date, slot and evaluation status', …)`; for the Java tests the form is `@DisplayName("TC-SCRUM-<key>-nn …")`.
 - **Manual functional tests** (DoD: "functional tests performed and recorded"): record TC ID, date, version, who and result [TODO: where, e.g. a comment on the Jira story].
 
-> **✏️ Example (illustrative — replace).** Story `SCRUM-999`, reject assigning someone whose TAS has expired (RN02):
-> - `TC-SCRUM-999-01` (negative): **Given** Member B's TAS expired before the slot date, **When** the duty chief assigns Member B, **Then** the evaluation is ineligible with rule code `RN02` and confirmation is blocked.
-> - `TC-SCRUM-999-02` (boundary): **Given** Member C's TAS expires on the slot date, **When** the duty chief assigns Member C, **Then** [TODO: eligible or ineligible, once the team confirms how RN02 treats the expiry day].
-> - `TC-SCRUM-999-03` (positive): **Given** Member A holds a TAS valid beyond the slot date, **When** the duty chief assigns Member A to an ambulance slot, **Then** the evaluation is eligible and the assignment can be confirmed.
+Test cases with a `TC-` ID today, both in `apps/web/src/app/app.spec.ts` (story SCRUM-46, the installable phone PWA):
+
+- `TC-SCRUM-46-01`: lists today's date, slot and evaluation status.
+- `TC-SCRUM-46-02`: offers install when the browser fires `beforeinstallprompt`.
 
 ## Boundary cases catalogue
 
@@ -95,9 +111,9 @@ flowchart LR
 
 | Evidence | Produced by | Where to find it |
 |---|---|---|
-| Unit, integration and contract test reports | CI `tests` stage | GitHub Actions run → artefacts [TODO: link] |
-| Coverage report | CI `tests` stage | [TODO: link] |
-| Static analysis and dependency check reports | CI `static analysis` and `dependency check` stages | [TODO: link] |
+| Unit and integration test reports | CI `tests` stage | GitHub Actions run → artefacts `escala-api-reports`, `elegibilidade-worker-reports` (Surefire) and `web-reports` |
+| Coverage report | CI `tests` stage | Same artefacts (JaCoCo HTML for the Java services, `coverage/` for `apps/web`) and SonarQube [TODO: link to the SonarQube projects, Diogo Sousa] |
+| Static analysis and dependency check reports | SonarQube step and `security` job of `build.yml` | SonarQube [TODO: link, Diogo Sousa]; job summary and artefacts `security-reports` and `sbom` of the run |
 | End-to-end report (screenshots on failure) | CI `image` stage [TODO: confirm] | [TODO: link] |
 | Recorded manual functional tests | Team members | [TODO: where, e.g. Jira story comments] |
 | Performance results | [TODO: stage or person] | [TODO: link] |
