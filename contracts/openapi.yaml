@@ -5,9 +5,29 @@ info:
   description: >
     REST contract for escala-api (published roster, unavailability, swaps, cover).
     Authentication is a mocked bearer token carrying memberId and role (ADR 0006).
+
+
+    Implemented in escala-api today: GET and POST /api/v1/piquetes and the three Actuator health
+    endpoints under /actuator/health. Every other path is the planned product API and does not exist
+    yet. The bearer token is not checked yet either: escala-api has no security dependency, so the
+    implemented endpoints are open (security: []).
+
+
+    Servers and base paths. Paths are the ones escala-api serves. The web nginx forwards /api/ to
+    escala-api unchanged, so /api/v1/piquetes is the same path on every server below. The Actuator
+    is not under /api in escala-api: through the web nginx it is reached as /api/actuator/..., so the
+    health paths declare their own servers.
 servers:
   - url: http://localhost:8080
-    description: Local Docker Compose
+    description: Docker Compose, straight to escala-api
+  - url: http://localhost:8000
+    description: Docker Compose, through the web nginx
+  - url: https://escala-dev.duckdns.org
+    description: dev (Kubernetes), through the web nginx
+  - url: https://escala-qa.duckdns.org
+    description: qa (Kubernetes), through the web nginx
+  - url: https://escala-prod.duckdns.org
+    description: prod (Kubernetes), through the web nginx
 tags:
   - name: health
   - name: me
@@ -29,60 +49,198 @@ paths:
           description: Own roster
         "401":
           description: Missing or invalid token
-  /health:
+  /actuator/health:
+    get:
+      tags: [health]
+      summary: Overall health, including the database and the broker
+      description: >
+        Spring Boot Actuator, the only endpoint exposed (management.endpoints.web.exposure.include=health,
+        details hidden). Answers 503 with status DOWN when a dependency is down: checked locally with
+        RabbitMQ stopped. With the database stopped the request did not answer within 10 seconds.
+        The Kubernetes probes and the Docker Compose healthchecks use this path.
+      operationId: getHealth
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      servers:
+        - url: http://localhost:8080
+          description: Docker Compose, straight to escala-api (path /actuator/...)
+        - url: http://localhost:8000/api
+          description: Docker Compose, through the web nginx (path /api/actuator/...)
+        - url: https://escala-dev.duckdns.org/api
+          description: dev, through the web nginx
+        - url: https://escala-qa.duckdns.org/api
+          description: qa, through the web nginx
+        - url: https://escala-prod.duckdns.org/api
+          description: prod, through the web nginx
+      responses:
+        "200":
+          description: Up
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: "#/components/schemas/HealthWithGroups"
+              example:
+                groups: [liveness, readiness]
+                status: UP
+        "503":
+          description: A dependency is down
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: "#/components/schemas/HealthWithGroups"
+              example:
+                groups: [liveness, readiness]
+                status: DOWN
+  /actuator/health/liveness:
     get:
       tags: [health]
       summary: Liveness
-      operationId: getHealth
+      description: >
+        The application state only. It stayed 200 with RabbitMQ and the database stopped (checked locally).
+      operationId: getHealthLiveness
       security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      servers:
+        - url: http://localhost:8080
+          description: Docker Compose, straight to escala-api (path /actuator/...)
+        - url: http://localhost:8000/api
+          description: Docker Compose, through the web nginx (path /api/actuator/...)
+        - url: https://escala-dev.duckdns.org/api
+          description: dev, through the web nginx
+        - url: https://escala-qa.duckdns.org/api
+          description: qa, through the web nginx
+        - url: https://escala-prod.duckdns.org/api
+          description: prod, through the web nginx
       responses:
         "200":
           description: Process is up
-  /health/ready:
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: UP
+  /actuator/health/readiness:
     get:
       tags: [health]
-      summary: Readiness (database and broker reachable)
-      operationId: getHealthReady
+      summary: Readiness
+      description: >
+        The application state only; no database or broker indicator is configured in it. It stayed 200
+        with RabbitMQ and the database stopped (checked locally), so it does not tell whether the
+        dependencies are reachable: use /actuator/health for that.
+      operationId: getHealthReadiness
       security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      servers:
+        - url: http://localhost:8080
+          description: Docker Compose, straight to escala-api (path /actuator/...)
+        - url: http://localhost:8000/api
+          description: Docker Compose, through the web nginx (path /api/actuator/...)
+        - url: https://escala-dev.duckdns.org/api
+          description: dev, through the web nginx
+        - url: https://escala-qa.duckdns.org/api
+          description: qa, through the web nginx
+        - url: https://escala-prod.duckdns.org/api
+          description: prod, through the web nginx
       responses:
         "200":
           description: Ready to receive traffic
-        "503":
-          description: Dependency not ready
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: "#/components/schemas/Health"
+              example:
+                status: UP
   /api/v1/piquetes:
     get:
       tags: [piquetes]
       summary: List piquetes (walking skeleton, SCRUM-45)
+      description: All piquetes with their slots, in the order the database returns them.
       operationId: listPiquetes
       security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
       responses:
         "200":
-          description: Piquetes with their slots
+          description: Piquetes with their slots (an empty array when there are none)
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PiqueteResponse"
     post:
       tags: [piquetes]
-      summary: Supervisor creates a piquete for a date with one slot
+      summary: Create a piquete for a date with one slot
+      description: >
+        The new slot has role CREW_MEMBER and status PENDING; escala-api queues AvaliacaoPedida and the
+        slot becomes ELIGIBLE after the worker answers (a few seconds). Fields other than dutyDate are
+        ignored. No bearer token is checked yet.
       operationId: createPiquete
       security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [dutyDate]
-              properties:
-                dutyDate:
-                  type: string
-                  format: date
+              $ref: "#/components/schemas/CreatePiqueteRequest"
       responses:
         "201":
-          description: Created; Location points at /api/v1/piquetes/{id}
+          description: Created
+          headers:
+            Location:
+              description: >
+                /api/v1/piquetes/{id} of the new piquete. There is no endpoint for that path yet:
+                a GET on it answers 404.
+              schema:
+                type: string
+                example: /api/v1/piquetes/9f6456d9-0df5-46db-9adc-6c412207a4df
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PiqueteResponse"
         "400":
-          description: dutyDate missing
-        "401":
-          description: Missing or invalid token
-        "403":
-          description: Role not allowed
+          description: >
+            dutyDate missing or null (empty body), or the body is absent, not valid JSON or dutyDate is not
+            a date (Spring Boot error body)
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "415":
+          description: Content-Type is not application/json (Spring Boot error body)
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /piquetes/{id}/publish:
     post:
       tags: [piquetes]
@@ -265,6 +423,98 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Mocked token with memberId and role (ADR 0006)
+      description: Mocked token with memberId and role (ADR 0006). Not checked by escala-api yet.
+  parameters:
+    TraceId:
+      name: X-Trace-Id
+      in: header
+      required: false
+      description: >
+        Correlation id. escala-api uses the value sent, or creates a UUID when the header is absent or
+        blank, and returns it in the same header on every response, errors included. It travels in
+        the AvaliacaoPedida event and comes back in AvaliacaoConcluida.
+      schema:
+        type: string
+  headers:
+    TraceId:
+      description: The trace id of the request (the one sent, or a generated UUID)
+      schema:
+        type: string
+        example: d26598d5-750d-4276-b097-f629d6eef444
+  schemas:
+    CreatePiqueteRequest:
+      type: object
+      required: [dutyDate]
+      properties:
+        dutyDate:
+          type: string
+          format: date
+          example: "2026-11-01"
+    PiqueteResponse:
+      type: object
+      required: [id, dutyDate, slots]
+      properties:
+        id:
+          type: string
+          format: uuid
+        dutyDate:
+          type: string
+          format: date
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/SlotResponse"
+    SlotResponse:
+      type: object
+      required: [id, role, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        status:
+          $ref: "#/components/schemas/SlotStatus"
+    SlotRole:
+      type: string
+      description: SlotRole in escala-api. A new piquete has one slot, CREW_MEMBER.
+      enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
+    SlotStatus:
+      type: string
+      description: >
+        SlotStatus in escala-api. A new slot is PENDING and becomes ELIGIBLE after the evaluation; escala-api
+        sets no other value yet.
+      enum: [OPEN, PENDING, ELIGIBLE, PROPOSED, FILLED]
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          description: UP or DOWN, the values seen in tests
+          example: UP
+    HealthWithGroups:
+      allOf:
+        - $ref: "#/components/schemas/Health"
+        - type: object
+          properties:
+            groups:
+              type: array
+              items:
+                type: string
+              example: [liveness, readiness]
+    ErrorResponse:
+      type: object
+      description: Spring Boot's default error body
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        path:
+          type: string
 security:
   - bearerAuth: []

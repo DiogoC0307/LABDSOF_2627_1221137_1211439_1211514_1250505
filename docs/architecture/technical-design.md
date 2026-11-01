@@ -201,7 +201,7 @@ Consistency is strong inside each database and eventual between services (visibl
 - Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)); health endpoints stay open
 - Header: `X-Trace-Id` (RF37)
 
-Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API: `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Liveness/readiness: `/actuator/health` (RF36).
+Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API: `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` (RF36), `/actuator/health/liveness` and `/actuator/health/readiness`.
 
 ## Deployment view
 
@@ -228,7 +228,7 @@ Kubernetes overlays under `infra/k8s` are the team demo host (GitHub Actions, GH
 ## Observability and SLIs
 
 - Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text
-- Health: `/actuator/health` (RF36); readiness via the same actuator when datasource and broker are wired
+- Health: `/actuator/health` (RF36) includes the database and the broker and answers 503 `DOWN` when RabbitMQ is down; `/actuator/health/liveness` and `/actuator/health/readiness` report only the state of the application and stayed `UP` with RabbitMQ and the database stopped (checked locally on 2026-11-01)
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - Metrics: checks, DLQ, IPMA age, extraction fallbacks, time-to-fill (RF38)
 - Dashboard: Grafana `http://localhost:3000` (RF39)
