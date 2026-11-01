@@ -5,6 +5,8 @@ data:
   SPRING_PROFILES_ACTIVE: "qa"
   LOGGING_LEVEL_ROOT: "INFO"
   SPRING_RABBITMQ_HOST: "rabbitmq"
+  # Exchanges and queues come from infra/rabbitmq/definitions.json; this service login may not declare them
+  SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-escala-api:5432/escala"
   JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
   OTEL_SERVICE_NAME: "escala-api"
