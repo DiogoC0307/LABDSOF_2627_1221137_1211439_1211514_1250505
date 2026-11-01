@@ -4,7 +4,7 @@
 
 Escala is the product of LABDSOF 2026/27 (MSc in Computer Engineering, ISEP).
 
-> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The walking skeleton runs end to end (pull requests #36, #40 and #41): `POST /api/v1/piquetes` creates a slot in state `PENDING`, `escala-api` publishes `AvaliacaoPedida` through its outbox, `elegibilidade-worker` answers `AvaliacaoConcluida` (for now it always answers that the member is eligible) and the slot becomes `ELIGIBLE`. It runs with Docker Compose on your machine and is deployed on Kubernetes in dev.
+> **Status.** Sprint 1 (22 September to 1 November 2026): discovery, design and walking skeleton. The walking skeleton runs end to end (pull requests #36, #40 and #41): `POST /api/v1/piquetes` creates a slot in state `PENDING`, `escala-api` publishes `AvaliacaoPedida` through its outbox, `elegibilidade-worker` answers `AvaliacaoConcluida` (for now it always answers that the member is eligible) and the slot becomes `ELIGIBLE`. It runs with Docker Compose on your machine and is deployed on Kubernetes in dev, qa and prod (release `v0.3.0`).
 
 ## The problem
 
@@ -167,7 +167,7 @@ The workflows are in `.github/workflows`: `build-images.yml` (build and push), `
 3. **Release (prod).** On GitHub, Releases, Draft a new release: tag `v1.2.0`, target `release/1.2.0` (the last commit qa tested), Publish. The pipeline checks that the tag is on `release/1.2.0`, retags the exact images qa tested (nothing is rebuilt) and publishes `deploy/prod`. Approve the `production` environment if asked, then click **Sync** on `escala-prod` in Argo CD.
 4. **Finish.** Open a pull request `release/1.2.0` into `main` so the fixes made during qa are not lost, then delete the release branch.
 5. **Hotfix on prod.** Branch `release/1.2.1` from the tag `v1.2.0`, fix, let qa test it, publish `v1.2.1` and merge it back into `main`.
-6. **Rollback.** In Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available; use Argo CD.
+6. **Rollback.** In Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available; use Argo CD. A rollback was rehearsed on qa on 2026-11-01 and took a little over a minute; on qa, turn off auto-sync first (`escala-prod` has none). Details in [Rollback](docs/operations/deployment-and-operations.md#rollback).
 
 ## Security, backups and observability
 
