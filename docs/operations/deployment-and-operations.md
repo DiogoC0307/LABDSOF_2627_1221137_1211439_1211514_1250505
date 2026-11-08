@@ -124,7 +124,7 @@ Policy and threat analysis are on **09 · Security and Privacy Assessment**; thi
 | `rabbitmq-credentials` | RabbitMQ admin login | same | [TODO: when and how, Diogo Costa] |
 | `grafana-admin` | Grafana `admin` | same, in the namespace `observability` | [TODO: when and how, Diogo Costa] |
 | `SONAR_TOKEN`, `SONAR_HOST_URL` | `build.yml` | GitHub Actions secrets | [TODO: when and how, Diogo Costa] |
-| `claude-code-auth` (planned, SCRUM-90) | `elegibilidade-worker` (`CLAUDE_CODE_OAUTH_TOKEN`) | Sealed Secret in git; Secret in the environment's namespace | Before the token expires (one year): run `claude setup-token` again and reseal [TODO: who renews it and how the expiry is tracked, Diogo Costa] |
+| `claude-code-auth` (planned, SCRUM-90) | `elegibilidade-worker` (`CLAUDE_CODE_OAUTH_TOKEN`) | Sealed Secret in git; Secret in the environment's namespace | Before the token expires (one year): run `claude setup-token` again and reseal [TODO: who renews it and how the expiry is tracked, Diogo Pereira or Diogo Sousa (account owner)] |
 
 ## Profiles
 
