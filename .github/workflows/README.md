@@ -26,7 +26,7 @@ How the deployment works end to end (Argo CD, environments, releasing, rollback)
 | Image | `build-images.yml` | Docker Buildx, GitHub Container Registry | push to `main` (dev), push to `release/**` (qa); prod retags |
 | Deploy | `deploy*.yml` | Kustomize, Argo CD | dev: push to `main`; qa: push to `release/**`; prod: Release published |
 
-[TODO: are the *Build* jobs required status checks in the ruleset of `main` (SCRUM-20 asks for it), and is the `production` GitHub Environment configured with required reviewers, Diogo Costa]
+The *Build* jobs `escala-api`, `elegibilidade-worker` and `web` (build, test, sonarqube) are required status checks in the ruleset of `main` (SCRUM-20). [TODO: is the `production` GitHub Environment configured with required reviewers, Diogo Costa]
 
 ### Security job
 

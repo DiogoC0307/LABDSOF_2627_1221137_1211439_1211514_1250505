@@ -178,7 +178,7 @@ The VM accepts connections only on port 22 (SSH) and ports 80 and 443 (HTTPS thr
 - RabbitMQ accepts AMQP (5672) only from `escala-api` and `elegibilidade-worker`: `infra/k8s/<env>/shared/networkpolicy.yaml`.
 - Each database accepts connections only from its own service and from its backup job: `infra/k8s/<env>/<service>/networkpolicy.yaml`.
 
-Administrators reach a database or the RabbitMQ management UI only through `kubectl port-forward` (the scripts `infra/scripts/db-access` and `infra/scripts/rabbitmq-ui`), which needs the cluster's kubeconfig and the SSH tunnel to the VM. With Docker Compose the databases and RabbitMQ are bound to `127.0.0.1`, so only your own machine reaches them.
+Administrators reach a database or the RabbitMQ management UI only through `kubectl port-forward` (the scripts `infra/scripts/db-access` and `infra/scripts/rabbitmq-ui`), which needs the cluster's kubeconfig and the SSH tunnel to the VM. Today only Diogo Costa has both; personal SSH keys and read-only access for the other members are planned in SCRUM-92. With Docker Compose the databases and RabbitMQ are bound to `127.0.0.1`, so only your own machine reaches them.
 
 ### RabbitMQ: one user per service
 
@@ -233,7 +233,7 @@ kubectl -n escala-prod cp pg-escala-api-0:/backups/<file>.dump ./escala-prod.dum
 kubectl -n escala-prod exec pg-escala-api-0 -- pg_restore -U escala -d escala --clean --if-exists --no-owner /backups/<file>.dump
 ```
 
-The backups are on the same VM disk as the databases. They protect against mistakes and data corruption, not against losing the VM: copy the prod dumps off the VM regularly with the `kubectl cp` command above. RabbitMQ is not backed up (messages are transient; what must not be lost is in the databases, see the outbox in ADR 0009).
+The backups are on the same VM disk as the databases. They protect against mistakes and data corruption, not against losing the VM: copy the prod dumps off the VM regularly with the `kubectl cp` command above. This is not done yet: no copy exists outside the cluster (SCRUM-91). RabbitMQ is not backed up (messages are transient; what must not be lost is in the databases, see the outbox in ADR 0009).
 
 ### Container logs
 
