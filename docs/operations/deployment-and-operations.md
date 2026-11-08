@@ -8,7 +8,7 @@
 | Deliverable | Sprint 1 · #10 Walking Skeleton (Containerized deployment); Sprint 2 · #11 CI/CD pipeline; Final submission · #3 Deployment instructions |
 | Sources | Assignment §6.7, §6.8, §8.4, §8.5, §9, §11, §12 |
 | Confluence page | **10 · Walking Skeleton**, **07 · Technical Design** |
-| Last updated | 2026-11-01 |
+| Last updated | 2026-11-08 |
 
 > **ℹ️ About this document.** How to run, configure, deploy, roll back and operate Escala, plus the runbook for its degraded modes. It is the "Deployment and operation guide" of assignment §9 and the "Deployment instructions" of §12: the teaching staff follow it to run the product, and the team follows it on demo day. The architecture behind it is in the [Technical Design](../architecture/technical-design.md); the tests that prove the runbook are in the [Test Strategy](../testing/test-strategy.md). Keep the quick start in the [repository README](../../README.md) identical to [Run locally](#run-locally).
 
@@ -26,6 +26,8 @@ Every environment uses synthetic data only (§11); no real corps member appears 
 | Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (SCRUM-43) | Teaching staff (§12) | http://localhost:8000 |
 
 Each environment has its own databases, RabbitMQ and secrets; nothing is shared between them. The worker is internal and has no public URL. Argo CD is at https://escala-argocd.duckdns.org and Grafana at https://escala-grafana.duckdns.org.
+
+Only Diogo Costa has the cluster's kubeconfig and access to the VM. Personal SSH keys and read-only access for the other members are planned in SCRUM-92.
 
 ## Prerequisites
 
@@ -108,7 +110,9 @@ Policy and threat analysis are on **09 · Security and Privacy Assessment**; thi
 - **Kubernetes:** passwords are random and different per environment. Git holds only **encrypted** Sealed Secrets files (`sealed-secret*.yaml`), created by `infra/scripts/seal-secrets` (`.sh` and `.ps1`); the Sealed Secrets controller in the cluster turns them into Kubernetes Secrets, which reach the pods as environment variables. They are not in a `.env` file on the VM, not in Docker secrets and not in the images.
 - **GitHub Actions:** the SonarQube analysis uses the repository secrets `SONAR_TOKEN` and `SONAR_HOST_URL`; pushing images to GHCR uses the workflow's `GITHUB_TOKEN`. The pipeline holds no cluster credentials (Argo CD pulls from Git).
 - **Repository check:** the `security` job of `build.yml` runs gitleaks over the history. It only reports for now and does not fail the build [TODO: make it fail the build on a real finding (RNF07, SCRUM-20), Diogo Costa].
-- **Separation:** each component has its own database login and its own RabbitMQ login. [TODO: how the Claude Code CLI of the worker is authenticated, once ADR 0016 is accepted, Diogo Costa]
+- **Separation:** each component has its own database login and its own RabbitMQ login.
+- **Claude Code CLI in the worker (planned, SCRUM-90; ADR 0016 is still Proposed):** a long-lived OAuth token created with `claude setup-token` (valid for one year), sealed as the Secret `claude-code-auth` in the worker's folder and passed to the container as `CLAUDE_CODE_OAUTH_TOKEN` with `secretKeyRef`. `ANTHROPIC_API_KEY` must never be set in the worker, because it takes precedence over the token. AI stays off in prod.
+- **Argo CD:** the initial `admin` password was changed (confirmed by Diogo Costa on 2026-11-07).
 - **Encryption at rest:** k3s does not encrypt Secrets at rest by default; the procedure to enable it is in the [README](../../README.md#where-the-passwords-are-stored). [TODO: has it been enabled on the VM, Diogo Costa]
 - **Leak:** rotate the secret at once, redeploy, and record a Jira issue labelled `risk`.
 
@@ -120,6 +124,7 @@ Policy and threat analysis are on **09 · Security and Privacy Assessment**; thi
 | `rabbitmq-credentials` | RabbitMQ admin login | same | [TODO: when and how, Diogo Costa] |
 | `grafana-admin` | Grafana `admin` | same, in the namespace `observability` | [TODO: when and how, Diogo Costa] |
 | `SONAR_TOKEN`, `SONAR_HOST_URL` | `build.yml` | GitHub Actions secrets | [TODO: when and how, Diogo Costa] |
+| `claude-code-auth` (planned, SCRUM-90) | `elegibilidade-worker` (`CLAUDE_CODE_OAUTH_TOKEN`) | Sealed Secret in git; Secret in the environment's namespace | Before the token expires (one year): run `claude setup-token` again and reseal [TODO: who renews it and how the expiry is tracked, Diogo Costa] |
 
 ## Profiles
 
@@ -173,6 +178,7 @@ flowchart LR
 | deploy | Renders the manifests of the environment and publishes them to the branch `deploy/<env>`, which Argo CD applies | `deploy.yml`, Kustomize, Argo CD | The commit on `deploy/<env>`: `deploy(<env>): <tag> (source <sha>)` |
 
 - Workflow files and their triggers: [`.github/workflows/README.md`](../../.github/workflows/README.md)
+- The *Build* workflow is a required status check on `main`: its jobs `escala-api`, `elegibilidade-worker` and `web` (build, test, sonarqube) must pass before a pull request is merged.
 - The end-to-end tests do not run in the pipeline yet [TODO: end-to-end tests in the pipeline, Diogo Sousa, see the Test Strategy].
 
 ## Deploy
@@ -181,7 +187,7 @@ The automatic path:
 
 1. Merge to `main`. The workflow *Deploy DEV* builds the three images and tags them with the commit SHA (and `latest`). A `release/X.Y.Z` branch deploys to qa with the tag `X.Y.Z-rc.<run number>`; publishing a GitHub Release `vX.Y.Z` deploys to prod with the images that qa tested, retagged `X.Y.Z`.
 2. The pipeline renders `infra/k8s/<env>` with the new tag and pushes `manifests.yaml` to the branch `deploy/<env>`. Argo CD, in the cluster, watches that branch and applies it. dev and qa sync by themselves; prod waits for a click on **Sync** in Argo CD (and for the approval of the GitHub Environment `production`, if enabled).
-3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. Hibernate creates tables and columns, but it never changes a constraint that already exists: when an enum gets new values, a database that already exists keeps rejecting them. This is what broke `POST /api/v1/piquetes` on dev on 2026-11-01 (see the [Runbook](#runbook--degraded-modes)). There is no migration tool yet [TODO: migration tool and the rule that every migration works with the previous version, Diogo Costa].
+3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. Hibernate creates tables and columns, but it never changes a constraint that already exists: when an enum gets new values, a database that already exists keeps rejecting them. This is what broke `POST /api/v1/piquetes` on dev on 2026-11-01 (see the [Runbook](#runbook--degraded-modes)). There is no migration tool yet: versioned migrations with Flyway are planned for Sprint 2 (SCRUM-87) [TODO: the rule that every migration works with the previous version, Diogo Costa].
 4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
@@ -190,6 +196,8 @@ There is no one-command manual deploy of an arbitrary tag. The workflows can be 
 ## Rollback
 
 A rollback redeploys a previous version; it does not undo database changes, because the schema is updated by Hibernate and not by reversible migrations.
+
+The nightly database backups ([README](../../README.md#database-backups)) stay on the VM's disk: they are not copied outside the cluster yet (SCRUM-91), so they do not survive the loss of the VM.
 
 - **prod:** in Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available.
 - **dev:** `git revert` the merge commit in a new pull request; the merge to `main` redeploys dev.
@@ -202,8 +210,9 @@ A rollback redeploys a previous version; it does not undo database changes, beca
 ## Observability
 
 - **Dashboard:** Grafana at https://escala-grafana.duckdns.org shows traces and logs for all environments (log in as `admin`; the password is in the Secret `grafana-admin`). [TODO: an Escala dashboard (RF39), Diogo Costa]
-- **Traces:** the OpenTelemetry Java agent in both Java images records HTTP requests, database queries and RabbitMQ publish and consume, and carries the trace across RabbitMQ from one service to the other. Tempo keeps them 7 days. In Grafana: Explore, Tempo, Search by service name (`escala-api` or `elegibilidade-worker`).
+- **Traces:** the OpenTelemetry Java agent in both Java images records HTTP requests, database queries and RabbitMQ publish and consume. Tempo keeps them 7 days. The trace breaks at the outbox: the relay publishes outside any active span, so Tempo shows the request and the evaluation as separate traces; the application `traceId` in the event payload still links them. Fixing it is a code change, planned in SCRUM-93. In Grafana: Explore, Tempo, Search by service name (`escala-api` or `elegibilidade-worker`).
 - **Logs:** Grafana Alloy collects the logs of every pod in the `escala-*` namespaces and sends them to Loki, which keeps them 90 days. Log lines carry `[trace_id,span_id]`, so Grafana jumps from a log line to its trace. With Docker Compose, read them with `docker compose logs -f escala-api` (or any other service name); they rotate at 10 Mi and 5 files per container.
+- **Log levels:** root `DEBUG` in dev, `INFO` in qa and `WARN` in prod (`LOGGING_LEVEL_ROOT` in each ConfigMap). At `DEBUG` the logs contain Hibernate SQL and message bodies, and Loki keeps them 90 days. This conflicts with the threat model, where free text is never logged (T-07); the fix is planned in SCRUM-94.
 - **Health:** `/actuator/health` on both services, with the groups `liveness` and `readiness`; Kubernetes probes use it.
 - **Metrics:** none are exposed yet: only the `health` endpoint is exposed (`management.endpoints.web.exposure.include=health`) [TODO: Prometheus metrics (RF38), Diogo Costa].
 - **Error reporting:** [TODO: how errors reach the team, e.g. an error-rate panel and alerts, Diogo Costa]
