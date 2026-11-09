@@ -75,3 +75,4 @@ One row per ADR, in number order. The Date is the day the decision was taken; ea
 | [0016](0016-use-claude-haiku-through-the-claude-code-cli.md) | Use Claude Haiku through the Claude Code CLI for free-text extraction | Proposed | 2026-10-27 | — |
 | [0017](0017-build-the-client-as-an-angular-pwa.md) | Build the client as an Angular PWA | Accepted | 2026-10-31 | — |
 | [0018](0018-run-docker-compose-for-evaluation-and-kubernetes-with-argo-cd-for-team-environments.md) | Run Docker Compose for evaluation and Kubernetes with Argo CD for the team environments | Accepted | 2026-10-31 | — |
+| [0019](0019-version-the-database-schema-with-flyway-migrations.md) | Version the database schema with Flyway migrations | Proposed | 2026-11-09 | — |

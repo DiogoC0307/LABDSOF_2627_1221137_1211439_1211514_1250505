@@ -62,11 +62,15 @@ At least 70% of the lines of new code, measured with JaCoCo (Java services) and 
 |---|---|---|---|
 | `escala-api` | `EscalaApiApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
 | `escala-api` | `CreatePiqueteIT` | 2 | Creating a piquete through the API (integration, Testcontainers) |
+| `escala-api` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01: an empty database is built by the migrations and its columns and constraints are identical to the schema `ddl-auto=update` created up to 0.3.0 |
+| `escala-api` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 (no Flyway history, one piquete) is baselined at version 1 and the piquete is still listed |
 | `elegibilidade-worker` | `ElegibilidadeWorkerApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
 | `elegibilidade-worker` | `AvaliacaoPedidaIT` | 1 | An `AvaliacaoPedida` event sent through RabbitMQ is answered with an `AvaliacaoConcluida` that is `ELIGIBLE` and carries the same trace ID |
+| `elegibilidade-worker` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01, as for `escala-api` |
+| `elegibilidade-worker` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 with one evaluation is baselined at version 1 and keeps the evaluation |
 | `apps/web` | `app.spec.ts` | 11 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt |
 
-Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01. The Java tests do not carry a `TC-` ID yet.
+Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, and on 2026-11-09 for the Flyway tests. Every Java test runs against the Flyway migrations. Only the Flyway tests carry a `TC-` ID so far.
 
 ## Test case convention
 
