@@ -4,9 +4,9 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
 import org.springframework.amqp.listener.FatalExceptionStrategy;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
-import org.springframework.amqp.rabbit.listener.ConditionalRejectingErrorHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -22,6 +22,10 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 
 	private static final ObjectMapper JSON = JsonMapper.builder().build();
 
+	private static final String UNKNOWN = "unknown";
+
+	private static final String MISSING = "missing";
+
 	public SafeListenerErrorHandler() {
 	}
 
@@ -32,15 +36,17 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 	@Override
 	protected void log(Throwable t) {
 		Message message = t instanceof ListenerExecutionFailedException failed ? failed.getFailedMessage() : null;
-		log.warn("listener failed {} exception={}", describe(message), SafeLogValues.exceptionClasses(t));
+		if (log.isWarnEnabled()) {
+			log.warn("listener failed {} exception={}", describe(message), SafeLogValues.exceptionClasses(t));
+		}
 	}
 
 	/** The queue, the event type and the event's IDs of a message, for a log line; never its body. */
 	public static String describe(Message message) {
-		String queue = "unknown";
-		String type = "unknown";
-		String eventId = "missing";
-		String traceId = "missing";
+		String queue = UNKNOWN;
+		String type = UNKNOWN;
+		String eventId = MISSING;
+		String traceId = MISSING;
 		if (message != null) {
 			if (message.getMessageProperties().getConsumerQueue() != null) {
 				queue = message.getMessageProperties().getConsumerQueue();
@@ -60,8 +66,8 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 	private static String knownType(String type) {
 		return switch (type) {
 			case "AvaliacaoPedida", "AvaliacaoConcluida", "ExtracaoPedida", "ExtracaoConcluida", "RiscoAtualizado" -> type;
-			case "" -> "missing";
-			default -> "unknown";
+			case "" -> MISSING;
+			default -> UNKNOWN;
 		};
 	}
 }

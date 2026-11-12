@@ -23,14 +23,18 @@ class RequestErrorLogging {
 
 	@ExceptionHandler(HttpMessageNotReadableException.class)
 	void unreadableBody(HttpMessageNotReadableException e, HttpServletResponse response) throws IOException {
-		log.warn("request body not readable status=400 exception={}", SafeLogValues.exceptionClasses(e));
+		if (log.isWarnEnabled()) {
+			log.warn("request body not readable status=400 exception={}", SafeLogValues.exceptionClasses(e));
+		}
 		response.sendError(HttpStatus.BAD_REQUEST.value());
 	}
 
 	@ExceptionHandler(DataAccessException.class)
 	void databaseFailure(DataAccessException e, HttpServletResponse response) throws IOException {
-		log.error("request failed in the database status=500 constraint={} exception={}",
-				constraintName(e), SafeLogValues.exceptionClasses(e));
+		if (log.isErrorEnabled()) {
+			log.error("request failed in the database status=500 constraint={} exception={}",
+					constraintName(e), SafeLogValues.exceptionClasses(e));
+		}
 		response.sendError(HttpStatus.INTERNAL_SERVER_ERROR.value());
 	}
 
