@@ -65,6 +65,13 @@ The first build takes several minutes. It works when:
 
 Stop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.
 
+**Old RabbitMQ data folders.** Until SCRUM-95, the RabbitMQ container had no fixed hostname, and RabbitMQ names its data folder after it (`rabbit@<container ID>`), so each recreated container started with an empty broker and left its old folder in the volume `rabbitmq-data`. The container is now `hostname: rabbitmq` and keeps `rabbit@rabbitmq`. The old folders hold nothing the current broker uses and can be deleted. List them, then delete them (this cannot be undone):
+
+```bash
+docker compose exec rabbitmq sh -c 'ls -d /var/lib/rabbitmq/mnesia/rabbit@* | grep -v "/rabbit@rabbitmq"'
+docker compose exec rabbitmq sh -c 'ls -d /var/lib/rabbitmq/mnesia/rabbit@* | grep -v "/rabbit@rabbitmq" | xargs rm -rf'
+```
+
 ## Configuration
 
 The Compose variables are in `.env.example`; copy it to `.env` to change them (`.env` is git-ignored). All of them are optional: `compose.yaml` has the same defaults. A password's default is "— (secret)": the throwaway local value is in `.env.example`, and it must never be used outside your machine. The handling of real secrets is in [Secrets handling](#secrets-handling).
@@ -219,7 +226,7 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 - **Log levels:** the libraries (root) log at `INFO` in dev and qa and `WARN` in prod; the team's own code (`pt.isep.escala`) at `DEBUG` in dev and Compose and `INFO` in qa and prod, so the lines with the event type, IDs and trace ID stay in prod. Both are in each ConfigMap (`LOGGING_LEVEL_ROOT`, `LOGGING_LEVEL_PT_ISEP_ESCALA`) and in `compose.yaml` (SCRUM-94).
 - **What never reaches the logs:** request bodies, message bodies, SQL values and the free text or contacts they may carry (threat model T-07: free text is never logged; Loki keeps logs 90 days). Our own log lines carry only the event type, IDs and trace ID. Three things in the code enforce it, and the tests TC-SCRUM-94-01 to 06 check them:
   - `LibraryLogFilter` (in `logback-spring.xml` of each service) writes `DEBUG` and `TRACE` only for `pt.isep.escala`. At those levels Spring MVC prints request bodies, Spring AMQP prints message bodies and Hibernate prints SQL bind values. It also never writes `org.hibernate.orm.jdbc.error`, which prints the rejected row of a failed SQL statement.
-  - When a listener fails, `SafeListenerErrorHandler` logs the queue, the event type, the IDs and the exception classes, without the exception messages, which often carry the value that failed. Rejecting or requeueing the message is unchanged (retries and the dead-letter queue: SCRUM-95).
+  - When a listener fails, `SafeListenerErrorHandler` logs the queue, the event type, the IDs and the exception classes, without the exception messages, which often carry the value that failed. Each retry is logged the same way (`listener failed, retry 1 of 3 …`).
   - In `escala-api`, an unreadable request body (`400`) or a database failure (`500`, with the constraint name) is logged the same way; the response body is unchanged.
 - **Do not turn on `DEBUG` for a library with an environment variable** (for example `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP=DEBUG` in a ConfigMap). `LibraryLogFilter` drops those lines anyway, because at `DEBUG` libraries write request and message bodies and SQL values, which can hold free text or a contact (T-07). If a library's debug output is really needed, change `LibraryLogFilter` in a pull request, use synthetic data only, and revert it in the same sprint.
 - **Not covered:** an exception that no handler catches is still logged by the server with its message. The known cases (unreadable body, database failure, listener failure) are handled; new handlers follow the same rule.
@@ -234,6 +241,56 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 | [TODO: define the alerts, their conditions, who is notified and the first action of each, Diogo Costa] | — | — | — |
 
 No alerts exist yet. They should at least cover: worker not ready, stale fire risk, dead letters and slow evaluations (see the runbook below).
+
+## Dead-letter queues
+
+A message that a service cannot process is retried through the broker after 5 s, 30 s and 2 min, then moved to `<queue>.dlq`; a malformed message (not JSON, or an ID that is not a UUID) goes there at once. Each attempt writes a `WARN` line with the queue, the event type, `eventId` and `traceId`. The mechanism and its tests are in **07 · Technical Design**, "Reliability of messaging" (SCRUM-95).
+
+**What a message in a DLQ means for the user.** A request the worker could not evaluate is answered `FAILED`, and the slot shows `EVALUATION_FAILED` on `GET /api/v1/piquetes`. If the worker's database was down, that answer could not be written either and the slot stays `PENDING`. A failed evaluation is resolved by replaying the DLQ (operator) until the product offers a retry (SCRUM-65, SCRUM-79).
+
+**Where.**
+
+- **Compose:** the management UI at http://localhost:15672 and `docker compose exec rabbitmq rabbitmqctl …`; the admin login is `RABBITMQ_USER` (see [Configuration](#configuration)).
+- **dev, qa, prod:** the same commands through `infra/scripts/rabbitmq-ui` (port-forward to the management UI) or `kubectl exec`, which need the cluster's kubeconfig: only Diogo Costa has it today (SCRUM-92).
+
+**Count.**
+
+```bash
+docker compose exec rabbitmq rabbitmqctl list_queues name messages | grep '\.dlq'
+```
+
+**Inspect headers and IDs only, never bodies.** A body can hold free text or a contact (threat model T-07), so do not open messages with "Get messages" in the UI. Ask the management API for the messages with their body cut to 0 bytes; `reject_requeue_true` leaves them in the DLQ:
+
+```bash
+curl -s -u "${RABBITMQ_USER:-escala}" -H 'content-type: application/json' -X POST   http://localhost:15672/api/queues/%2F/api.avaliacao-concluida.dlq/get   -d '{"count":10,"ackmode":"reject_requeue_true","encoding":"auto","truncate":0}'
+```
+
+`curl` asks for the password. Each message shows its headers: `escala-retry-count` (3 after the retries, absent for a malformed message) and `x-death` (the queue and the reason, `rejected`). The `eventId` and `traceId` of each message are in the `WARN` lines of the service that rejected it (Grafana, Loki; or `docker compose logs`).
+
+**Replay** once the cause is fixed (the database is back, the bug is deployed), with the shovel plugin, which moves the messages that are in the DLQ back to their queue and then deletes itself:
+
+```bash
+docker compose exec rabbitmq rabbitmqctl set_parameter shovel replay-worker-avaliacao-pedida   '{"src-protocol":"amqp091","src-uri":"amqp://","src-queue":"worker.avaliacao-pedida.dlq","src-delete-after":"queue-length","dest-protocol":"amqp091","dest-uri":"amqp://","dest-queue":"worker.avaliacao-pedida"}'
+```
+
+In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue without `.dlq`.
+
+- A replayed message keeps `escala-retry-count`: if it fails again, it goes back to the DLQ at once, without new retries. A malformed message always goes back to the DLQ; it is never dropped.
+- Replaying is safe to repeat: consumers ignore an `eventId` they have already processed (RNF05). A request the worker answered `FAILED` is not marked as processed, so replaying it evaluates it again, and an `ELIGIBLE` result turns `EVALUATION_FAILED` into `ELIGIBLE`.
+- Tried on Compose on 2026-11-12:
+  1. `pg-elegibilidade-worker` was stopped and a piquete created; its slot stayed `PENDING`.
+  2. The worker retried after 5 s, 30 s and 2 min (plus 30 s each time, waiting for a database connection), then the request was in `worker.avaliacao-pedida.dlq`.
+  3. The inspect command above showed `escala-retry-count` 3 and no body.
+  4. The `rabbitmq` container was recreated: both DLQ messages were still there.
+  5. The database was started again and the replay command run: the slot was `ELIGIBLE` 2 seconds later, the DLQ was empty and the shovel had deleted itself.
+  6. A malformed message replayed the same way went back to `api.avaliacao-concluida.dlq` with one delivery.
+
+**Limitations.**
+
+- The worker's database down: the worker cannot write the `FAILED` answer, so the slot stays `PENDING` (not `EVALUATION_FAILED`) until the DLQ is replayed.
+- In dev, qa and prod the broker has no persistent volume: a restart of its pod loses the messages in every queue, the DLQs included (SCRUM-155, with publisher confirms for the outbox).
+- A listener that stops does not make the readiness probe fail yet (SCRUM-88).
+- In Compose, before SCRUM-95 the broker's data folder was named after the container ID, so a recreated container started empty. The container now has `hostname: rabbitmq`; the old folders `rabbit@<container ID>` stay in the volume and can be deleted (see [Run locally](#run-locally)).
 
 ## Runbook — degraded modes
 
