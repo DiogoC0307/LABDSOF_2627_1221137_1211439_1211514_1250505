@@ -198,6 +198,7 @@ The automatic path:
 3. Database changes are Flyway migrations (ADR 0019), applied by each service to its own database when it starts. A database created before Flyway (by `ddl-auto=update`, up to 0.3.0) is recorded as version 1 the first time (baseline) and keeps its data. Rules for a migration:
    - **It works with the previous version of the service**, so a rollback of the image never needs a database restore. Add first, remove later: a new column is nullable or has a default; a column or value is dropped only in a later release, after no deployed version uses it; a rename is a new column, a copy, and a later drop.
    - **A changed enum, column or constraint is a migration.** Hibernate never changes the database (`validate`): this is what broke `POST /api/v1/piquetes` on dev on 2026-11-01, when `ddl-auto=update` did not change `slot_status_check` (see the [Runbook](#runbook--degraded-modes)). When an enum gets a new value, the migration drops and recreates its check constraint with the new list, and the previous version still works because it never writes the new value.
+   - **A new enum value is a breaking change for rollback; document the revert step in the same PR.** The migration is compatible, but the rows the new version writes are not: the previous version cannot read the new value. The revert step (usually an `UPDATE` back to a value the previous version knows) goes in [Rollback](#rollback). Example: `EVALUATION_FAILED` (SCRUM-95).
    - **A merged migration is never edited.** A fix is a new migration with the next number.
 4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
@@ -217,6 +218,23 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 - After a rollback: check the health endpoint, check the dead-letter queue is empty, and open a Jira Bug.
 - **Rehearsed on qa on 2026-11-01** (Diogo Pereira, in Argo CD): auto-sync and `selfHeal` off, History and rollback to the previous revision (`0.2.0-rc.2`), then back to `0.3.0-rc.3` with auto-sync and `selfHeal` on again. Rolling back took a little over a minute and less than a minute and a half (timed by hand). While rolled back, `/api/actuator/health` answered `200`, `GET /api/v1/piquetes` answered `404` (the nginx of the old version) and the PWA bundle was not the one of `0.3.0`. After rolling forward, `GET /api/v1/piquetes` answered `200` and a new piquete went from `PENDING` to `ELIGIBLE` in 3 seconds. The image tags of the pods were not captured.
 - Not rehearsed on prod. [TODO: one documented command for a rollback (RNF08); the rehearsal needed several steps in Argo CD, Diogo Costa]
+
+### Rolling back to a version without `EVALUATION_FAILED`
+
+Versions before SCRUM-95 do not know the slot status `EVALUATION_FAILED`: Hibernate cannot map the value to their `SlotStatus`, so reading a piquete with such a slot fails. The V2 migration itself needs no undo. Before rolling back past SCRUM-95, in this order:
+
+1. **Put those slots back to `PENDING`**, in the database of `escala-api`:
+
+   ```sql
+   UPDATE slot SET status = 'PENDING' WHERE status = 'EVALUATION_FAILED';
+   ```
+
+   Compose: `docker compose exec pg-escala-api psql -U "${ESCALA_DB_USER:-escala}" -d "${ESCALA_DB_NAME:-escala}" -c "…"`. dev, qa, prod: `kubectl exec` into the `escala-api` database pod, so only Diogo Costa today (SCRUM-92).
+2. **Roll back** as above.
+3. **Check again**: `SELECT count(*) FROM slot WHERE status = 'EVALUATION_FAILED';` must be `0`. A slot can be marked between step 1 and the moment the new version stops; if so, run step 1 again. The previous version never writes this value, so the count stays `0`.
+4. **Replay the DLQs** (see [Dead-letter queues](#dead-letter-queues)): `worker.avaliacao-pedida.dlq` first, then `api.avaliacao-concluida.dlq`. The requests the worker answered `FAILED` are evaluated again and their slots become `ELIGIBLE`; the previous version of `escala-api` ignores a `FAILED` result. Versions before SCRUM-95 requeue a message that fails, without retries or DLQ, so replay only once the cause of the failures is fixed.
+
+Not rehearsed: the SQL and the order come from the code of both versions, not from a rollback on Compose or qa.
 
 ## Observability
 
