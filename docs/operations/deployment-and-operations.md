@@ -101,7 +101,7 @@ Compose and the Kubernetes ConfigMaps (`infra/k8s/<env>/<service>/configmap.yaml
 | `SPRING_RABBITMQ_DYNAMIC` | `false`: the service does not declare exchanges or queues; they come from `infra/rabbitmq/definitions.json` | `false` | — |
 | `OTEL_*`, `LOGGING_PATTERN_LEVEL` | OpenTelemetry agent settings and the `[trace_id,span_id]` log pattern | see `compose.yaml` | see the ConfigMaps |
 
-The database schema is created and updated by Hibernate when a service starts (`spring.jpa.hibernate.ddl-auto=update`); each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
+The database schema is created and changed by the Flyway migrations of each service (`src/main/resources/db/migration`), which run when the service starts; Hibernate only checks that the entities match it (`spring.jpa.hibernate.ddl-auto=validate`, ADR 0019). Each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
 
 ## Secrets handling
 
@@ -188,7 +188,10 @@ The automatic path:
 
 1. Merge to `main`. The workflow *Deploy DEV* builds the three images and tags them with the commit SHA (and `latest`). A `release/X.Y.Z` branch deploys to qa with the tag `X.Y.Z-rc.<run number>`; publishing a GitHub Release `vX.Y.Z` deploys to prod with the images that qa tested, retagged `X.Y.Z`.
 2. The pipeline renders `infra/k8s/<env>` with the new tag and pushes `manifests.yaml` to the branch `deploy/<env>`. Argo CD, in the cluster, watches that branch and applies it. dev and qa sync by themselves; prod waits for a click on **Sync** in Argo CD (and for the approval of the GitHub Environment `production`, if enabled).
-3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. Hibernate creates tables and columns, but it never changes a constraint that already exists: when an enum gets new values, a database that already exists keeps rejecting them. This is what broke `POST /api/v1/piquetes` on dev on 2026-11-01 (see the [Runbook](#runbook--degraded-modes)). There is no migration tool yet: versioned migrations with Flyway are planned for Sprint 2 (SCRUM-87) [TODO: the rule that every migration works with the previous version, Diogo Costa].
+3. Database changes are Flyway migrations (ADR 0019), applied by each service to its own database when it starts. A database created before Flyway (by `ddl-auto=update`, up to 0.3.0) is recorded as version 1 the first time (baseline) and keeps its data. Rules for a migration:
+   - **It works with the previous version of the service**, so a rollback of the image never needs a database restore. Add first, remove later: a new column is nullable or has a default; a column or value is dropped only in a later release, after no deployed version uses it; a rename is a new column, a copy, and a later drop.
+   - **A changed enum, column or constraint is a migration.** Hibernate never changes the database (`validate`): this is what broke `POST /api/v1/piquetes` on dev on 2026-11-01, when `ddl-auto=update` did not change `slot_status_check` (see the [Runbook](#runbook--degraded-modes)). When an enum gets a new value, the migration drops and recreates its check constraint with the new list, and the previous version still works because it never writes the new value.
+   - **A merged migration is never edited.** A fix is a new migration with the next number.
 4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
@@ -196,7 +199,7 @@ There is no one-command manual deploy of an arbitrary tag. The workflows can be 
 
 ## Rollback
 
-A rollback redeploys a previous version; it does not undo database changes, because the schema is updated by Hibernate and not by reversible migrations.
+A rollback redeploys a previous version; it does not undo database changes. That is safe because every migration works with the previous version of the service (see [Deploy](#deploy)); the `flyway_schema_history` table stays, and the previous version ignores it. Tested on Docker Compose on 2026-11-09: images of 0.3.0, then of the Flyway branch, then of 0.3.0 again; the piquetes created before were kept and a new one went from `PENDING` to `ELIGIBLE` each time.
 
 The nightly database backups ([README](../../README.md#database-backups)) stay on the VM's disk: they are not copied outside the cluster yet (SCRUM-91), so they do not survive the loss of the VM.
 

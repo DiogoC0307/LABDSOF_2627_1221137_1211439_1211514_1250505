@@ -64,13 +64,17 @@ At least 70% of the lines of new code, measured with JaCoCo (Java services) and 
 | `escala-api` | `CreatePiqueteIT` | 2 | Creating a piquete through the API (integration, Testcontainers) |
 | `escala-api` | `LogLeakIT` | 4 | TC-SCRUM-94-01, 02, 05, 06 with the levels of dev: a marker in a processed message, in a message the listener rejects, in a request body the API rejects, and in a row the database rejects never reaches the logs |
 | `escala-api` | `LogLeakVerboseLevelsIT` | 2 | TC-SCRUM-94-03, 04 with root `DEBUG`, SQL binds at `TRACE` and Spring AMQP at `DEBUG`: request values, SQL values and message bodies never reach the logs |
+| `escala-api` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01: an empty database is built by the migrations and its columns and constraints are identical to the schema `ddl-auto=update` created up to 0.3.0 |
+| `escala-api` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 (no Flyway history, one piquete) is baselined at version 1 and the piquete is still listed |
 | `elegibilidade-worker` | `ElegibilidadeWorkerApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
 | `elegibilidade-worker` | `AvaliacaoPedidaIT` | 1 | An `AvaliacaoPedida` event sent through RabbitMQ is answered with an `AvaliacaoConcluida` that is `ELIGIBLE` and carries the same trace ID |
 | `elegibilidade-worker` | `LogLeakIT` | 2 | TC-SCRUM-94-01, 02, as for `escala-api` |
 | `elegibilidade-worker` | `LogLeakVerboseLevelsIT` | 1 | TC-SCRUM-94-04, as for `escala-api` |
+| `elegibilidade-worker` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01, as for `escala-api` |
+| `elegibilidade-worker` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 with one evaluation is baselined at version 1 and keeps the evaluation |
 | `apps/web` | `app.spec.ts` | 11 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt |
 
-Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, and on 2026-11-12 for the logging tests. Only the logging tests carry a `TC-` ID so far.
+Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, on 2026-11-09 for the Flyway tests and on 2026-11-12 for the logging tests. Every Java test runs against the Flyway migrations. Only the Flyway and logging tests carry a `TC-` ID so far.
 
 ## Test case convention
 
