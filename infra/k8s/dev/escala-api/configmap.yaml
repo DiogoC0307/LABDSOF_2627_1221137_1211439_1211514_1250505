@@ -3,7 +3,9 @@ kind: ConfigMap
 metadata: { name: escala-api-config, namespace: escala-dev }
 data:
   SPRING_PROFILES_ACTIVE: "dev"
-  LOGGING_LEVEL_ROOT: "DEBUG"
+  LOGGING_LEVEL_ROOT: "INFO"
+  # DEBUG and TRACE reach the logs only for pt.isep.escala (LibraryLogFilter, SCRUM-94)
+  LOGGING_LEVEL_PT_ISEP_ESCALA: "DEBUG"
   SPRING_RABBITMQ_HOST: "rabbitmq"
   # Exchanges and queues come from infra/rabbitmq/definitions.json; this service login may not declare them
   SPRING_RABBITMQ_DYNAMIC: "false"
