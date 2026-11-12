@@ -482,9 +482,12 @@ components:
     SlotStatus:
       type: string
       description: >
-        SlotStatus in escala-api. A new slot is PENDING and becomes ELIGIBLE after the evaluation; escala-api
-        sets no other value yet.
-      enum: [OPEN, PENDING, ELIGIBLE, PROPOSED, FILLED]
+        SlotStatus in escala-api. A new slot is PENDING and becomes ELIGIBLE after the evaluation. It becomes
+        EVALUATION_FAILED when the evaluation could not be made or applied after the retries (RF24). A failed
+        evaluation never makes a slot ELIGIBLE; an operator resolves it by replaying the dead-letter queue, and
+        the ELIGIBLE result of the replayed evaluation then makes the slot ELIGIBLE.
+        escala-api sets no other value yet.
+      enum: [OPEN, PENDING, ELIGIBLE, PROPOSED, FILLED, EVALUATION_FAILED]
     Health:
       type: object
       required: [status]

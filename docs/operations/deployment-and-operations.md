@@ -65,6 +65,13 @@ The first build takes several minutes. It works when:
 
 Stop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.
 
+**Old RabbitMQ data folders.** Until SCRUM-95, the RabbitMQ container had no fixed hostname, and RabbitMQ names its data folder after it (`rabbit@<container ID>`), so each recreated container started with an empty broker and left its old folder in the volume `rabbitmq-data`. The container is now `hostname: rabbitmq` and keeps `rabbit@rabbitmq`. The old folders hold nothing the current broker uses and can be deleted. List them, then delete them (this cannot be undone):
+
+```bash
+docker compose exec rabbitmq sh -c 'ls -d /var/lib/rabbitmq/mnesia/rabbit@* | grep -v "/rabbit@rabbitmq"'
+docker compose exec rabbitmq sh -c 'ls -d /var/lib/rabbitmq/mnesia/rabbit@* | grep -v "/rabbit@rabbitmq" | xargs rm -rf'
+```
+
 ## Configuration
 
 The Compose variables are in `.env.example`; copy it to `.env` to change them (`.env` is git-ignored). All of them are optional: `compose.yaml` has the same defaults. A password's default is "— (secret)": the throwaway local value is in `.env.example`, and it must never be used outside your machine. The handling of real secrets is in [Secrets handling](#secrets-handling).
@@ -101,7 +108,7 @@ Compose and the Kubernetes ConfigMaps (`infra/k8s/<env>/<service>/configmap.yaml
 | `SPRING_RABBITMQ_DYNAMIC` | `false`: the service does not declare exchanges or queues; they come from `infra/rabbitmq/definitions.json` | `false` | — |
 | `OTEL_*`, `LOGGING_PATTERN_LEVEL` | OpenTelemetry agent settings and the `[trace_id,span_id]` log pattern | see `compose.yaml` | see the ConfigMaps |
 
-The database schema is created and updated by Hibernate when a service starts (`spring.jpa.hibernate.ddl-auto=update`); each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
+The database schema is created and changed by the Flyway migrations of each service (`src/main/resources/db/migration`), which run when the service starts; Hibernate only checks that the entities match it (`spring.jpa.hibernate.ddl-auto=validate`, ADR 0019). Each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
 
 ## Secrets handling
 
@@ -188,7 +195,11 @@ The automatic path:
 
 1. Merge to `main`. The workflow *Deploy DEV* builds the three images and tags them with the commit SHA (and `latest`). A `release/X.Y.Z` branch deploys to qa with the tag `X.Y.Z-rc.<run number>`; publishing a GitHub Release `vX.Y.Z` deploys to prod with the images that qa tested, retagged `X.Y.Z`.
 2. The pipeline renders `infra/k8s/<env>` with the new tag and pushes `manifests.yaml` to the branch `deploy/<env>`. Argo CD, in the cluster, watches that branch and applies it. dev and qa sync by themselves; prod waits for a click on **Sync** in Argo CD (and for the approval of the GitHub Environment `production`, if enabled).
-3. Database changes are applied by each service when it starts (Hibernate `ddl-auto=update`); each service migrates only its own database. Hibernate creates tables and columns, but it never changes a constraint that already exists: when an enum gets new values, a database that already exists keeps rejecting them. This is what broke `POST /api/v1/piquetes` on dev on 2026-11-01 (see the [Runbook](#runbook--degraded-modes)). There is no migration tool yet: versioned migrations with Flyway are planned for Sprint 2 (SCRUM-87) [TODO: the rule that every migration works with the previous version, Diogo Costa].
+3. Database changes are Flyway migrations (ADR 0019), applied by each service to its own database when it starts. A database created before Flyway (by `ddl-auto=update`, up to 0.3.0) is recorded as version 1 the first time (baseline) and keeps its data. Rules for a migration:
+   - **It works with the previous version of the service**, so a rollback of the image never needs a database restore. Add first, remove later: a new column is nullable or has a default; a column or value is dropped only in a later release, after no deployed version uses it; a rename is a new column, a copy, and a later drop.
+   - **A changed enum, column or constraint is a migration.** Hibernate never changes the database (`validate`): this is what broke `POST /api/v1/piquetes` on dev on 2026-11-01, when `ddl-auto=update` did not change `slot_status_check` (see the [Runbook](#runbook--degraded-modes)). When an enum gets a new value, the migration drops and recreates its check constraint with the new list, and the previous version still works because it never writes the new value.
+   - **A new enum value is a breaking change for rollback; document the revert step in the same PR.** The migration is compatible, but the rows the new version writes are not: the previous version cannot read the new value. The revert step (usually an `UPDATE` back to a value the previous version knows) goes in [Rollback](#rollback). Example: `EVALUATION_FAILED` (SCRUM-95).
+   - **A merged migration is never edited.** A fix is a new migration with the next number.
 4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
@@ -196,7 +207,7 @@ There is no one-command manual deploy of an arbitrary tag. The workflows can be 
 
 ## Rollback
 
-A rollback redeploys a previous version; it does not undo database changes, because the schema is updated by Hibernate and not by reversible migrations.
+A rollback redeploys a previous version; it does not undo database changes. That is safe because every migration works with the previous version of the service (see [Deploy](#deploy)); the `flyway_schema_history` table stays, and the previous version ignores it. Tested on Docker Compose on 2026-11-09: images of 0.3.0, then of the Flyway branch, then of 0.3.0 again; the piquetes created before were kept and a new one went from `PENDING` to `ELIGIBLE` each time.
 
 The nightly database backups ([README](../../README.md#database-backups)) stay on the VM's disk: they are not copied outside the cluster yet (SCRUM-91), so they do not survive the loss of the VM.
 
@@ -208,6 +219,23 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 - **Rehearsed on qa on 2026-11-01** (Diogo Pereira, in Argo CD): auto-sync and `selfHeal` off, History and rollback to the previous revision (`0.2.0-rc.2`), then back to `0.3.0-rc.3` with auto-sync and `selfHeal` on again. Rolling back took a little over a minute and less than a minute and a half (timed by hand). While rolled back, `/api/actuator/health` answered `200`, `GET /api/v1/piquetes` answered `404` (the nginx of the old version) and the PWA bundle was not the one of `0.3.0`. After rolling forward, `GET /api/v1/piquetes` answered `200` and a new piquete went from `PENDING` to `ELIGIBLE` in 3 seconds. The image tags of the pods were not captured.
 - Not rehearsed on prod. [TODO: one documented command for a rollback (RNF08); the rehearsal needed several steps in Argo CD, Diogo Costa]
 
+### Rolling back to a version without `EVALUATION_FAILED`
+
+Versions before SCRUM-95 do not know the slot status `EVALUATION_FAILED`: Hibernate cannot map the value to their `SlotStatus`, so reading a piquete with such a slot fails. The V2 migration itself needs no undo. Before rolling back past SCRUM-95, in this order:
+
+1. **Put those slots back to `PENDING`**, in the database of `escala-api`:
+
+   ```sql
+   UPDATE slot SET status = 'PENDING' WHERE status = 'EVALUATION_FAILED';
+   ```
+
+   Compose: `docker compose exec pg-escala-api psql -U "${ESCALA_DB_USER:-escala}" -d "${ESCALA_DB_NAME:-escala}" -c "…"`. dev, qa, prod: `kubectl exec` into the `escala-api` database pod, so only Diogo Costa today (SCRUM-92).
+2. **Roll back** as above.
+3. **Check again**: `SELECT count(*) FROM slot WHERE status = 'EVALUATION_FAILED';` must be `0`. A slot can be marked between step 1 and the moment the new version stops; if so, run step 1 again. The previous version never writes this value, so the count stays `0`.
+4. **Replay the DLQs** (see [Dead-letter queues](#dead-letter-queues)): `worker.avaliacao-pedida.dlq` first, then `api.avaliacao-concluida.dlq`. The requests the worker answered `FAILED` are evaluated again and their slots become `ELIGIBLE`; the previous version of `escala-api` ignores a `FAILED` result. Versions before SCRUM-95 requeue a message that fails, without retries or DLQ, so replay only once the cause of the failures is fixed.
+
+Not rehearsed: the SQL and the order come from the code of both versions, not from a rollback on Compose or qa.
+
 ## Observability
 
 - **Dashboard:** Grafana at https://escala-grafana.duckdns.org shows traces and logs for all environments (log in as `admin`; the password is in the Secret `grafana-admin`). [TODO: an Escala dashboard (RF39), Diogo Costa]
@@ -216,7 +244,7 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 - **Log levels:** the libraries (root) log at `INFO` in dev and qa and `WARN` in prod; the team's own code (`pt.isep.escala`) at `DEBUG` in dev and Compose and `INFO` in qa and prod, so the lines with the event type, IDs and trace ID stay in prod. Both are in each ConfigMap (`LOGGING_LEVEL_ROOT`, `LOGGING_LEVEL_PT_ISEP_ESCALA`) and in `compose.yaml` (SCRUM-94).
 - **What never reaches the logs:** request bodies, message bodies, SQL values and the free text or contacts they may carry (threat model T-07: free text is never logged; Loki keeps logs 90 days). Our own log lines carry only the event type, IDs and trace ID. Three things in the code enforce it, and the tests TC-SCRUM-94-01 to 06 check them:
   - `LibraryLogFilter` (in `logback-spring.xml` of each service) writes `DEBUG` and `TRACE` only for `pt.isep.escala`. At those levels Spring MVC prints request bodies, Spring AMQP prints message bodies and Hibernate prints SQL bind values. It also never writes `org.hibernate.orm.jdbc.error`, which prints the rejected row of a failed SQL statement.
-  - When a listener fails, `SafeListenerErrorHandler` logs the queue, the event type, the IDs and the exception classes, without the exception messages, which often carry the value that failed. Rejecting or requeueing the message is unchanged (retries and the dead-letter queue: SCRUM-95).
+  - When a listener fails, `SafeListenerErrorHandler` logs the queue, the event type, the IDs and the exception classes, without the exception messages, which often carry the value that failed. Each retry is logged the same way (`listener failed, retry 1 of 3 …`).
   - In `escala-api`, an unreadable request body (`400`) or a database failure (`500`, with the constraint name) is logged the same way; the response body is unchanged.
 - **Do not turn on `DEBUG` for a library with an environment variable** (for example `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP=DEBUG` in a ConfigMap). `LibraryLogFilter` drops those lines anyway, because at `DEBUG` libraries write request and message bodies and SQL values, which can hold free text or a contact (T-07). If a library's debug output is really needed, change `LibraryLogFilter` in a pull request, use synthetic data only, and revert it in the same sprint.
 - **Not covered:** an exception that no handler catches is still logged by the server with its message. The known cases (unreadable body, database failure, listener failure) are handled; new handlers follow the same rule.
@@ -231,6 +259,56 @@ The nightly database backups ([README](../../README.md#database-backups)) stay o
 | [TODO: define the alerts, their conditions, who is notified and the first action of each, Diogo Costa] | — | — | — |
 
 No alerts exist yet. They should at least cover: worker not ready, stale fire risk, dead letters and slow evaluations (see the runbook below).
+
+## Dead-letter queues
+
+A message that a service cannot process is retried through the broker after 5 s, 30 s and 2 min, then moved to `<queue>.dlq`; a malformed message (not JSON, or an ID that is not a UUID) goes there at once. Each attempt writes a `WARN` line with the queue, the event type, `eventId` and `traceId`. The mechanism and its tests are in **07 · Technical Design**, "Reliability of messaging" (SCRUM-95).
+
+**What a message in a DLQ means for the user.** A request the worker could not evaluate is answered `FAILED`, and the slot shows `EVALUATION_FAILED` on `GET /api/v1/piquetes`. If the worker's database was down, that answer could not be written either and the slot stays `PENDING`. A failed evaluation is resolved by replaying the DLQ (operator) until the product offers a retry (SCRUM-65, SCRUM-79).
+
+**Where.**
+
+- **Compose:** the management UI at http://localhost:15672 and `docker compose exec rabbitmq rabbitmqctl …`; the admin login is `RABBITMQ_USER` (see [Configuration](#configuration)).
+- **dev, qa, prod:** the same commands through `infra/scripts/rabbitmq-ui` (port-forward to the management UI) or `kubectl exec`, which need the cluster's kubeconfig: only Diogo Costa has it today (SCRUM-92).
+
+**Count.**
+
+```bash
+docker compose exec rabbitmq rabbitmqctl list_queues name messages | grep '\.dlq'
+```
+
+**Inspect headers and IDs only, never bodies.** A body can hold free text or a contact (threat model T-07), so do not open messages with "Get messages" in the UI. Ask the management API for the messages with their body cut to 0 bytes; `reject_requeue_true` leaves them in the DLQ:
+
+```bash
+curl -s -u "${RABBITMQ_USER:-escala}" -H 'content-type: application/json' -X POST   http://localhost:15672/api/queues/%2F/api.avaliacao-concluida.dlq/get   -d '{"count":10,"ackmode":"reject_requeue_true","encoding":"auto","truncate":0}'
+```
+
+`curl` asks for the password. Each message shows its headers: `escala-retry-count` (3 after the retries, absent for a malformed message) and `x-death` (the queue and the reason, `rejected`). The `eventId` and `traceId` of each message are in the `WARN` lines of the service that rejected it (Grafana, Loki; or `docker compose logs`).
+
+**Replay** once the cause is fixed (the database is back, the bug is deployed), with the shovel plugin, which moves the messages that are in the DLQ back to their queue and then deletes itself:
+
+```bash
+docker compose exec rabbitmq rabbitmqctl set_parameter shovel replay-worker-avaliacao-pedida   '{"src-protocol":"amqp091","src-uri":"amqp://","src-queue":"worker.avaliacao-pedida.dlq","src-delete-after":"queue-length","dest-protocol":"amqp091","dest-uri":"amqp://","dest-queue":"worker.avaliacao-pedida"}'
+```
+
+In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue without `.dlq`.
+
+- A replayed message keeps `escala-retry-count`: if it fails again, it goes back to the DLQ at once, without new retries. A malformed message always goes back to the DLQ; it is never dropped.
+- Replaying is safe to repeat: consumers ignore an `eventId` they have already processed (RNF05). A request the worker answered `FAILED` is not marked as processed, so replaying it evaluates it again, and an `ELIGIBLE` result turns `EVALUATION_FAILED` into `ELIGIBLE`.
+- Tried on Compose on 2026-11-12:
+  1. `pg-elegibilidade-worker` was stopped and a piquete created; its slot stayed `PENDING`.
+  2. The worker retried after 5 s, 30 s and 2 min (plus 30 s each time, waiting for a database connection), then the request was in `worker.avaliacao-pedida.dlq`.
+  3. The inspect command above showed `escala-retry-count` 3 and no body.
+  4. The `rabbitmq` container was recreated: both DLQ messages were still there.
+  5. The database was started again and the replay command run: the slot was `ELIGIBLE` 2 seconds later, the DLQ was empty and the shovel had deleted itself.
+  6. A malformed message replayed the same way went back to `api.avaliacao-concluida.dlq` with one delivery.
+
+**Limitations.**
+
+- The worker's database down: the worker cannot write the `FAILED` answer, so the slot stays `PENDING` (not `EVALUATION_FAILED`) until the DLQ is replayed.
+- In dev, qa and prod the broker has no persistent volume: a restart of its pod loses the messages in every queue, the DLQs included (SCRUM-155, with publisher confirms for the outbox).
+- A listener that stops does not make the readiness probe fail yet (SCRUM-88).
+- In Compose, before SCRUM-95 the broker's data folder was named after the container ID, so a recreated container started empty. The container now has `hostname: rabbitmq`; the old folders `rabbit@<container ID>` stay in the volume and can be deleted (see [Run locally](#run-locally)).
 
 ## Runbook — degraded modes
 

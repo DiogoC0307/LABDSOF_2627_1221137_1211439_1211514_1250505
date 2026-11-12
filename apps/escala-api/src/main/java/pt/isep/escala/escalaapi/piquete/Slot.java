@@ -58,8 +58,22 @@ class Slot {
 		return assignmentId;
 	}
 
-	void markEligible() {
+	/** An ELIGIBLE evaluation applies to a slot waiting for it, or to one whose evaluation failed and was replayed. */
+	boolean markEligible() {
+		if (status != SlotStatus.PENDING && status != SlotStatus.EVALUATION_FAILED) {
+			return false;
+		}
 		this.status = SlotStatus.ELIGIBLE;
+		return true;
+	}
+
+	/** A failed evaluation never applies a change (RF24): it only marks a slot that is still waiting for one. */
+	boolean markEvaluationFailed() {
+		if (status != SlotStatus.PENDING) {
+			return false;
+		}
+		this.status = SlotStatus.EVALUATION_FAILED;
+		return true;
 	}
 
 	void setPiquete(Piquete piquete) {

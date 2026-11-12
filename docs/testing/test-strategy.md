@@ -64,13 +64,25 @@ At least 70% of the lines of new code, measured with JaCoCo (Java services) and 
 | `escala-api` | `CreatePiqueteIT` | 2 | Creating a piquete through the API (integration, Testcontainers) |
 | `escala-api` | `LogLeakIT` | 4 | TC-SCRUM-94-01, 02, 05, 06 with the levels of dev: a marker in a processed message, in a message the listener rejects, in a request body the API rejects, and in a row the database rejects never reaches the logs |
 | `escala-api` | `LogLeakVerboseLevelsIT` | 2 | TC-SCRUM-94-03, 04 with root `DEBUG`, SQL binds at `TRACE` and Spring AMQP at `DEBUG`: request values, SQL values and message bodies never reach the logs |
+| `escala-api` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01: an empty database is built by the migrations and its columns and constraints are identical to the schema `ddl-auto=update` created up to 0.3.0 |
+| `escala-api` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 (no Flyway history, one piquete) is baselined at version 1 and the piquete is still listed |
+| `escala-api` | `RetryCountSurvivesRestartIT` | 1 | TC-SCRUM-95-01: a result that fails is retried through the broker's retry queues (short TTLs declared by the test), keeps its retry count across a restart of the service, then lands in the DLQ, persistent |
+| `escala-api` | `DuplicateDeliveryIT` | 1 | TC-SCRUM-95-02: the same `AvaliacaoConcluida` delivered twice is applied once |
+| `escala-api` | `EvaluationStatesIT` | 4 | TC-SCRUM-95-03: through `GET /api/v1/piquetes`, a slot is `PENDING`, then `ELIGIBLE` or `EVALUATION_FAILED`; a `FAILED` result never makes it `ELIGIBLE` nor changes an `ELIGIBLE` slot; a result that cannot be applied after the retries shows `EVALUATION_FAILED` |
+| `escala-api` | `MalformedMessageIT` | 2 | TC-SCRUM-95-04: a message that is not JSON, or whose `eventId` is not a UUID, goes to the DLQ at once with one delivery |
+| `escala-api` | `TopologyMatchesDefinitionsIT` | 5 | TC-SCRUM-95-05: the queues, exchanges, bindings and arguments declared in code are those of `infra/rabbitmq/definitions.json`; each consumed queue has its DLQ and its retry queues of 5 s, 30 s and 2 min; the three ConfigMap copies equal the file |
+| `escala-api` | `ListenerAuthenticationIT` | 1 | TC-SCRUM-95-06: the service starts before its broker user exists; the listener consumes once the user is created, without a restart |
 | `elegibilidade-worker` | `ElegibilidadeWorkerApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
 | `elegibilidade-worker` | `AvaliacaoPedidaIT` | 1 | An `AvaliacaoPedida` event sent through RabbitMQ is answered with an `AvaliacaoConcluida` that is `ELIGIBLE` and carries the same trace ID |
 | `elegibilidade-worker` | `LogLeakIT` | 2 | TC-SCRUM-94-01, 02, as for `escala-api` |
 | `elegibilidade-worker` | `LogLeakVerboseLevelsIT` | 1 | TC-SCRUM-94-04, as for `escala-api` |
+| `elegibilidade-worker` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01, as for `escala-api` |
+| `elegibilidade-worker` | `FlywayExistingDatabaseIT` | 1 | TC-SCRUM-87-02: a database created by 0.3.0 with one evaluation is baselined at version 1 and keeps the evaluation |
+| `elegibilidade-worker` | `RetryCountSurvivesRestartIT`, `DuplicateDeliveryIT`, `MalformedMessageIT`, `TopologyMatchesDefinitionsIT`, `ListenerAuthenticationIT` | 1, 1, 2, 5, 1 | TC-SCRUM-95-01, 02, 04, 05, 06, as for `escala-api`; a duplicate `AvaliacaoPedida` gives one evaluation and one `AvaliacaoConcluida` |
+| `elegibilidade-worker` | `EvaluationFailedIT` | 1 | TC-SCRUM-95-03: a request the worker cannot evaluate after the retries is answered `FAILED`, never `ELIGIBLE`, and is in the DLQ |
 | `apps/web` | `app.spec.ts` | 11 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt |
 
-Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, and on 2026-11-12 for the logging tests. Only the logging tests carry a `TC-` ID so far.
+Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, on 2026-11-09 for the Flyway tests and on 2026-11-12 for the logging and messaging tests. Every Java test runs against the Flyway migrations; `FlywayFreshDatabaseIT` stops at version 1, the version it compares with 0.3.0. Only the Flyway, logging and messaging tests carry a `TC-` ID so far.
 
 ## Test case convention
 
