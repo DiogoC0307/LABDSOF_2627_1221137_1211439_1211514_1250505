@@ -20,7 +20,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
-@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
+// Only V1 is compared with 0.3.0: later migrations change the schema on purpose (V2, SCRUM-95).
+@SpringBootTest(properties = {"spring.rabbitmq.dynamic=true", "spring.flyway.target=1"})
 @Testcontainers
 class FlywayFreshDatabaseIT {
 

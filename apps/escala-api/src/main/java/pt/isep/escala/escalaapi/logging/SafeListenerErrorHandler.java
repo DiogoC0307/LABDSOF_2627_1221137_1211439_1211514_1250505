@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.listener.FatalExceptionStrategy;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
 import org.springframework.amqp.rabbit.listener.ConditionalRejectingErrorHandler;
 import tools.jackson.databind.JsonNode;
@@ -13,8 +14,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Spring AMQP's default error handler with a different log line: it writes the queue, the exception classes and
  * the event's IDs, never the message body or the exception messages (SCRUM-94). Rejecting or requeueing the
- * message is left to {@link ConditionalRejectingErrorHandler}, unchanged; retries and the dead-letter queue are
- * SCRUM-95.
+ * message is left to {@link ConditionalRejectingErrorHandler}.
  */
 public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 
@@ -22,14 +22,26 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 
 	private static final ObjectMapper JSON = JsonMapper.builder().build();
 
+	public SafeListenerErrorHandler() {
+	}
+
+	protected SafeListenerErrorHandler(FatalExceptionStrategy exceptionStrategy) {
+		super(exceptionStrategy);
+	}
+
 	@Override
 	protected void log(Throwable t) {
+		Message message = t instanceof ListenerExecutionFailedException failed ? failed.getFailedMessage() : null;
+		log.warn("listener failed {} exception={}", describe(message), SafeLogValues.exceptionClasses(t));
+	}
+
+	/** The queue, the event type and the event's IDs of a message, for a log line; never its body. */
+	public static String describe(Message message) {
 		String queue = "unknown";
 		String type = "unknown";
 		String eventId = "missing";
 		String traceId = "missing";
-		if (t instanceof ListenerExecutionFailedException failed && failed.getFailedMessage() != null) {
-			Message message = failed.getFailedMessage();
+		if (message != null) {
 			if (message.getMessageProperties().getConsumerQueue() != null) {
 				queue = message.getMessageProperties().getConsumerQueue();
 			}
@@ -42,8 +54,7 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 				type = "not JSON";
 			}
 		}
-		log.warn("listener failed queue={} type={} eventId={} traceId={} exception={}",
-				queue, type, eventId, traceId, SafeLogValues.exceptionClasses(t));
+		return "queue=" + queue + " type=" + type + " eventId=" + eventId + " traceId=" + traceId;
 	}
 
 	private static String knownType(String type) {

@@ -34,7 +34,7 @@ import tools.jackson.databind.json.JsonMapper;
 
 /**
  * The broker topology lives in infra/rabbitmq/definitions.json (imported in Compose and in the three clusters'
- * ConfigMaps) and is declared again in code for the tests and for Compose. Both must say the same, and the retry
+ * ConfigMaps) and is declared again in code, which the tests use (Compose and the clusters set SPRING_RABBITMQ_DYNAMIC=false). Both must say the same, and the retry
  * delays (5 s, 30 s, 2 min) are the TTLs of the retry queues there.
  */
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")

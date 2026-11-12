@@ -12,11 +12,15 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageDeliveryMode;
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.builder.SpringApplicationBuilder;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.junit.jupiter.Container;
@@ -30,6 +34,7 @@ import pt.isep.escala.escalaapi.EscalaApiApplication;
  * queue. The retry count must be carried by the message, not kept in the service.
  */
 @Testcontainers
+@ExtendWith(OutputCaptureExtension.class)
 class RetryCountSurvivesRestartIT {
 
 	@Container
@@ -72,7 +77,7 @@ class RetryCountSurvivesRestartIT {
 
 	@Test
 	@DisplayName("TC-SCRUM-95-01 a failing message is retried through the broker's retry queues, keeps its count across a restart of the service, then lands in the DLQ")
-	void failingMessageIsRetriedAcrossARestartThenDeadLettered() {
+	void failingMessageIsRetriedAcrossARestartThenDeadLettered(CapturedOutput output) {
 		ConfigurableApplicationContext service = startService();
 		try {
 			JdbcTemplate jdbc = MessagingTestSupport.jdbc(postgres);
@@ -80,7 +85,8 @@ class RetryCountSurvivesRestartIT {
 			// The database refuses to make this slot ELIGIBLE, so every delivery of the result fails.
 			jdbc.execute("ALTER TABLE slot ADD CONSTRAINT tc_scrum_95_01 CHECK (assignment_id <> '" + assignmentId
 					+ "'::uuid OR status <> 'ELIGIBLE')");
-			MessagingTestSupport.sendConcluida(rabbitTemplate, UUID.randomUUID(), assignmentId, "ELIGIBLE");
+			UUID eventId = UUID.randomUUID();
+			MessagingTestSupport.sendConcluida(rabbitTemplate, eventId, assignmentId, "ELIGIBLE");
 
 			// After two failed deliveries the message waits in the second retry queue: stop the service there.
 			await().atMost(Duration.ofSeconds(15))
@@ -91,9 +97,15 @@ class RetryCountSurvivesRestartIT {
 			Message dead = MessagingTestSupport.awaitDeadLetter(rabbitTemplate, DLQ, Duration.ofSeconds(30));
 
 			assertThat(dead.getMessageProperties().<Object>getHeader(RETRY_COUNT_HEADER)).hasToString("3");
-			// Each retry queue held the message once: the count did not start again after the restart.
-			assertThat(MessagingTestSupport.deathCount(dead, QUEUE + ".test-retry.1")).isEqualTo(1);
-			assertThat(MessagingTestSupport.deathCount(dead, QUEUE + ".test-retry.2")).isEqualTo(1);
+			// Persistent, so it is not lost if the broker restarts while it waits in a retry queue or in the DLQ.
+			assertThat(dead.getMessageProperties().getReceivedDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
+			// Each retry happened once, two before the restart and one after it: the count did not start again. (The
+			// broker's x-death header cannot show this: RabbitMQ 4 does not keep it when a client publishes the message again.)
+			for (int retry = 1; retry <= 3; retry++) {
+				assertThat(MessagingTestSupport.occurrences(output.getAll(), "retry " + retry + " of 3 queue=" + QUEUE))
+						.as("retry %d", retry).isEqualTo(1);
+			}
+			assertThat(MessagingTestSupport.occurrences(output.getAll(), "eventId=" + eventId)).isEqualTo(4);
 			assertThat(MessagingTestSupport.deathCount(dead, QUEUE + ".test-retry.3")).isEqualTo(1);
 			assertThat(MessagingTestSupport.messageCount(admin, QUEUE)).isZero();
 		} finally {
