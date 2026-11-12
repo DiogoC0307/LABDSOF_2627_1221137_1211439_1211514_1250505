@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Spring Boot's default console logging (logging.* properties and LOGGING_* variables still apply), plus a
+     filter that keeps request values, SQL values and message bodies out of the logs at any level (SCRUM-94). -->
+<configuration>
+	<turboFilter class="pt.isep.escala.escalaapi.logging.LibraryLogFilter"/>
+	<include resource="org/springframework/boot/logging/logback/base.xml"/>
+</configuration>
