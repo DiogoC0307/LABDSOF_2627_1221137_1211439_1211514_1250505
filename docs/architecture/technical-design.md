@@ -160,7 +160,7 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 
 ## Observability and SLIs
 
-- Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text
+- Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text. `DEBUG` only for `pt.isep.escala`; request bodies, message bodies, SQL values and exception messages never reach the logs (SCRUM-94, see Deployment and Operations)
 - Health: `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` (RF36; through the web proxy `/api/actuator/...`). Today `/actuator/health` reports DOWN when RabbitMQ is down, but the readiness group does not yet include the database or the broker, and the Kubernetes probes use `/actuator/health`. Both are fixed in SCRUM-88 (Sprint 2).
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
