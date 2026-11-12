@@ -1,6 +1,6 @@
 package pt.isep.escala.elegibilidadeworker.messaging;
 
-import org.springframework.amqp.rabbit.listener.ConditionalRejectingErrorHandler;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
 import pt.isep.escala.elegibilidadeworker.logging.SafeListenerErrorHandler;
 
 /**

@@ -68,14 +68,14 @@ class TopologyMatchesDefinitionsIT {
 
 		for (Queue queue : declared(Queue.class)) {
 			JsonNode defined = named(definitions.path("queues"), queue.getName());
-			assertThat(defined != null).as("queue %s in definitions.json", queue.getName()).isTrue();
+			assertThat((Object) defined).as("queue %s in definitions.json", queue.getName()).isNotNull();
 			assertThat(queue.isDurable()).as("durable %s", queue.getName()).isEqualTo(defined.path("durable").asBoolean());
 			assertThat((JsonNode) JSON.valueToTree(queue.getArguments())).as("arguments of %s", queue.getName())
 					.isEqualTo(defined.path("arguments"));
 		}
 		for (Exchange exchange : declared(Exchange.class)) {
 			JsonNode defined = named(definitions.path("exchanges"), exchange.getName());
-			assertThat(defined != null).as("exchange %s in definitions.json", exchange.getName()).isTrue();
+			assertThat((Object) defined).as("exchange %s in definitions.json", exchange.getName()).isNotNull();
 			assertThat(exchange.getType()).isEqualTo(defined.path("type").asText());
 			assertThat(exchange.isDurable()).isEqualTo(defined.path("durable").asBoolean());
 		}

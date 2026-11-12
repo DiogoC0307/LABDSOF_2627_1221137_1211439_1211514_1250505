@@ -1,6 +1,6 @@
 package pt.isep.escala.escalaapi.messaging;
 
-import org.springframework.amqp.rabbit.listener.ConditionalRejectingErrorHandler;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
 import pt.isep.escala.escalaapi.logging.SafeListenerErrorHandler;
 
 /**
