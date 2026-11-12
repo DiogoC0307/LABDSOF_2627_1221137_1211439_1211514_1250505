@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Message;
+import org.springframework.amqp.listener.ConditionalRejectingErrorHandler;
 import org.springframework.amqp.listener.ListenerExecutionFailedException;
-import org.springframework.amqp.rabbit.listener.ConditionalRejectingErrorHandler;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -22,12 +22,16 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 
 	private static final ObjectMapper JSON = JsonMapper.builder().build();
 
+	private static final String UNKNOWN = "unknown";
+
+	private static final String MISSING = "missing";
+
 	@Override
 	protected void log(Throwable t) {
-		String queue = "unknown";
-		String type = "unknown";
-		String eventId = "missing";
-		String traceId = "missing";
+		String queue = UNKNOWN;
+		String type = UNKNOWN;
+		String eventId = MISSING;
+		String traceId = MISSING;
 		if (t instanceof ListenerExecutionFailedException failed && failed.getFailedMessage() != null) {
 			Message message = failed.getFailedMessage();
 			if (message.getMessageProperties().getConsumerQueue() != null) {
@@ -42,15 +46,17 @@ public class SafeListenerErrorHandler extends ConditionalRejectingErrorHandler {
 				type = "not JSON";
 			}
 		}
-		log.warn("listener failed queue={} type={} eventId={} traceId={} exception={}",
-				queue, type, eventId, traceId, SafeLogValues.exceptionClasses(t));
+		if (log.isWarnEnabled()) {
+			log.warn("listener failed queue={} type={} eventId={} traceId={} exception={}",
+					queue, type, eventId, traceId, SafeLogValues.exceptionClasses(t));
+		}
 	}
 
 	private static String knownType(String type) {
 		return switch (type) {
 			case "AvaliacaoPedida", "AvaliacaoConcluida", "ExtracaoPedida", "ExtracaoConcluida", "RiscoAtualizado" -> type;
-			case "" -> "missing";
-			default -> "unknown";
+			case "" -> MISSING;
+			default -> UNKNOWN;
 		};
 	}
 }
