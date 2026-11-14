@@ -53,14 +53,16 @@ The first build takes several minutes. It works when:
 - `docker compose ps` shows every service as healthy
 - `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`; on `escala-api`, `/actuator/health/liveness` and `/actuator/health/readiness` also answer `{"status":"UP"}`. RF36 names `/health/ready`; the services expose Spring Boot Actuator's `/actuator/health` [TODO: align the endpoint name with RF36, Diogo Costa]
 - `GET http://localhost:8000/api/actuator/health` answers the same through the web nginx; it is the same path as on Kubernetes (`https://escala-<env>.duckdns.org/api/actuator/health`)
-- the walking skeleton works. Create a piquete and look at its slot a few seconds later:
+- the walking skeleton works. Sign in as the synthetic supervisor (mocked sign-in, ADR 0006), create a piquete and look at its slot a few seconds later:
 
   ```bash
-  curl -X POST http://localhost:8000/api/v1/piquetes -H 'Content-Type: application/json' -d '{"dutyDate":"2026-11-01"}'   # slot status: PENDING
-  curl http://localhost:8000/api/v1/piquetes                                                                               # a few seconds later: ELIGIBLE
+  TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/mock-sign-in -H 'Content-Type: application/json' \
+    -d '{"memberId":"00000000-0000-4000-8000-000000000002"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
+  curl -X POST http://localhost:8000/api/v1/piquetes -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"dutyDate":"2026-11-01"}'   # slot status: PENDING
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/piquetes                                                                               # a few seconds later: ELIGIBLE
   ```
 
-  The PWA at http://localhost:8000 shows the same list.
+  Without the `Authorization` header both calls answer `401`; with the token of the synthetic member (`…0001`) or admin (`…0003`), the `POST` answers `403`. The PWA at http://localhost:8000 opens on the sign-in screen; "Synthetic Supervisor" sees the same list and the form to create a piquete.
 - optional, Grafana at http://localhost:3000 (user `admin`) with the Compose profile `observability`, see [Observability](#observability) [TODO: Grafana dashboard for Escala (RF39) does not exist yet, Diogo Costa]
 
 Stop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.
@@ -192,7 +194,7 @@ The automatic path:
    - **It works with the previous version of the service**, so a rollback of the image never needs a database restore. Add first, remove later: a new column is nullable or has a default; a column or value is dropped only in a later release, after no deployed version uses it; a rename is a new column, a copy, and a later drop.
    - **A changed enum, column or constraint is a migration.** Hibernate never changes the database (`validate`): this is what broke `POST /api/v1/piquetes` on dev on 2026-11-01, when `ddl-auto=update` did not change `slot_status_check` (see the [Runbook](#runbook--degraded-modes)). When an enum gets a new value, the migration drops and recreates its check constraint with the new list, and the previous version still works because it never writes the new value.
    - **A merged migration is never edited.** A fix is a new migration with the next number.
-4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
+4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}` without a token; `GET /api/v1/piquetes` without a token answers `401`; then sign in as "Synthetic Supervisor" (in the PWA, or with the commands in [Run locally](#run-locally) on the environment's URL), create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
 There is no one-command manual deploy of an arbitrary tag. The workflows can be started by hand only for dev (*Deploy DEV* has `workflow_dispatch`); to put an older version back, use [Rollback](#rollback). The release steps (cutting a release, fixing what qa finds, hotfixes) are in the [README](../../README.md#releasing-git-flow).

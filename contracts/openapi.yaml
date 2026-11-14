@@ -7,10 +7,14 @@ info:
     Authentication is a mocked bearer token carrying memberId and role (ADR 0006).
 
 
-    Implemented in escala-api today: GET and POST /api/v1/piquetes and the three Actuator health
-    endpoints under /actuator/health. Every other path is the planned product API and does not exist
-    yet. The bearer token is not checked yet either: escala-api has no security dependency, so the
-    implemented endpoints are open (security: []).
+    Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
+    under /api/v1/auth and the three Actuator health endpoints under /actuator/health. Every other path
+    is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
+
+
+    The bearer token is checked on every implemented endpoint except the health and sign-in ones
+    (security: [] on those): no token, or a token escala-api does not accept, answers 401; a role the
+    access-control matrix on 09 does not allow answers 403 (SCRUM-63).
 
 
     Servers and base paths. Paths are the ones escala-api serves. The web nginx forwards /api/ to
@@ -30,6 +34,7 @@ servers:
     description: prod (Kubernetes), through the web nginx
 tags:
   - name: health
+  - name: auth
   - name: me
   - name: piquetes
   - name: assignments
@@ -170,9 +175,10 @@ paths:
     get:
       tags: [piquetes]
       summary: List piquetes (walking skeleton, SCRUM-45)
-      description: All piquetes with their slots, in the order the database returns them.
+      description: >
+        All piquetes with their slots, in the order the database returns them. Any signed-in role
+        (MEMBER, SUPERVISOR, ADMIN).
       operationId: listPiquetes
-      security: []
       parameters:
         - $ref: "#/components/parameters/TraceId"
       responses:
@@ -187,15 +193,17 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PiqueteResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [piquetes]
       summary: Create a piquete for a date with one slot
       description: >
         The new slot has role CREW_MEMBER and status PENDING; escala-api queues AvaliacaoPedida and the
         slot becomes ELIGIBLE after the worker answers (a few seconds). Fields other than dutyDate are
-        ignored. No bearer token is checked yet.
+        ignored. SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
+        403 and nothing is created.
       operationId: createPiquete
-      security: []
       parameters:
         - $ref: "#/components/parameters/TraceId"
       requestBody:
@@ -232,6 +240,10 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
         "415":
           description: Content-Type is not application/json (Spring Boot error body)
           headers:
@@ -241,6 +253,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/auth/mock-users:
+    get:
+      tags: [auth]
+      summary: The users the mocked sign-in offers (SCRUM-63)
+      description: >
+        The active members, each with ID, name and role only (never a contact). Synthetic users only while
+        sign-in is mocked (ADR 0006; 09, T-01).
+      operationId: listMockUsers
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The users to pick from
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MockUser"
+  /api/v1/auth/mock-sign-in:
+    post:
+      tags: [auth]
+      summary: Sign in as one of the mocked users and get their token (SCRUM-63)
+      description: >
+        No password: the token is issued for any active member (ADR 0006). Send it as
+        Authorization: Bearer <token>.
+      operationId: mockSignIn
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MockSignInRequest"
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MockSignInResponse"
+        "400":
+          description: memberId missing, or the body is not valid JSON or memberId is not a UUID
+        "401":
+          description: Unknown or inactive member. No body, no token.
   /piquetes/{id}/publish:
     post:
       tags: [piquetes]
@@ -423,7 +489,30 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Mocked token with memberId and role (ADR 0006). Not checked by escala-api yet.
+      description: >
+        Mocked token from POST /api/v1/auth/mock-sign-in (ADR 0006): "mock." followed by the base64url of
+        {"memberId": "...", "role": "..."}. It is not signed: escala-api accepts it only for an active member
+        whose role in the database is the role in the token, and answers 401 otherwise. Anyone can build the
+        token of a seeded user, the same exposure as the mocked sign-in itself (09, T-01).
+  responses:
+    Unauthorized:
+      description: No token, or a token escala-api does not accept (Spring Boot error body)
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/TraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The role is not allowed (Spring Boot error body)
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/TraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   parameters:
     TraceId:
       name: X-Trace-Id
@@ -442,6 +531,44 @@ components:
         type: string
         example: d26598d5-750d-4276-b097-f629d6eef444
   schemas:
+    AccessRole:
+      type: string
+      description: What a member may do (ADR 0006; access-control matrix on 09). Not the member's rank.
+      enum: [MEMBER, SUPERVISOR, ADMIN]
+    MockUser:
+      type: object
+      required: [id, fullName, role]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+          example: Synthetic Supervisor
+        role:
+          $ref: "#/components/schemas/AccessRole"
+    MockSignInRequest:
+      type: object
+      required: [memberId]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+          example: 00000000-0000-4000-8000-000000000002
+    MockSignInResponse:
+      type: object
+      required: [token, memberId, role, fullName]
+      properties:
+        token:
+          type: string
+          example: mock.eyJtZW1iZXJJZCI6IjAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMiIsInJvbGUiOiJTVVBFUlZJU09SIn0
+        memberId:
+          type: string
+          format: uuid
+        role:
+          $ref: "#/components/schemas/AccessRole"
+        fullName:
+          type: string
     CreatePiqueteRequest:
       type: object
       required: [dutyDate]

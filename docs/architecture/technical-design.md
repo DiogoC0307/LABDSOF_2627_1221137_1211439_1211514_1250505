@@ -143,7 +143,11 @@ Consistency is strong inside each database and eventual between services (visibl
 
 - REST: [`contracts/openapi.yaml`](../../contracts/openapi.yaml)
 - Events: [`contracts/events/`](../../contracts/events/) — envelope `eventId`, `type`, `schemaVersion`, `occurredAt`, `traceId`
-- Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)); health endpoints stay open
+- Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)), implemented in SCRUM-63:
+  - `GET /api/v1/auth/mock-users` lists the seeded synthetic users (ID, name, role) and `POST /api/v1/auth/mock-sign-in` returns the token of one of them; the PWA shows them on its sign-in screen and keeps the session in `localStorage`.
+  - The token is `mock.` and the base64url of `{"memberId","role"}`. It is **not signed**: `escala-api` accepts it only for an active member whose role in the `member` table (migration V3) is the role in the token. Anyone can build the token of a seeded user, the same exposure as the mocked sign-in itself (09, T-01): synthetic data only, real authentication before any real data.
+  - `auth/SecurityConfig` checks the role on the server for every request: `GET /api/v1/piquetes` for any role, `POST /api/v1/piquetes` for `SUPERVISOR` only (09: the admin does not build the schedule). No token, or one that is not accepted, answers `401`; a role that is not allowed, `403`; any other path is refused. The health endpoints and the two sign-in endpoints stay open. Tests: TC-SCRUM-63-01 to 04 ([test strategy](../testing/test-strategy.md)).
+  - The token is never logged. Endpoints that act for a member will take it from the token (`SignedInMember`), never from the body (T-03, SCRUM-68 and SCRUM-73).
 - Header: `X-Trace-Id` (RF37)
 
 Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
