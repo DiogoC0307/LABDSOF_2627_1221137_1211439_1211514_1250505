@@ -1,5 +1,6 @@
 package pt.isep.escala.escalaapi.messaging;
 
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +43,8 @@ public class RetryPublisher implements DisposableBean {
 		RabbitConnectionFactoryBean bean = new RabbitConnectionFactoryBean();
 		rabbitConfigurer.configure(bean);
 		bean.afterPropertiesSet();
-		this.connectionFactory = new CachingConnectionFactory(bean.getObject());
+		this.connectionFactory = new CachingConnectionFactory(
+				Objects.requireNonNull(bean.getObject(), "RabbitMQ connection factory for the retry publisher"));
 		cachingConfigurer.configure(this.connectionFactory);
 		this.connectionFactory.setPublisherConfirmType(ConfirmType.SIMPLE);
 		this.connectionFactory.setPublisherReturns(true);
