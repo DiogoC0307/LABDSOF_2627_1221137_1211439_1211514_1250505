@@ -606,6 +606,11 @@ data:
 
     rabbitmqctl import_definitions /etc/rabbitmq/definitions.json
     echo "rabbitmq topology imported"
+
+    # Shovel plugin: an operator replays a dead-letter queue by moving its messages back to the queue (SCRUM-95,
+    # docs/operations/deployment-and-operations.md). Enabled at run time, so the image and its entrypoint are unchanged.
+    rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management >/dev/null
+    echo "rabbitmq shovel plugin enabled"
 kind: ConfigMap
 metadata:
   name: rabbitmq-config
@@ -778,7 +783,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:f982ce8ac453899f9593b70972652a8da0484c74
+        image: ghcr.io/diogoc0307/elegibilidade-worker:1e672505ff35d4e08aae3ebc4ca23cb4b3df0192
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -839,7 +844,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:f982ce8ac453899f9593b70972652a8da0484c74
+        image: ghcr.io/diogoc0307/escala-api:1e672505ff35d4e08aae3ebc4ca23cb4b3df0192
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -965,7 +970,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:f982ce8ac453899f9593b70972652a8da0484c74
+      - image: ghcr.io/diogoc0307/escala-web:1e672505ff35d4e08aae3ebc4ca23cb4b3df0192
         name: web
         ports:
         - containerPort: 80
