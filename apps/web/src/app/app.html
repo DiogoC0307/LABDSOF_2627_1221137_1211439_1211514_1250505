@@ -1,42 +1,49 @@
 <main class="page">
-  <header class="top">
-    <h1>Today's piquete</h1>
-    @if (canInstall()) {
-      <button type="button" class="install" (click)="install()">Install Escala</button>
-    }
-  </header>
-  <p class="lead">Date, slot and evaluation on a phone-sized screen. A new slot starts PENDING and becomes ELIGIBLE after evaluation.</p>
-
-  @if (offline()) {
-    <p class="notice">Showing the last loaded roster. You are offline.</p>
-  }
-
-  @if (todayPiquete(); as piquete) {
-    <article class="card" aria-label="Today's piquete">
-      <p class="date">{{ piquete.dutyDate }}</p>
-      @for (slot of piquete.slots; track slot.id) {
-        <p class="slot">
-          <span class="label">Slot</span>
-          <span>{{ slot.role }}</span>
-        </p>
-        <p class="slot">
-          <span class="label">Evaluation</span>
-          <span class="status">{{ slot.status }}</span>
-        </p>
-      } @empty {
-        <p class="empty">No slot on today's piquete.</p>
+  @if (auth.session(); as session) {
+    <nav class="menu" aria-label="Menu">
+      <span class="session">{{ session.fullName }} · {{ session.role }}</span>
+      <button type="button" class="sign-out" (click)="signOut()">Sign out</button>
+    </nav>
+    <header class="top">
+      <h1>Today's piquete</h1>
+      @if (canInstall()) {
+        <button type="button" class="install" (click)="install()">Install Escala</button>
       }
-    </article>
+    </header>
+    <p class="lead">Date, slot and evaluation on a phone-sized screen. A new slot starts PENDING and becomes ELIGIBLE after evaluation.</p>
+
+    @if (offline()) {
+      <p class="notice">Showing the last loaded roster. You are offline.</p>
+    }
+
+    @if (todayPiquete(); as piquete) {
+      <article class="card" aria-label="Today's piquete">
+        <p class="date">{{ piquete.dutyDate }}</p>
+        @for (slot of piquete.slots; track slot.id) {
+          <p class="slot">
+            <span class="label">Slot</span>
+            <span>{{ slot.role }}</span>
+          </p>
+          <p class="slot">
+            <span class="label">Evaluation</span>
+            <span class="status">{{ slot.status }}</span>
+          </p>
+        } @empty {
+          <p class="empty">No slot on today's piquete.</p>
+        }
+      </article>
   } @else {
     <p class="empty">No piquete for today.</p>
   }
-  <form (ngSubmit)="create()">
-    <label>
-      Date
-      <input type="date" name="dutyDate" [(ngModel)]="dutyDate" required />
-    </label>
-    <button type="submit">Create piquete</button>
-  </form>
+  @if (auth.isSupervisor()) {
+    <form (ngSubmit)="create()" aria-label="Schedule editor">
+      <label>
+        Date
+        <input type="date" name="dutyDate" [(ngModel)]="dutyDate" required />
+      </label>
+      <button type="submit">Create piquete</button>
+    </form>
+  }
 
   @if (error()) {
     <p class="error" role="alert">{{ error() }}</p>
@@ -55,4 +62,7 @@
       <li class="empty">No piquetes yet.</li>
     }
   </ul>
+  } @else {
+    <app-sign-in (signedIn)="onSignedIn()" />
+  }
 </main>

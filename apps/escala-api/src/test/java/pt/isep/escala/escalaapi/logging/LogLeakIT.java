@@ -25,6 +25,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.springframework.http.HttpHeaders;
+import pt.isep.escala.escalaapi.auth.MockTokens;
 
 // The levels of dev: root INFO, the team's own packages at DEBUG.
 @SpringBootTest(properties = {
@@ -84,7 +86,7 @@ class LogLeakIT {
 	@DisplayName("TC-SCRUM-94-05 a request the API rejects does not log the value it rejected")
 	void rejectedRequestDoesNotLogTheRejectedValue(CapturedOutput output) throws Exception {
 		String marker = LogLeakSupport.marker();
-		mockMvc.perform(post("/api/v1/piquetes")
+		mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"dutyDate\":\"" + marker + "\"}"))
 				.andExpect(status().isBadRequest());
@@ -100,7 +102,7 @@ class LogLeakIT {
 		String rejectedDate = "2031-07-30";
 		jdbc.execute("ALTER TABLE piquete ADD CONSTRAINT tc_scrum_94_06 CHECK (duty_date <> DATE '" + rejectedDate + "')");
 		try {
-			mockMvc.perform(post("/api/v1/piquetes")
+			mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor())
 							.contentType(MediaType.APPLICATION_JSON)
 							.content("{\"dutyDate\":\"" + rejectedDate + "\"}"))
 					.andExpect(status().isInternalServerError());

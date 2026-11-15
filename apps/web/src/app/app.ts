@@ -9,6 +9,8 @@ import {
 } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { AuthService, LAST_PIQUETES_KEY } from './auth/auth.service';
+import { SignIn } from './sign-in/sign-in';
 
 interface Slot {
   id: string;
@@ -26,17 +28,16 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-const LAST_PIQUETES_KEY = 'escala.lastPiquetes';
-
 @Component({
   selector: 'app-root',
-  imports: [FormsModule],
+  imports: [FormsModule, SignIn],
   templateUrl: './app.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
+  protected readonly auth = inject(AuthService);
   private deferredInstall: BeforeInstallPromptEvent | null = null;
   private readonly onBeforeInstall = (event: Event) => this.captureInstallPrompt(event);
 
@@ -53,11 +54,24 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     window.addEventListener('beforeinstallprompt', this.onBeforeInstall);
-    this.reload();
+    if (this.auth.session()) {
+      this.reload();
+    }
   }
 
   ngOnDestroy(): void {
     window.removeEventListener('beforeinstallprompt', this.onBeforeInstall);
+  }
+
+  protected onSignedIn(): void {
+    this.reload();
+  }
+
+  protected signOut(): void {
+    this.auth.signOut();
+    this.piquetes.set([]);
+    this.error.set(null);
+    this.offline.set(false);
   }
 
   protected create(): void {
@@ -88,6 +102,11 @@ export class App implements OnInit, OnDestroy {
         localStorage.setItem(LAST_PIQUETES_KEY, JSON.stringify(list));
       },
       error: () => {
+        if (!this.auth.session()) {
+          // 401: the interceptor signed out; the sign-in screen is shown, with no roster.
+          this.piquetes.set([]);
+          return;
+        }
         const cached = this.readCachedPiquetes();
         if (cached !== null) {
           this.offline.set(true);
