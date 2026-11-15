@@ -24,7 +24,11 @@
     "traceId": { "type": "string", "minLength": 1 },
     "requestEventId": { "type": "string", "format": "uuid" },
     "assignmentId": { "type": "string", "format": "uuid" },
-    "result": { "type": "string", "enum": ["ELIGIBLE", "INELIGIBLE"] },
+    "result": {
+      "type": "string",
+      "enum": ["ELIGIBLE", "INELIGIBLE", "FAILED"],
+      "description": "FAILED: the worker could not evaluate the request after its retries; the request is in the worker's dead-letter queue and violatedRules is empty."
+    },
     "violatedRules": { "type": "array", "items": { "type": "string" } },
     "engineVersion": { "type": "string", "minLength": 1 }
   }

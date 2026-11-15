@@ -51,6 +51,9 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
+    # A fixed name: RabbitMQ keeps its data in a folder named after the node (rabbit@<hostname>), so without it a
+    # recreated container starts empty (SCRUM-95).
+    hostname: rabbitmq
     logging: *default-logging
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-escala}
