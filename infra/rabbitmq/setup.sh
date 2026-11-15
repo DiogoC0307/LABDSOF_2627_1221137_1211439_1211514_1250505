@@ -33,3 +33,8 @@ create_user "$ELEGIBILIDADE_WORKER_USER"  "$ELEGIBILIDADE_WORKER_PASSWORD"  '^wo
 
 rabbitmqctl import_definitions /etc/rabbitmq/definitions.json
 echo "rabbitmq topology imported"
+
+# Shovel plugin: an operator replays a dead-letter queue by moving its messages back to the queue (SCRUM-95,
+# docs/operations/deployment-and-operations.md). Enabled at run time, so the image and its entrypoint are unchanged.
+rabbitmq-plugins enable rabbitmq_shovel rabbitmq_shovel_management >/dev/null
+echo "rabbitmq shovel plugin enabled"

@@ -94,12 +94,23 @@ sequenceDiagram
 
 ## Reliability of messaging
 
-| §6.3 | Mechanism |
-|---|---|
-| Retries | 5 s / 30 s / 2 min then DLQ ([ADR 0005](../adr/0005-use-rabbitmq-as-message-broker.md)) |
-| Duplicates | `eventId` in the same transaction ([ADR 0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md), RNF05) |
-| Failures | Transactional outbox, then DLQ ([ADR 0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md)) |
-| Eventual consistency | pending / evaluated / failed; swap or cover not applied without a valid check ([ADR 0008](../adr/0008-events-carry-the-state-the-consumer-needs.md), RF24) |
+| §6.3 | Mechanism | Tests |
+|---|---|---|
+| Retries | A listener that fails does not wait: the message is published to the broker's retry queue `<queue>.retry.5s`, then `.retry.30s`, then `.retry.2m`, with the count in the header `escala-retry-count`. Each retry queue's TTL is the delay; it then sends the message back to its queue. The count travels with the message, so it survives a restart of the service ([ADR 0005](../adr/0005-use-rabbitmq-as-message-broker.md), [ADR 0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md)) | TC-SCRUM-95-01 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/RetryCountSurvivesRestartIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/RetryCountSurvivesRestartIT.java)) |
+| Failures | After the third retry, or at once for a malformed message (not JSON, or an ID that is not a UUID), the message is rejected without requeue and the broker dead-letters it through `escala.dlx` to `<queue>.dlq`. `default-requeue-rejected=false`, so no message is ever put back in its queue in a loop | TC-SCRUM-95-01, TC-SCRUM-95-04 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/MalformedMessageIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/MalformedMessageIT.java)) |
+| Duplicates | `eventId` stored in `processed_event` in the same transaction as the effect; a second delivery is ignored ([ADR 0009](../adr/0009-transactional-outbox-and-idempotent-consumers.md), RNF05) | TC-SCRUM-95-02 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/DuplicateDeliveryIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/DuplicateDeliveryIT.java)) |
+| Eventual consistency | A slot is `PENDING`, then `ELIGIBLE` (evaluated) or `EVALUATION_FAILED` (failed), visible on `GET /api/v1/piquetes`. A failed evaluation never makes a slot `ELIGIBLE` and does not change a slot that is no longer `PENDING`; a swap or cover is not applied without a valid check ([ADR 0008](../adr/0008-events-carry-the-state-the-consumer-needs.md), RF24) | TC-SCRUM-95-03 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/EvaluationStatesIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/EvaluationFailedIT.java)) |
+| Topology | The queues, retry queues, DLQs and their arguments live in `infra/rabbitmq/definitions.json` (imported by the broker in Compose and in the clusters) and are declared again in code for the tests; a test keeps them equal, and keeps the three ConfigMap copies equal to the file | TC-SCRUM-95-05 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/TopologyMatchesDefinitionsIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/TopologyMatchesDefinitionsIT.java)) |
+| Broker start-up | A refused login does not stop a listener for good (`possibleAuthenticationFailureFatal=false`): it keeps trying and consumes once its user exists | TC-SCRUM-95-06 ([api](../../apps/escala-api/src/test/java/pt/isep/escala/escalaapi/messaging/ListenerAuthenticationIT.java), [worker](../../apps/elegibilidade-worker/src/test/java/pt/isep/escala/elegibilidadeworker/messaging/ListenerAuthenticationIT.java)) |
+
+**Republish, then acknowledge.** A retry is published as a persistent message, on its own connection with publisher confirms and `mandatory`, and the original message is acknowledged only after the broker has confirmed and routed the copy. If the service stops between the two steps, the message is delivered twice but never lost; the consumer ignores the duplicate by its `eventId` (TC-SCRUM-95-02). The application's other connection, which the outbox uses, has no publisher confirms yet ([SCRUM-155](https://isep-team-apn94608.atlassian.net/browse/SCRUM-155)).
+
+**When an evaluation fails.**
+
+- The worker cannot evaluate a request after the retries: it answers `AvaliacaoConcluida` with `result` `FAILED`, and the request goes to `worker.avaliacao-pedida.dlq`.
+- `escala-api` cannot apply a result after the retries: it marks the slot `EVALUATION_FAILED`, and the result goes to `api.avaliacao-concluida.dlq`.
+- If the worker's database is down, the `FAILED` answer cannot be written either: the slot stays `PENDING` until the DLQ is replayed.
+- A failed evaluation is resolved by replaying the DLQ (operator) until the product offers a retry. What the supervisor sees and whether they can ask for a new check belong to the schedule stories (SCRUM-65, SCRUM-79). Replay steps: **Operations · Deployment and Operations**, "Replay a dead-letter queue".
 
 Exchange `escala.events`. Consumers ignore a result older than the stored one (`outdated`). `ExtracaoPedida` holds free text: purge the DLQ after 7 days (**09 · Security and Privacy Assessment**).
 

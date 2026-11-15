@@ -5,5 +5,7 @@ enum SlotStatus {
 	PENDING,
 	ELIGIBLE,
 	PROPOSED,
-	FILLED
+	FILLED,
+	/** The evaluation could not be made or applied (RF24); an operator resolves it by replaying the DLQ (SCRUM-95). */
+	EVALUATION_FAILED
 }
