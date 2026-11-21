@@ -23,7 +23,7 @@ Every environment uses synthetic data only (§11); no real corps member appears 
 | dev | Kubernetes (k3s, one VM), namespace `escala-dev` | `dev` | The team; every merge to `main` is deployed here | https://escala-dev.duckdns.org |
 | qa | same cluster, namespace `escala-qa` | `qa` | Release candidates, tested before the Sprint Review (Definition of Done) | https://escala-qa.duckdns.org |
 | prod | same cluster, namespace `escala-prod` | `prod` | Published releases | https://escala-prod.duckdns.org |
-| Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (SCRUM-43) | Teaching staff (§12) | http://localhost:8000 |
+| Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (fixtures committed in SCRUM-43; the container is still to build) | Teaching staff (§12) | http://localhost:8000 |
 
 Each environment has its own databases, RabbitMQ and secrets; nothing is shared between them. The worker is internal and has no public URL. Argo CD is at https://escala-argocd.duckdns.org and Grafana at https://escala-grafana.duckdns.org.
 
@@ -157,10 +157,10 @@ The product-level profiles of §12 are not built yet. Selecting a profile and sw
 | Profile | IPMA source | AI | Network needed | Used for |
 |---|---|---|---|---|
 | `default` | Live IPMA open data, polled hourly with cache (ADR 0010) | [TODO: model per ADR 0016, once it is accepted, Diogo Pereira]; form fallback when down or off | Yes | Deployed environment, sprint reviews |
-| `evaluation` | `tools/ipma-sim` (SCRUM-43) | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
+| `evaluation` | `tools/ipma-sim` (fixtures committed in SCRUM-43; the container is still to build) | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
 
-- How to select a profile: [TODO: a Compose profile or an override file, once SCRUM-43 is done, Diogo Costa]
-- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command, once SCRUM-43 is done, Diogo Costa]
+- How to select a profile: [TODO: a Compose profile or an override file, once the simulator container exists, Diogo Costa]
+- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command, once the simulator container exists, Diogo Costa]
 
 ## CI/CD pipeline
 
@@ -316,11 +316,11 @@ In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue with
 
 | Scenario | How to trigger (for the demo) | Expected behaviour | Recovery |
 |---|---|---|---|
-| IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable* (SCRUM-43), Diogo Costa] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after SCRUM-43 |
+| IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable*, Diogo Costa. SCRUM-43 committed the fixtures only] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after the simulator container |
 | AI down | [TODO: the AI feature flag (ADR 0011) does not exist yet, Diogo Costa] | Form fallback: the free-text box is replaced by the unavailability form (RF35). Planned, not built yet | Planned, after the flag exists |
 | Worker down | `docker compose stop elegibilidade-worker` | Tested on Compose on 2026-11-01: the API keeps accepting requests (`POST /api/v1/piquetes` answers `201`), the slot stays `PENDING` and the request waits in the queue `worker.avaliacao-pedida` | `docker compose start elegibilidade-worker`: the waiting request is processed and the slot became `ELIGIBLE` within 9 seconds in that test. Check the dead-letter queue is empty |
 
-- The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once SCRUM-43 is done.
+- The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once the container exists. SCRUM-43 committed the fixture files only.
 - The "worker down" scenario was tried on Compose only, not on Kubernetes.
 - **Seen on dev, 2026-11-01: `POST /api/v1/piquetes` answers `500` while `GET` and the health check answer `200`.** The log of `escala-api` (Grafana, Loki) showed `new row for relation "slot" violates check constraint "slot_status_check"`: the dev database was created when a slot status had three values (`OPEN`, `PROPOSED`, `FILLED`) and `ddl-auto=update` did not change the constraint when `PENDING` and `ELIGIBLE` were added. Fixed in Argo CD, not in Git: delete the PVC `data-pg-escala-api-0` and the pod `pg-escala-api-0` of `escala-dev` (the data of dev was test data only), then delete the pod of `escala-api` so it creates the tables again. Afterwards `POST` answered `201` and the slot went from `PENDING` to `ELIGIBLE` in 3 seconds. qa and prod were not affected: version `0.2.0` had no `slot` table. The missing migration tool is the TODO in [Deploy](#deploy).
 - Demo recordings: [TODO: links, Diogo Pereira]
