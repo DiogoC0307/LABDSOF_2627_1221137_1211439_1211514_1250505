@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pt.isep.escala.escalaapi.auth.SignedInMember;
-import pt.isep.escala.escalaapi.member.InvalidRequestException.InvalidField;
+import pt.isep.escala.escalaapi.validation.InvalidRequestException.InvalidField;
 
 /**
  * Registers and changes members (admin only, checked in SecurityConfig) and shows them to the caller with the contact
