@@ -49,13 +49,16 @@ export class Schedule implements OnInit {
     }
     this.error.set(null);
     this.creating.set(true);
-    this.http.post<Piquete>('/api/v1/piquetes', { dutyDate: this.dutyDate }).pipe(finalize(() => this.creating.set(false))).subscribe({
-      next: (created) => {
-        this.reload();
-        this.pollUntilEligible(created.id);
-      },
-      error: () => this.error.set('Could not create the piquete.'),
-    });
+    this.http
+      .post<Piquete>('/api/v1/piquetes', { dutyDate: this.dutyDate })
+      .pipe(finalize(() => this.creating.set(false)))
+      .subscribe({
+        next: (created) => {
+          this.reload();
+          this.pollUntilEligible(created.id);
+        },
+        error: () => this.error.set('Could not create the piquete.'),
+      });
   }
 
   private reload(): void {
