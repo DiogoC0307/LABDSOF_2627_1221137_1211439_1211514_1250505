@@ -10,6 +10,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import org.junit.jupiter.api.DisplayName;
@@ -27,7 +28,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 /**
- * TC-SCRUM-97-01, 06, 08 and 09 for the worker, against a real PostgreSQL and RabbitMQ. Spring Boot leaves metrics
+ * TC-SCRUM-97-01, 06, 08, 09 and 10 for the worker, against a real PostgreSQL and RabbitMQ. Spring Boot leaves metrics
  * export off in tests unless {@link AutoConfigureMetrics} is there. The endpoint is exposed by a test property here; in
  * the application it is one line of application.properties (after SCRUM-88).
  */
@@ -108,6 +109,18 @@ class WorkerMetricsIT {
 			assertThat(gauge).isNotNull();
 			assertThat(gauge.value()).isGreaterThanOrEqualTo(1.0);
 		});
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-97-10 every metric the dashboard asks the worker for is in its /actuator/prometheus output")
+	void dashboardMetricsExist() throws Exception {
+		DashboardQueries dashboard = new DashboardQueries();
+		assertThat(dashboard.selectorsWithoutApplication()).isEmpty();
+		Set<String> asked = dashboard.metricsOf("elegibilidade-worker");
+		assertThat(asked).isNotEmpty();
+		// the DLQ gauge has its rows after the first refresh from the broker (every 15 s)
+		await().atMost(Duration.ofSeconds(30))
+				.untilAsserted(() -> assertThat(DashboardQueries.seriesNames(scrape())).containsAll(asked));
 	}
 
 	@Test

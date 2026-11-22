@@ -20,9 +20,9 @@ public final class MetricTags {
 	public static final String OTHER = "OTHER";
 
 	/** {@code AvaliacaoPedida.purpose}; CANDIDATE is for SCRUM-65 (a candidate checked before it is proposed). */
-	private static final Set<String> PURPOSES = Set.of("ASSIGNMENT", "SWAP", "COVER", "CANDIDATE");
+	static final Set<String> PURPOSES = Set.of("ASSIGNMENT", "SWAP", "COVER", "CANDIDATE");
 
-	private static final Set<String> RESULTS = Set.of("ELIGIBLE", "INELIGIBLE", "FAILED");
+	static final Set<String> RESULTS = Set.of("ELIGIBLE", "INELIGIBLE", "FAILED");
 
 	private MetricTags() {
 	}

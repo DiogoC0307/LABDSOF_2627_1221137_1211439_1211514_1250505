@@ -18,7 +18,7 @@ public final class MetricTags {
 
 	public static final String OTHER = "OTHER";
 
-	private static final Set<String> RESULTS = Set.of("ELIGIBLE", "INELIGIBLE", "FAILED");
+	static final Set<String> RESULTS = Set.of("ELIGIBLE", "INELIGIBLE", "FAILED");
 
 	private MetricTags() {
 	}

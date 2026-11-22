@@ -32,14 +32,22 @@ public class EvaluationMetrics {
 		this.processing = Timer.builder("escala.evaluation.processing")
 				.description("From reading an AvaliacaoPedida to writing its answer in the outbox")
 				.publishPercentileHistogram().register(registry);
+		// every series exists at 0 from the start, so rates and the dashboard have data before the first evaluation
+		for (String result : MetricTags.RESULTS) {
+			completedCounter(result, LISTENER);
+			completedCounter(result, RETRIES_EXHAUSTED);
+		}
 	}
 
 	public void completed(String result, String source) {
-		afterCommit(() -> Counter.builder("escala.evaluations.completed")
-				.description("Evaluations answered by the worker")
-				.tag(MetricTags.RESULT, MetricTags.result(result))
-				.tag(MetricTags.SOURCE, RETRIES_EXHAUSTED.equals(source) ? RETRIES_EXHAUSTED : LISTENER)
-				.register(registry).increment());
+		Counter counter = completedCounter(MetricTags.result(result),
+				RETRIES_EXHAUSTED.equals(source) ? RETRIES_EXHAUSTED : LISTENER);
+		afterCommit(counter::increment);
+	}
+
+	private Counter completedCounter(String result, String source) {
+		return Counter.builder("escala.evaluations.completed").description("Evaluations answered by the worker")
+				.tag(MetricTags.RESULT, result).tag(MetricTags.SOURCE, source).register(registry);
 	}
 
 	public void processed(Duration duration) {

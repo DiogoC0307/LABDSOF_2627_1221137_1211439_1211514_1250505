@@ -39,14 +39,27 @@ public class EvaluationMetrics {
 	public EvaluationMetrics(MeterRegistry registry, JdbcTemplate jdbc) {
 		this.registry = registry;
 		this.jdbc = jdbc;
-		for (String result : List.of("ELIGIBLE", "INELIGIBLE", "FAILED")) {
+		// every series exists at 0 from the start, so rates and the dashboard have data before the first evaluation
+		MetricTags.PURPOSES.forEach(this::requestedCounter);
+		for (String result : MetricTags.RESULTS) {
+			completedCounter(result, true);
+			completedCounter(result, false);
 			latency(result);
 		}
 	}
 
 	public void requested(String purpose) {
-		Counter.builder("escala.evaluations.requested").description("AvaliacaoPedida written to the outbox")
-				.tag(MetricTags.PURPOSE, MetricTags.purpose(purpose)).register(registry).increment();
+		requestedCounter(MetricTags.purpose(purpose)).increment();
+	}
+
+	private Counter requestedCounter(String purpose) {
+		return Counter.builder("escala.evaluations.requested").description("AvaliacaoPedida written to the outbox")
+				.tag(MetricTags.PURPOSE, purpose).register(registry);
+	}
+
+	private Counter completedCounter(String result, boolean applied) {
+		return Counter.builder("escala.evaluations.completed").description("AvaliacaoConcluida applied by escala-api")
+				.tag(MetricTags.RESULT, result).tag(MetricTags.APPLIED, Boolean.toString(applied)).register(registry);
 	}
 
 	/**
@@ -57,9 +70,7 @@ public class EvaluationMetrics {
 		String tag = MetricTags.result(result);
 		Optional<Instant> start = requestedAt(requestEventId);
 		afterCommit(() -> {
-			Counter.builder("escala.evaluations.completed").description("AvaliacaoConcluida applied by escala-api")
-					.tag(MetricTags.RESULT, tag).tag(MetricTags.APPLIED, Boolean.toString(applied)).register(registry)
-					.increment();
+			completedCounter(tag, applied).increment();
 			start.ifPresent(requested -> latency(tag).record(Duration.between(requested, appliedAt)));
 		});
 	}

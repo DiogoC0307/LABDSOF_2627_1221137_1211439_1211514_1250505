@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -32,9 +34,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import pt.isep.escala.escalaapi.auth.MockTokens;
+import tools.jackson.databind.JsonNode;
 
 /**
- * TC-SCRUM-97-04, 06, 07 and 08 for escala-api, against a real PostgreSQL and RabbitMQ. The Prometheus output is read
+ * TC-SCRUM-97-04, 06, 07, 08 and 10 for escala-api, against a real PostgreSQL and RabbitMQ. The Prometheus output is read
  * from the registry: the endpoint itself is opened in SecurityConfig with SCRUM-88.
  */
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
@@ -45,6 +48,9 @@ class ApiMetricsIT {
 
 	private static final Pattern UUID_PATTERN = Pattern
 			.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
+	/** Asked for by the dashboard (as 0 when absent) before the feature exists: exceptional assignment, D-02. */
+	private static final Set<String> NOT_EMITTED_YET = Set.of("escala_assignments_exceptional_total");
 
 	@Container
 	@ServiceConnection
@@ -145,6 +151,30 @@ class ApiMetricsIT {
 
 		assertThat(registry.find("http.server.requests").tag("uri", "/api/v1/members/{id}").timers()).isNotEmpty();
 		assertThat(prometheus.scrape()).contains("http_server_requests_seconds_count").doesNotContain(someone.toString());
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-97-10 the dashboard reads the prometheus datasource, names a service in every query, and every metric it asks escala-api for exists")
+	void dashboardMetricsExist() throws Exception {
+		DashboardQueries dashboard = new DashboardQueries();
+		assertThat(dashboard.json().path("uid").asString()).isEqualTo("escala-operations");
+		assertThat(dashboard.json().path("panels")).isNotEmpty();
+		for (JsonNode panel : dashboard.json().path("panels")) {
+			String title = panel.path("title").asString();
+			assertThat(panel.path("datasource").path("uid").asString()).as(title).isEqualTo("prometheus");
+			assertThat(panel.path("targets")).as(title).isNotEmpty();
+		}
+		assertThat(dashboard.selectorsWithoutApplication()).isEmpty();
+		Set<String> byService = new TreeSet<>(dashboard.metricsOf("escala-api"));
+		byService.addAll(dashboard.metricsOf("elegibilidade-worker"));
+		assertThat(byService).isEqualTo(dashboard.allMetrics());
+
+		Set<String> asked = new TreeSet<>(dashboard.metricsOf("escala-api"));
+		asked.removeAll(NOT_EMITTED_YET);
+		assertThat(asked).isNotEmpty();
+		mockMvc.perform(get("/api/v1/members/" + UUID.randomUUID()).header("Authorization", MockTokens.admin()));
+		await().atMost(Duration.ofSeconds(30))
+				.untilAsserted(() -> assertThat(DashboardQueries.seriesNames(prometheus.scrape())).containsAll(asked));
 	}
 
 	@Test
