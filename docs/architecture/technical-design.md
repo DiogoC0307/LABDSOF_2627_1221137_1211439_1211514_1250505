@@ -20,7 +20,7 @@ Escala is a mobile roster for members of one volunteer fire corps: they see thei
 
 ## Technology selection
 
-Why these technologies, not others. Each row is an accepted ADR, except 0016 (*Proposed* until SCRUM-38). Same table as **High Level System Architecture**.
+Why these technologies, not others. Each row is an accepted ADR; 0016 was accepted on 2026-11-22 with the results of SCRUM-38 (two accuracy targets of 06 not met, follow-up SCRUM-157). Same table as **High Level System Architecture**.
 
 | Choice | Why it fits Escala | Rejected | ADR |
 |---|---|---|---|

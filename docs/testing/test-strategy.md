@@ -155,7 +155,7 @@ rcm-d0-municipality-missing.json, invalid.json and empty.json are fixed bodies f
 | Recorded manual functional tests | Team members | The smoke tests of 2026-11-01 are in [Manual smoke tests](#manual-smoke-tests) below [TODO: where the others are recorded, e.g. Jira story comments, Diogo Sousa] |
 | Performance results | [TODO: stage or person] | [TODO: link] |
 | Resilience and degraded-mode demonstration | Runbook in [Deployment and Operations](../operations/deployment-and-operations.md) | [TODO: recording or CI run link] |
-| AI evaluation results | Dataset runner | **06 · Responsible AI Opportunity Assessment** [TODO: link to the report] |
+| AI evaluation results | Dataset runner | **06 · Responsible AI Opportunity Assessment**; reports in Git: [baseline v0](../ai/baseline-results-2026-11-22.md) (SCRUM-99) and [Claude Haiku, prompt v0, 3 runs](../ai/haiku-results-2026-11-22.md) (SCRUM-38) |
 
 ## Manual smoke tests
 
