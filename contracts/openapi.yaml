@@ -65,7 +65,8 @@ paths:
         Spring Boot Actuator, the only endpoint exposed (management.endpoints.web.exposure.include=health,
         details hidden). Answers 503 with status DOWN when the database, RabbitMQ or a listener is down.
         The connection timeouts are 3 s, so it answers within seconds (SCRUM-88). The Docker Compose
-        healthchecks use this path; the Kubernetes probes use the two groups below.
+        healthchecks use this path; the Kubernetes probes use the two groups below. It is where a broker
+        or listener failure shows, since readiness does not include them.
       operationId: getHealth
       security: []
       parameters:
@@ -145,9 +146,11 @@ paths:
       tags: [health]
       summary: Readiness
       description: >
-        readinessState, the database, RabbitMQ and the listener containers: 503 within a few seconds when
-        one of them is down or a listener has stopped, so the pod leaves the Service and the problem is
-        visible. The Kubernetes readiness probe (SCRUM-88).
+        readinessState and the database only: 503 within a few seconds when the database is down, so the
+        pod leaves the Service. RabbitMQ and the listener containers are not part of it: with the broker
+        down or a listener stopped the API keeps serving (events wait in the outbox), readiness stays 200
+        and /actuator/health answers 503. The Kubernetes readiness probe (SCRUM-88). The
+        elegibilidade-worker's readiness, which has no API, also includes RabbitMQ and the listeners.
       operationId: getHealthReadiness
       security: []
       parameters:

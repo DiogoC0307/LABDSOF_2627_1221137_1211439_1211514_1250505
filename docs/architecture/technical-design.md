@@ -190,8 +190,10 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 - Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text. `DEBUG` only for `pt.isep.escala`; request bodies, message bodies, SQL values and exception messages never reach the logs (SCRUM-94, see Deployment and Operations)
 - Health (RF36; through the web proxy `/api/actuator/...`), on both services (SCRUM-88):
   - `/actuator/health/liveness`: the process only (`livenessState`). The Kubernetes liveness probe, so a dependency that is down never restarts the pod.
-  - `/actuator/health/readiness`: `readinessState`, the database (`db`), RabbitMQ (`rabbit`) and the listener containers (`listeners`, DOWN when one is not running). The Kubernetes readiness probe: with one of them down, it answers `503` within seconds (connection timeouts of 3 s for Hikari and RabbitMQ) and the pod leaves the Service.
-  - `/actuator/health`: all of the above, for Docker Compose.
+  - `/actuator/health/readiness`: the Kubernetes readiness probe; with a dependency in it down, it answers `503` within seconds (connection timeouts of 3 s for Hikari and RabbitMQ) and the pod leaves the Service.
+    - `elegibilidade-worker`: `readinessState`, the database (`db`), RabbitMQ (`rabbit`) and the listener containers (`listeners`, DOWN when one is not running).
+    - `escala-api`: `readinessState` and the database (`db`) only. The outbox lets the API keep serving with the broker down (events wait in `outbox_event`), so RabbitMQ and the listeners stay out of readiness and a broker failure does not take every API pod out of the Service.
+  - `/actuator/health`: all indicators (`db`, `rabbit`, `listeners` included), for Docker Compose; on `escala-api` it is where a broker or listener failure shows (`503`).
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - The trace breaks at the outbox today: the relay publishes outside any active span, so Tempo shows separate traces; the application `traceId` in the payload still passes (SCRUM-93).

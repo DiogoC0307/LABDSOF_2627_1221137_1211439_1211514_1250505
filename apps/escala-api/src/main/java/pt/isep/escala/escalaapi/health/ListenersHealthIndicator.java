@@ -6,9 +6,10 @@ import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.stereotype.Component;
 
 /**
- * DOWN when a RabbitMQ listener container is not running, so a stopped consumer takes the pod out of the Service
- * and is visible, instead of leaving messages waiting with health UP (SCRUM-88). Part of the readiness group as
- * "listeners"; never of liveness, so it does not restart the pod.
+ * DOWN when a RabbitMQ listener container is not running, so a stopped consumer is visible in /actuator/health
+ * (503) instead of leaving messages waiting with health UP (SCRUM-88). In escala-api it is in neither readiness nor
+ * liveness: the API keeps serving through the outbox, so a stopped consumer neither takes the pod out of the
+ * Service nor restarts it.
  */
 @Component
 class ListenersHealthIndicator implements HealthIndicator {
