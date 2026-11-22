@@ -50,9 +50,6 @@ public final class FakeClaude {
 		answer(mode, new String(stdin, StandardCharsets.UTF_8), token);
 	}
 
-	// java:S2925: the "sleep" mode stands for a CLI that never answers in time; it is a separate process, not a test
-	// that waits on the clock
-	@SuppressWarnings("java:S2925")
 	private static void answer(String mode, String stdin, String token) throws InterruptedException {
 		String periodsOk = "{\"type\":\"result\",\"is_error\":false,\"result\":\"\",\"structured_output\":%s,"
 				+ "\"total_cost_usd\":0.0009}";
@@ -83,7 +80,8 @@ public final class FakeClaude {
 			case "far" -> print(periodsOk.formatted("{\"periods\":[{\"startDate\":\"2026-10-30\",\"endDate\":"
 					+ "\"2026-10-30\"},{\"startDate\":\"2027-05-03\",\"endDate\":\"2027-05-03\"}]}"));
 			case "sleep" -> {
-				Thread.sleep(60_000);
+				// a CLI that never answers in time; a separate process, not a test waiting on the clock (Sonar java:S2925)
+				Thread.sleep(60_000); // NOSONAR
 				print(OK);
 			}
 			case "echo-stderr" -> {

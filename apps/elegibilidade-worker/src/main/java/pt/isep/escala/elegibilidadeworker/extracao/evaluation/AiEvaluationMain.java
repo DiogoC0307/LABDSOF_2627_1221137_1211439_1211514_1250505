@@ -50,7 +50,8 @@ public final class AiEvaluationMain {
 	// java:S106: a command-line tool run by hand in the ai-eval container; the console is its output
 	@SuppressWarnings("java:S106")
 	public static void main(String[] args) {
-		System.exit(run(args, System.getenv(), System.out));
+		// a command-line tool run by hand in the ai-eval container: the console is its output (Sonar java:S106)
+		System.exit(run(args, System.getenv(), System.out)); // NOSONAR
 	}
 
 	/** Returns the exit code: 0 done, 1 the smoke call gave no valid answer, 2 wrong options or environment. */
