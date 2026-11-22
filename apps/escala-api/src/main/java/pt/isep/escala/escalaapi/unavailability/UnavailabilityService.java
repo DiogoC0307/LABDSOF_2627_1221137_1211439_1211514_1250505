@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pt.isep.escala.escalaapi.unavailability.PatternExpansion.Interval;
 import pt.isep.escala.escalaapi.validation.InvalidRequestException;
 import pt.isep.escala.escalaapi.validation.InvalidRequestException.InvalidField;
 
@@ -45,6 +46,21 @@ class UnavailabilityService {
 				memberId, request.startsAt().toInstant(), request.endsAt().toInstant(), now));
 		log.info("unavailability declared id={} memberId={}", period.getId(), memberId);
 		return view(period);
+	}
+
+	/**
+	 * Periods confirmed from a free-text message (SCRUM-75), already checked and expanded by
+	 * UnavailabilityMessageService; in the caller's transaction, so the free text is deleted together.
+	 */
+	@Transactional
+	List<UnavailabilityResponse> declareFromText(UUID memberId, List<Interval> intervals, Instant now) {
+		List<UnavailabilityResponse> saved = new ArrayList<>();
+		for (Interval interval : intervals) {
+			saved.add(view(periods.save(new Unavailability(
+					memberId, interval.start(), interval.end(), Unavailability.SOURCE_FREE_TEXT, now))));
+		}
+		log.info("unavailability declared from text memberId={} periods={}", memberId, saved.size());
+		return saved;
 	}
 
 	@Transactional(readOnly = true)

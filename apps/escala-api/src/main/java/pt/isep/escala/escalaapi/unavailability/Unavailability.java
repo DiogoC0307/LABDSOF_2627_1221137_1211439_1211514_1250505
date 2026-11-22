@@ -16,6 +16,7 @@ import java.util.UUID;
 class Unavailability {
 
 	static final String SOURCE_FORM = "FORM";
+	static final String SOURCE_FREE_TEXT = "FREE_TEXT";
 
 	@Id
 	private UUID id;
@@ -39,11 +40,16 @@ class Unavailability {
 	}
 
 	Unavailability(UUID memberId, Instant startsAt, Instant endsAt, Instant createdAt) {
+		this(memberId, startsAt, endsAt, SOURCE_FORM, createdAt);
+	}
+
+	/** {@code source}: FORM (SCRUM-64) or FREE_TEXT, confirmed from a message (SCRUM-75). */
+	Unavailability(UUID memberId, Instant startsAt, Instant endsAt, String source, Instant createdAt) {
 		this.id = UUID.randomUUID();
 		this.memberId = memberId;
 		this.startsAt = startsAt;
 		this.endsAt = endsAt;
-		this.source = SOURCE_FORM;
+		this.source = source;
 		this.createdAt = createdAt;
 	}
 

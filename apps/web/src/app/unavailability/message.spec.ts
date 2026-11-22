@@ -130,7 +130,7 @@ describe('Unavailability in my own words', () => {
     http().expectOne({ method: 'DELETE', url: `${MESSAGES}/${id}` }).flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(page(fixture).querySelector('.proposal')).toBeNull();
-    expect(page(fixture).querySelector('.message [role="status"]')?.textContent).toContain('Use the form below');
+    expect(page(fixture).querySelector('.message [role="status"]')?.textContent).toContain('Use the form above');
   });
 
   it('TC-SCRUM-75-20 too many messages (429) and a text that is too long (400) are explained', async () => {
