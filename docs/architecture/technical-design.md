@@ -64,7 +64,7 @@ Split by question: published roster versus slow or external work. If the worker 
 | Workflow | Trigger | Result | Why async |
 |---|---|---|---|
 | Function check | `AvaliacaoPedida` (`SWAP` / `COVER` / `ASSIGNMENT`) | `AvaliacaoConcluida` | Product path: 202 without waiting (RNF02); schedule changes only after `ELIGIBLE` (RF24). Walking skeleton `POST /api/v1/piquetes` returns 201 + `Location` |
-| Extraction | `ExtracaoPedida` | `ExtracaoConcluida` | Model may be down; form stays up (RF35) |
+| Extraction | `ExtracaoPedida` (free text and the reference date only; no name or member ID) | `ExtracaoConcluida` (`schemaVersion` 2, SCRUM-75): a list of `periods` in the format of 06 and of the evaluation dataset (`startDate`, `endDate` inclusive; optional `weekdays` and `startTime`/`endTime` in Lisbon time), with `method` `MODEL` / `BASELINE` / `FALLBACK`. An empty list means no proposal: the form is shown. If any proposed period has already ended or starts more than 6 months ahead, the worker rejects the whole proposal and sends an empty list (06), never a partial one. The member edits and confirms before anything counts (RF32) | Model may be down; form stays up (RF35) |
 | Risk update | Hourly poll | `RiscoAtualizado` | Display only; does not change slots |
 
 ```mermaid
@@ -141,7 +141,7 @@ If Escala itself is down, the corps uses the phone. Runbook: [Deployment and Ope
 
 Source: [`domain_model.puml`](domain_model.puml). Cross-service IDs are references on events, never foreign keys. Instants in UTC; PWA shows `Europe/Lisbon` ([ADR 0012](../adr/0012-store-instants-in-utc.md)).
 
-- `escala-db` (blue): Member, Certification, DrivingLicence, ServiceHoursEntry, Vehicle, Piquete, Slot, Assignment, DailyRisk (display only), Unavailability, FreeTextMessage (deleted after confirmation), SwapRequest, PresenceConfirmation, CoverRequest, Application, Notification, AuditRecord, outbox.
+- `escala-db` (blue): Member (with its functions, migration V4), Certification (types TAS and TAT), DrivingLicence, ServiceHoursEntry, Vehicle, Piquete, Slot, Assignment, DailyRisk (display only), Unavailability, FreeTextMessage (deleted after confirmation), SwapRequest, PresenceConfirmation, CoverRequest, Application, Notification, AuditRecord, outbox.
 - `elegibilidade-db` (orange): EligibilityEvaluation (`purpose` SWAP/COVER/ASSIGNMENT), ViolatedRule, UnavailabilityExtraction, RiskObservation, WeatherWarning, outbox.
 
 ![Escala — Domain model](domain_model.png)
@@ -159,6 +159,12 @@ Consistency is strong inside each database and eventual between services (visibl
   - The token is `mock.` and the base64url of `{"memberId","role"}`. It is **not signed**: `escala-api` accepts it only for an active member whose role in the `member` table (migration V3) is the role in the token. Anyone can build the token of a seeded user, the same exposure as the mocked sign-in itself (09, T-01): synthetic data only, real authentication before any real data.
   - `auth/SecurityConfig` checks the role on the server for every request: `GET /api/v1/piquetes` for any role, `POST /api/v1/piquetes` for `SUPERVISOR` only (09: the admin does not build the schedule). No token, or one that is not accepted, answers `401`; a role that is not allowed, `403`; any other path is refused. The health endpoints and the two sign-in endpoints stay open. Tests: TC-SCRUM-63-01 to 04 ([test strategy](../testing/test-strategy.md)).
   - The token is never logged. Endpoints that act for a member will take it from the token (`SignedInMember`), never from the body (T-03, SCRUM-68 and SCRUM-73).
+- Members (SCRUM-77): `GET` and `POST /api/v1/members`, `GET` and `PUT /api/v1/members/{id}`, `PUT /api/v1/members/{id}/certifications` and `GET /api/v1/certification-types`.
+  - Only `ADMIN` registers and edits (09: "Edit members and certifications"); `SUPERVISOR` and `ADMIN` read the list; a `MEMBER` reads only themself. A new member is always `MEMBER`: changing a role waits for audit records (T-06).
+  - The contact is in the answer only for the admin and the member themself, and is never logged (09, data minimisation).
+  - Functions are the slot roles (`CREW_CHIEF`, `DRIVER`, `CREW_MEMBER`). There is one certification per type and one licence per class: a renewal replaces the dates, with no history. A driver needs a licence; a certification cannot expire before it was issued.
+  - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); SCRUM-88 aligns the other errors with it. Tests: TC-SCRUM-77-01, 02 and 05.
+  - No qualification rule (RN01, RN02) runs in `escala-api`: the eligibility rules belong to the worker (ADR 0007, SCRUM-65 and SCRUM-79).
 - Header: `X-Trace-Id` (RF37)
 
 Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).

@@ -49,7 +49,7 @@ final class PortugueseDateLexicon {
 
 	private static final Pattern SENTENCE_END = Pattern.compile("[.;!?]+(?=\\s|$)|\\R+");
 	private static final Pattern IS_VERB_ESTA = Pattern.compile("(?<!\\p{L})está(?!\\p{L})",
-			Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+			Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.CANON_EQ);
 
 	private PortugueseDateLexicon() {
 	}
@@ -67,7 +67,7 @@ final class PortugueseDateLexicon {
 	/** 1-12 for a full month name or a three-letter abbreviation, 0 for anything else. */
 	static int monthOrAbbreviation(String token) {
 		int full = month(token);
-		return full != 0 ? full : MONTH_ABBREVIATIONS.indexOf(token) + 1;
+		return full == 0 ? MONTH_ABBREVIATIONS.indexOf(token) + 1 : full;
 	}
 
 	/** Splits at sentence ends; a full stop between digits ("3.11") is not one. */
