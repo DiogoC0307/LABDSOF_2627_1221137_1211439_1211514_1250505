@@ -229,7 +229,11 @@ describe('Members', () => {
     expect(page(fixture).querySelector('[role="alert"]')?.textContent).toContain('Could not load the member');
     expect(save.disabled).toBe(true);
     save.click();
+    // Submitting the form itself (as the Enter key may) is refused too, not only the disabled button.
+    page(fixture).querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
     http().expectNone({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
+    expect(page(fixture).querySelectorAll('[role="alert"] li')).toHaveLength(0);
   });
 
   /** The visible text of a label, without the text of a control inside it (e.g. the options of a select). */
