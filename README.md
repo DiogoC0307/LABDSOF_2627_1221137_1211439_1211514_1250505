@@ -252,7 +252,7 @@ With Docker Compose the container logs rotate at 10 Mi and 5 files per container
 
 ### Traces and logs in Grafana
 
-Grafana (https://escala-grafana.duckdns.org) shows distributed traces and logs for all environments.
+Grafana (https://escala-grafana.duckdns.org) shows distributed traces, logs and metrics for all environments.
 
 ```mermaid
 flowchart LR
@@ -261,6 +261,9 @@ flowchart LR
   PODS["logs of the escala-* pods"] --> ALLOY["Alloy"] --> LOKI["Loki (90 days)"]
   TEMPO --> GRAFANA["Grafana"]
   LOKI --> GRAFANA
+  PROM["Prometheus (7 days, 2GB)"] -->|"scrapes /actuator/prometheus every 30 s"| API
+  PROM -->|"scrapes /actuator/prometheus every 30 s"| WORKER
+  PROM --> GRAFANA
 ```
 
 - **How tracing is added:** the Java images include the OpenTelemetry Java agent (`/otel/opentelemetry-javaagent.jar`, version set by `OTEL_AGENT_VERSION` in the Dockerfiles) and the ConfigMaps switch it on with `JAVA_TOOL_OPTIONS`. No application code is needed: the agent records HTTP requests, database queries and RabbitMQ publish and consume, and carries the trace across RabbitMQ from one service to the other. To turn it off, remove `JAVA_TOOL_OPTIONS` from the ConfigMap.
@@ -270,9 +273,10 @@ flowchart LR
   [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String((kubectl -n observability get secret grafana-admin -o jsonpath="{.data.admin-password}")))
   ```
   Then Explore, Tempo, Search by service name (`escala-api` or `elegibilidade-worker`). Kubernetes health probes call `/actuator/health` every few seconds, so hide that noise with the TraceQL query `{ name !~ ".*actuator.*" }`. Environments are told apart by the resource attribute `deployment.environment`.
-- **Files:** `infra/k8s/observability/` (one folder per component: `tempo`, `loki`, `alloy`, `grafana`), deployed by the Argo CD application `escala-observability`, which follows `main`. Traces are kept 7 days (`block_retention` in `tempo/configmap.yaml`).
+- **Files:** `infra/k8s/observability/` (one folder per component: `tempo`, `loki`, `alloy`, `prometheus`, `grafana`), deployed by the Argo CD application `escala-observability`, which follows `main`. Traces are kept 7 days (`block_retention` in `tempo/configmap.yaml`).
 - **One-time setup:** create the DuckDNS name `escala-grafana` (same IP as the others), run `infra/scripts/seal-secrets observability`, merge, then `kubectl apply -f infra/argocd/apps.yaml`.
-- **Cost:** the four components add about 1 Gi of memory limits to the VM. Check `kubectl top nodes`; if the VM runs short, scale the dev or qa environment down first.
+- **Metrics:** one Prometheus for the three environments scrapes `/actuator/prometheus` of `escala-api` and `elegibilidade-worker` straight from their pods every 30 s (pod discovery in the `escala-*` namespaces, so the deployments need no annotation) and keeps 7 days, at most 2GB. The web proxy forwards only `/api/actuator/health`, so no other Actuator endpoint is reachable through the ingress (SCRUM-97).
+- **Cost:** the five components add about 1.75 Gi of memory limits to the VM (Prometheus: 384Mi, request 128Mi). Check `kubectl top nodes`; if the VM runs short, scale the dev or qa environment down first.
 
 To try tracing on your machine (no logs locally, only traces):
 
