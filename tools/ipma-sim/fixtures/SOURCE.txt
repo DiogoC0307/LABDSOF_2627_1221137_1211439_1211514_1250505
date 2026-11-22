@@ -1,0 +1,14 @@
+SCRUM-43 fixtures. Fetched on 2026-11-21 (Europe/Lisbon).
+
+Normal bodies, saved as received:
+- rcm-d0.json from https://api.ipma.pt/open-data/forecast/meteorology/rcm/rcm-d0.json
+- warnings_www.json from https://api.ipma.pt/open-data/forecast/warnings/warnings_www.json
+
+DICO 1312 (Porto, the corps municipality in the technical design) is present in rcm-d0.json: rcm 1, latitude 41.158, longitude -8.6294. TC-SCRUM-43-02.
+
+Boundary fixtures, not downloaded. The live API on 2026-11-21 returned a usable body that includes DICO 1312, so these three cases were written as fixed bodies for the unusable responses (ADR 0013):
+- rcm-d0-municipality-missing.json has the same shape and no row for 1312. TC-SCRUM-43-03.
+- invalid.json is not JSON. TC-SCRUM-43-04.
+- empty.json has an empty body. TC-SCRUM-43-05.
+
+The HTTP simulator container, the unavailable and delayed modes, and the Compose evaluation profile are not part of this spike.
