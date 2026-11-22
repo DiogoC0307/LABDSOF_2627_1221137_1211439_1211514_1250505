@@ -5,6 +5,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * The evaluation metrics of the worker (SCRUM-97):
@@ -33,13 +35,29 @@ public class EvaluationMetrics {
 	}
 
 	public void completed(String result, String source) {
-		Counter.builder("escala.evaluations.completed").description("Evaluations answered by the worker")
+		afterCommit(() -> Counter.builder("escala.evaluations.completed")
+				.description("Evaluations answered by the worker")
 				.tag(MetricTags.RESULT, MetricTags.result(result))
 				.tag(MetricTags.SOURCE, RETRIES_EXHAUSTED.equals(source) ? RETRIES_EXHAUSTED : LISTENER)
-				.register(registry).increment();
+				.register(registry).increment());
 	}
 
 	public void processed(Duration duration) {
-		processing.record(duration);
+		afterCommit(() -> processing.record(duration));
+	}
+
+	/** Inside a transaction, after it commits (a rolled-back delivery is retried and must not count twice); else now. */
+	static void afterCommit(Runnable record) {
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+				@Override
+				public void afterCommit() {
+					record.run();
+				}
+			});
+		}
+		else {
+			record.run();
+		}
 	}
 }

@@ -12,6 +12,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import pt.isep.escala.escalaapi.messaging.EventFields;
+import pt.isep.escala.escalaapi.metrics.EvaluationMetrics;
 import pt.isep.escala.escalaapi.outbox.ProcessedEvent;
 import pt.isep.escala.escalaapi.outbox.ProcessedEventRepository;
 
@@ -25,9 +26,12 @@ class AvaliacaoConcluidaListener {
 	private final ObjectMapper objectMapper;
 	private final ProcessedEventRepository processed;
 	private final SlotRepository slots;
+	private final EvaluationMetrics metrics;
 
 	AvaliacaoConcluidaListener(
-			ObjectMapper objectMapper, ProcessedEventRepository processed, SlotRepository slots) {
+			ObjectMapper objectMapper, ProcessedEventRepository processed, SlotRepository slots,
+			EvaluationMetrics metrics) {
+		this.metrics = metrics;
 		this.objectMapper = objectMapper;
 		this.processed = processed;
 		this.slots = slots;
@@ -47,7 +51,7 @@ class AvaliacaoConcluidaListener {
 			}
 			UUID assignmentId = EventFields.uuid(body, "assignmentId");
 			String result = body.path("result").asText();
-			slots.findByAssignmentId(assignmentId).ifPresent(slot -> {
+			boolean applied = slots.findByAssignmentId(assignmentId).map(slot -> {
 				boolean changed = switch (result) {
 					case "ELIGIBLE" -> slot.markEligible();
 					case "FAILED" -> slot.markEvaluationFailed();
@@ -56,11 +60,22 @@ class AvaliacaoConcluidaListener {
 				if (changed) {
 					slots.save(slot);
 				}
-			});
+				return changed;
+			}).orElse(false);
 			processed.save(new ProcessedEvent(eventId, Instant.now()));
+			metrics.completed(requestEventId(body), result, applied, Instant.now());
 			log.info("AvaliacaoConcluida applied assignmentId={} result={} traceId={}", assignmentId, result, traceId);
 		} finally {
 			MDC.remove("trace_id");
+		}
+	}
+
+	/** The AvaliacaoPedida this answers, for SLI 1; a missing or broken one only means no latency is recorded. */
+	private static UUID requestEventId(JsonNode body) {
+		try {
+			return UUID.fromString(body.path("requestEventId").asText(""));
+		} catch (IllegalArgumentException e) {
+			return null;
 		}
 	}
 }
