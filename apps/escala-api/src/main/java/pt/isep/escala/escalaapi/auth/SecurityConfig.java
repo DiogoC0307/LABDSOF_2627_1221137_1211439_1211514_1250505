@@ -33,8 +33,9 @@ class SecurityConfig {
 				// CSRF protection stays on, but not for /api/**. CSRF guards credentials the browser sends by itself
 				// (cookies, a session). The API is stateless: the PWA sends the token in the Authorization header and
 				// there is no cookie or session, so a forged cross-site request carries no credentials and gets 401.
-				// A CSRF token on /api/** would only break the PWA's POST requests.
-				.csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+				// A CSRF token on /api/** would only break the PWA's POST requests. Sonar S4502 flags any ignored
+				// path, so it is suppressed on the next line for this reason; reviewed in PR #68 (SCRUM-63).
+				.csrf(csrf -> csrf.ignoringRequestMatchers("/api/**")) // NOSONAR stateless API, token in the Authorization header, no cookie or session
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
 				.logout(AbstractHttpConfigurer::disable)
