@@ -32,7 +32,7 @@ Why these technologies, not others. Each row is an accepted ADR, except 0016 (*P
 | Claude Haiku via CLI, `AI_ENABLED` | Extraction of unavailability only; the `evaluation` profile turns it off | AI that decides swaps or cover | 0007, 0011, 0016 |
 | Docker Compose for evaluation | One command on a staff laptop (§12); Kubernetes with Argo CD stays the team's demo and release host | Kubernetes as the evaluation contract | 0018 |
 
-**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` that adds `ipma-sim` and sets `AI_ENABLED=false` is planned [TODO: not in `compose.yaml` yet; with the simulator, SCRUM-43]. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
+**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` that adds `ipma-sim` and sets `AI_ENABLED=false` is planned [TODO: not in `compose.yaml` yet; the SCRUM-43 fixtures are in `tools/ipma-sim/fixtures/`, the container is still to build]. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
 
 ## System context
 
@@ -55,7 +55,7 @@ No component reads another component's database ([ADR 0003](../adr/0003-one-post
 | `escala-api` | Published schedule, members, unavailability, swaps, presence, cover, audit; DailyRisk display read model | `escala-db` | `web`; RabbitMQ | Sync REST (from `web`); async events (RabbitMQ) |
 | `elegibilidade-worker` | Function checks (RF21), extraction (RF31, ADR 0016), cached RCM (RF25, RF29) | `elegibilidade-db` | RabbitMQ; IPMA; Claude Code CLI | Async events (RabbitMQ); sync HTTP (IPMA); local process (Claude Code CLI) |
 | `web` | Member and supervisor screens; roster offline (RNF06) | None | `escala-api` | Sync REST |
-| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile; still to build, SCRUM-43) | None | `elegibilidade-worker` | Sync HTTP |
+| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile; fixtures in SCRUM-43, container still to build) | None | `elegibilidade-worker` | Sync HTTP |
 
 Split by question: published roster versus slow or external work. If the worker is down, `escala-api` still accepts unavailability, swap requests and cover accepts; applying a swap or filling a cover waits for a valid check (RF24).
 
@@ -125,7 +125,7 @@ Endpoints: RCM `rcm-d{0,1,2}.json`; warnings `warnings_www.json`. Poll hourly by
 | Incomplete | DICO missing | Keep last value for our municipality |
 | Invalid | Bad JSON or RCM not 1–5 | Reject; keep last valid |
 
-Simulator: `tools/ipma-sim`, `IPMA_SIM_MODE=ok` / `unavailable` / `delayed` / `incomplete` / `invalid`, for tests and the Compose profile `evaluation` (§12) [TODO: not built yet, SCRUM-43].
+Fixtures (SCRUM-43): `tools/ipma-sim/fixtures/` holds the fetched `rcm-d0.json` and `warnings_www.json`, plus municipality-missing, invalid JSON and empty bodies. Simulator: `tools/ipma-sim`, `IPMA_SIM_MODE=ok` / `unavailable` / `delayed` / `incomplete` / `invalid`, for tests and the Compose profile `evaluation` (§12) [TODO: the container is not built yet].
 
 ## Degraded modes
 
@@ -154,14 +154,18 @@ Consistency is strong inside each database and eventual between services (visibl
 
 - REST: [`contracts/openapi.yaml`](../../contracts/openapi.yaml)
 - Events: [`contracts/events/`](../../contracts/events/) — envelope `eventId`, `type`, `schemaVersion`, `occurredAt`, `traceId`
-- Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)); health endpoints stay open
+- Auth: mocked bearer token with `memberId` and `role` ([ADR 0006](../adr/0006-mock-authentication-and-enforce-roles.md)), implemented in SCRUM-63:
+  - `GET /api/v1/auth/mock-users` lists the seeded synthetic users (ID, name, role) and `POST /api/v1/auth/mock-sign-in` returns the token of one of them; the PWA shows them on its sign-in screen and keeps the session in `localStorage`.
+  - The token is `mock.` and the base64url of `{"memberId","role"}`. It is **not signed**: `escala-api` accepts it only for an active member whose role in the `member` table (migration V3) is the role in the token. Anyone can build the token of a seeded user, the same exposure as the mocked sign-in itself (09, T-01): synthetic data only, real authentication before any real data.
+  - `auth/SecurityConfig` checks the role on the server for every request: `GET /api/v1/piquetes` for any role, `POST /api/v1/piquetes` for `SUPERVISOR` only (09: the admin does not build the schedule). No token, or one that is not accepted, answers `401`; a role that is not allowed, `403`; any other path is refused. The health endpoints and the two sign-in endpoints stay open. Tests: TC-SCRUM-63-01 to 04 ([test strategy](../testing/test-strategy.md)).
+  - The token is never logged. Endpoints that act for a member will take it from the token (`SignedInMember`), never from the body (T-03, SCRUM-68 and SCRUM-73).
 - Header: `X-Trace-Id` (RF37)
 
 Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
 
 ## Deployment view
 
-Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation profile with `ipma-sim`: still to build (SCRUM-43). Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672).
+Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation profile with `ipma-sim`: the SCRUM-43 fixtures are in `tools/ipma-sim/fixtures/`; the container is still to build. Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672).
 
 ![Escala — Deployment view](c4-deployment.png)
 

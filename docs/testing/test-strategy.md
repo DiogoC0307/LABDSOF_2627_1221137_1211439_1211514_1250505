@@ -62,6 +62,7 @@ At least 70% of the lines of new code, measured with JaCoCo (Java services) and 
 |---|---|---|---|
 | `escala-api` | `EscalaApiApplicationTests` | 1 | The application starts with a PostgreSQL and a RabbitMQ container |
 | `escala-api` | `CreatePiqueteIT` | 2 | Creating a piquete through the API (integration, Testcontainers) |
+| `escala-api` | `RoleAccessIT` | 14 | TC-SCRUM-63-02: a member or the admin calling `POST /api/v1/piquetes` gets `403` and no row changes; TC-SCRUM-63-03: no token, an unreadable token, the token of an unknown or inactive member or with another role answers `401`, and mock-sign-in of an unknown or inactive member answers `401` with no token; TC-SCRUM-63-04: the three health endpoints answer without a token; the mocked users, a working sign-in, and the token never in the logs |
 | `escala-api` | `LogLeakIT` | 4 | TC-SCRUM-94-01, 02, 05, 06 with the levels of dev: a marker in a processed message, in a message the listener rejects, in a request body the API rejects, and in a row the database rejects never reaches the logs |
 | `escala-api` | `LogLeakVerboseLevelsIT` | 2 | TC-SCRUM-94-03, 04 with root `DEBUG`, SQL binds at `TRACE` and Spring AMQP at `DEBUG`: request values, SQL values and message bodies never reach the logs |
 | `escala-api` | `FlywayFreshDatabaseIT` | 1 | TC-SCRUM-87-01: an empty database is built by the migrations and its columns and constraints are identical to the schema `ddl-auto=update` created up to 0.3.0 |
@@ -90,9 +91,9 @@ At least 70% of the lines of new code, measured with JaCoCo (Java services) and 
 | `elegibilidade-worker` | `GuardsTest` | 19 | TC-SCRUM-99-08: nothing for vague messages, prompt injection, empty or over 500 characters, past dates or more than 6 months ahead; only the dates for a health reason |
 | `elegibilidade-worker` | `BaselineEvaluationTest` | 1 | TC-SCRUM-99-09: one run of the baseline on the 60 cases of the evaluation dataset, reported to `target/ai-eval/baseline-results.{json,md}`; the targets of 06 are reported, never enforced |
 | `elegibilidade-worker` | `EvaluationMeasuresTest` | 8 | TC-SCRUM-99-10: the evaluator on pairs made by hand: exact match, dates right, period count, per category, p95 |
-| `apps/web` | `app.spec.ts` | 11 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt |
+| `apps/web` | `app.spec.ts` | 17 | The piquete list, creating a piquete and polling until the slot is `ELIGIBLE`, error and offline states, and the install prompt; TC-SCRUM-63-01: "supervisor" signs in and sees the schedule editor, "member" and "admin" see the schedule without it; the token on every call, back to sign-in on `401`, sign-out clears the session and the cached roster |
 
-Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, on 2026-11-09 for the Flyway tests and on 2026-11-12 for the logging and messaging tests. Every Java test runs against the Flyway migrations; `FlywayFreshDatabaseIT` stops at version 1, the version it compares with 0.3.0. Only the Flyway, logging and messaging tests carry a `TC-` ID so far.
+Counts are from `./mvnw verify` and `npm run test:ci` on 2026-11-01, on 2026-11-09 for the Flyway tests, on 2026-11-12 for the logging and messaging tests and on 2026-11-15 for the sign-in tests. Every Java test runs against the Flyway migrations, and every call to `/api/v1/piquetes` carries the mocked token of a seeded user (`MockTokens`); `FlywayFreshDatabaseIT` stops at version 1, the version it compares with 0.3.0. Only the Flyway, logging, messaging and sign-in tests carry a `TC-` ID so far.
 
 ## Test case convention
 
@@ -125,8 +126,9 @@ Test cases with a `TC-` ID today, both in `apps/web/src/app/app.spec.ts` (story 
 > **ℹ️ Guidance.** Assignment §11: "Real personal or sensitive data should not be used when synthetic or anonymized data is sufficient." For Escala synthetic data is always sufficient, so every test uses it. Say where each data set lives and how it is produced; never copy real rosters, certifications or messages, even anonymised.
 
 - **Seed data:** placeholder members (Member A, Member B…), synthetic certifications and licences, one fictional corps. Path: [TODO: path].
-- **IPMA fixtures:** simulator responses for RCM levels 1–5 and for the four §6.5 cases (unavailable, delayed, incomplete, invalid). Path: `tools/ipma-sim` [TODO: fixture folder].
-- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path `apps/elegibilidade-worker/src/test/resources/ai-eval/unavailability.jsonl` (conventions and limitations in the `README.md` next to it). Written on 2026-10-25, before the extraction parser, and frozen: it is not edited to fit a parser. Origin and limitations on **06 · Responsible AI Opportunity Assessment**.
+- **IPMA fixtures (SCRUM-43):** `tools/ipma-sim/fixtures/`. `rcm-d0.json` and `warnings_www.json` are the bodies fetched on 2026-11-21. `rcm-d0-municipality-missing.json`, `invalid.json` and `empty.json` are fixed bodies for the unusable responses the live API did not return that day: the corps municipality missing, a body that is not JSON, and an empty body (ADR 0013). The simulator container and the unavailable and delayed modes are still to build.
+rcm-d0-municipality-missing.json, invalid.json and empty.json are fixed bodies for the unusable responses the live API did not return that day: the corps municipality missing, a body that is not JSON, and an empty JSON body (ADR 0013).
+- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path [TODO: path]; origin and limitations on **06 · Responsible AI Opportunity Assessment**.
 - **Clock:** tests use a fixed clock [TODO: how], so boundary cases do not depend on the day the pipeline runs.
 
 > **✏️ Example (illustrative — replace).** One synthetic seed member: `{"code": "M-A", "name": "Member A", "roster": "ACTIVE", "certifications": [{"type": "TAS", "expiresOn": "YYYY-MM-DD"}], "licenceClass": "[TODO: class]"}`. No contacts, no date of birth.

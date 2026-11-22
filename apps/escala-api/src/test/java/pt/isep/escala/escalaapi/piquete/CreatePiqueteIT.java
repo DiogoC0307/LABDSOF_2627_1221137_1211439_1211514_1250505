@@ -29,6 +29,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.springframework.http.HttpHeaders;
+import pt.isep.escala.escalaapi.auth.MockTokens;
 
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
 @AutoConfigureMockMvc
@@ -54,14 +56,14 @@ class CreatePiqueteIT {
 
 	@Test
 	void postWithoutDutyDateIsBadRequest() throws Exception {
-		mockMvc.perform(post("/api/v1/piquetes").contentType(MediaType.APPLICATION_JSON).content("{}"))
+		mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor()).contentType(MediaType.APPLICATION_JSON).content("{}"))
 				.andExpect(status().isBadRequest());
 	}
 
 	@Test
 	void postCreatesPiqueteWithPendingSlotThenEligibleAfterAvaliacaoConcluida() throws Exception {
 		String traceId = UUID.randomUUID().toString();
-		mockMvc.perform(post("/api/v1/piquetes")
+		mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor())
 						.contentType(MediaType.APPLICATION_JSON)
 						.header("X-Trace-Id", traceId)
 						.content("{\"dutyDate\":\"2026-11-02\"}"))
@@ -107,7 +109,7 @@ class CreatePiqueteIT {
 				"avaliacao.concluida",
 				new Message(concluida.getBytes(StandardCharsets.UTF_8), properties));
 
-		await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> mockMvc.perform(get("/api/v1/piquetes"))
+		await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> mockMvc.perform(get("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].slots[0].status").value("ELIGIBLE")));
 	}

@@ -23,7 +23,7 @@ Every environment uses synthetic data only (§11); no real corps member appears 
 | dev | Kubernetes (k3s, one VM), namespace `escala-dev` | `dev` | The team; every merge to `main` is deployed here | https://escala-dev.duckdns.org |
 | qa | same cluster, namespace `escala-qa` | `qa` | Release candidates, tested before the Sprint Review (Definition of Done) | https://escala-qa.duckdns.org |
 | prod | same cluster, namespace `escala-prod` | `prod` | Published releases | https://escala-prod.duckdns.org |
-| Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (SCRUM-43) | Teaching staff (§12) | http://localhost:8000 |
+| Evaluation | Teaching staff machine, Docker Compose | `local`, as for Local; the Compose profile `evaluation` (IPMA simulator, AI off) does not exist yet (fixtures committed in SCRUM-43; the container is still to build) | Teaching staff (§12) | http://localhost:8000 |
 
 Each environment has its own databases, RabbitMQ and secrets; nothing is shared between them. The worker is internal and has no public URL. Argo CD is at https://escala-argocd.duckdns.org and Grafana at https://escala-grafana.duckdns.org.
 
@@ -53,14 +53,16 @@ The first build takes several minutes. It works when:
 - `docker compose ps` shows every service as healthy
 - `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`; on `escala-api`, `/actuator/health/liveness` and `/actuator/health/readiness` also answer `{"status":"UP"}`. RF36 names `/health/ready`; the services expose Spring Boot Actuator's `/actuator/health` [TODO: align the endpoint name with RF36, Diogo Costa]
 - `GET http://localhost:8000/api/actuator/health` answers the same through the web nginx; it is the same path as on Kubernetes (`https://escala-<env>.duckdns.org/api/actuator/health`)
-- the walking skeleton works. Create a piquete and look at its slot a few seconds later:
+- the walking skeleton works. Sign in as the synthetic supervisor (mocked sign-in, ADR 0006), create a piquete and look at its slot a few seconds later:
 
   ```bash
-  curl -X POST http://localhost:8000/api/v1/piquetes -H 'Content-Type: application/json' -d '{"dutyDate":"2026-11-01"}'   # slot status: PENDING
-  curl http://localhost:8000/api/v1/piquetes                                                                               # a few seconds later: ELIGIBLE
+  TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/mock-sign-in -H 'Content-Type: application/json' \
+    -d '{"memberId":"00000000-0000-4000-8000-000000000002"}' | sed 's/.*"token":"\([^"]*\)".*/\1/')
+  curl -X POST http://localhost:8000/api/v1/piquetes -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"dutyDate":"2026-11-01"}'   # slot status: PENDING
+  curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/piquetes                                                                               # a few seconds later: ELIGIBLE
   ```
 
-  The PWA at http://localhost:8000 shows the same list.
+  Without the `Authorization` header both calls answer `401`; with the token of the synthetic member (`…0001`) or admin (`…0003`), the `POST` answers `403`. The PWA at http://localhost:8000 opens on the sign-in screen; "Synthetic Supervisor" sees the same list and the form to create a piquete.
 - optional, Grafana at http://localhost:3000 (user `admin`) with the Compose profile `observability`, see [Observability](#observability) [TODO: Grafana dashboard for Escala (RF39) does not exist yet, Diogo Costa]
 
 Stop: `docker compose down`. Stop and delete all local data: `docker compose down -v`.
@@ -157,10 +159,10 @@ The product-level profiles of §12 are not built yet. Selecting a profile and sw
 | Profile | IPMA source | AI | Network needed | Used for |
 |---|---|---|---|---|
 | `default` | Live IPMA open data, polled hourly with cache (ADR 0010) | [TODO: model per ADR 0016, once it is accepted, Diogo Pereira]; form fallback when down or off | Yes | Deployed environment, sprint reviews |
-| `evaluation` | `tools/ipma-sim` (SCRUM-43) | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
+| `evaluation` | `tools/ipma-sim` (fixtures committed in SCRUM-43; the container is still to build) | Off: form and template text (RF35) | No | Teaching staff (§12), CI resilience tests, demo plan B |
 
-- How to select a profile: [TODO: a Compose profile or an override file, once SCRUM-43 is done, Diogo Costa]
-- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command, once SCRUM-43 is done, Diogo Costa]
+- How to select a profile: [TODO: a Compose profile or an override file, once the simulator container exists, Diogo Costa]
+- How to switch the IPMA simulator mode (unavailable, delayed, incomplete, invalid): [TODO: command, once the simulator container exists, Diogo Costa]
 
 ## CI/CD pipeline
 
@@ -200,7 +202,7 @@ The automatic path:
    - **A changed enum, column or constraint is a migration.** Hibernate never changes the database (`validate`): this is what broke `POST /api/v1/piquetes` on dev on 2026-11-01, when `ddl-auto=update` did not change `slot_status_check` (see the [Runbook](#runbook--degraded-modes)). When an enum gets a new value, the migration drops and recreates its check constraint with the new list, and the previous version still works because it never writes the new value.
    - **A new enum value is a breaking change for rollback; document the revert step in the same PR.** The migration is compatible, but the rows the new version writes are not: the previous version cannot read the new value. The revert step (usually an `UPDATE` back to a value the previous version knows) goes in [Rollback](#rollback). Example: `EVALUATION_FAILED` (SCRUM-95).
    - **A merged migration is never edited.** A fix is a new migration with the next number.
-4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}`, then create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
+4. Smoke check: `https://escala-<env>.duckdns.org/api/actuator/health` returns `{"status":"UP"}` without a token; `GET /api/v1/piquetes` without a token answers `401`; then sign in as "Synthetic Supervisor" (in the PWA, or with the commands in [Run locally](#run-locally) on the environment's URL), create a piquete and see its slot go from `PENDING` to `ELIGIBLE`.
 5. The deployed tag is recorded in the commit message on the branch `deploy/<env>`; `git log deploy/prod` is the history of everything deployed to production.
 
 There is no one-command manual deploy of an arbitrary tag. The workflows can be started by hand only for dev (*Deploy DEV* has `workflow_dispatch`); to put an older version back, use [Rollback](#rollback). The release steps (cutting a release, fixing what qa finds, hotfixes) are in the [README](../../README.md#releasing-git-flow).
@@ -316,11 +318,11 @@ In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue with
 
 | Scenario | How to trigger (for the demo) | Expected behaviour | Recovery |
 |---|---|---|---|
-| IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable* (SCRUM-43), Diogo Costa] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after SCRUM-43 |
+| IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable*, Diogo Costa. SCRUM-43 committed the fixtures only] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after the simulator container |
 | AI down | [TODO: the AI feature flag (ADR 0011) does not exist yet, Diogo Costa] | Form fallback: the free-text box is replaced by the unavailability form (RF35). Planned, not built yet | Planned, after the flag exists |
 | Worker down | `docker compose stop elegibilidade-worker` | Tested on Compose on 2026-11-01: the API keeps accepting requests (`POST /api/v1/piquetes` answers `201`), the slot stays `PENDING` and the request waits in the queue `worker.avaliacao-pedida` | `docker compose start elegibilidade-worker`: the waiting request is processed and the slot became `ELIGIBLE` within 9 seconds in that test. Check the dead-letter queue is empty |
 
-- The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once SCRUM-43 is done.
+- The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once the container exists. SCRUM-43 committed the fixture files only.
 - The "worker down" scenario was tried on Compose only, not on Kubernetes.
 - **Seen on dev, 2026-11-01: `POST /api/v1/piquetes` answers `500` while `GET` and the health check answer `200`.** The log of `escala-api` (Grafana, Loki) showed `new row for relation "slot" violates check constraint "slot_status_check"`: the dev database was created when a slot status had three values (`OPEN`, `PROPOSED`, `FILLED`) and `ddl-auto=update` did not change the constraint when `PENDING` and `ELIGIBLE` were added. Fixed in Argo CD, not in Git: delete the PVC `data-pg-escala-api-0` and the pod `pg-escala-api-0` of `escala-dev` (the data of dev was test data only), then delete the pod of `escala-api` so it creates the tables again. Afterwards `POST` answered `201` and the slot went from `PENDING` to `ELIGIBLE` in 3 seconds. qa and prod were not affected: version `0.2.0` had no `slot` table. The missing migration tool is the TODO in [Deploy](#deploy).
 - Demo recordings: [TODO: links, Diogo Pereira]

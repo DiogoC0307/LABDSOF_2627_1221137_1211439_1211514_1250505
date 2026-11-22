@@ -1,0 +1,17 @@
+<section class="sign-in" aria-label="Sign in">
+  <h1>Sign in</h1>
+  <p class="notice">Simulated sign-in: pick a user. Synthetic data only.</p>
+  <ul class="users">
+    @for (user of users(); track user.id) {
+      <li>
+        <button type="button" (click)="signIn(user)">
+          <strong>{{ user.fullName }}</strong>
+          <span class="role">{{ user.role }}</span>
+        </button>
+      </li>
+    }
+  </ul>
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+</section>
