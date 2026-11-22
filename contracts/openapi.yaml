@@ -649,16 +649,150 @@ paths:
   /api/v1/unavailability-messages:
     post:
       tags: [unavailabilities]
-      summary: Declare unavailability in free text, read automatically (planned, SCRUM-75)
+      summary: Say when the caller cannot serve, in their own words (SCRUM-75)
       description: >
-        Not implemented yet. 202 without waiting for the extraction; the member confirms the proposed periods
-        before they count (06).
-      operationId: declareUnavailabilityMessage
+        Any role, for themself. Answers 202 at once: the text goes to elegibilidade-worker as ExtracaoPedida
+        through the outbox, with the reference date (today in Lisbon) and never the member. Nothing counts as
+        unavailability until the member confirms the proposal. The free text is deleted on confirmation, on
+        discard, or 24 hours after the message (RNF09, 09); it is never logged nor returned. At most 10 messages
+        per member in any hour (09 T-11): the 11th answers 429.
+      operationId: sendUnavailabilityMessage
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnavailabilityMessageRequest"
       responses:
         "202":
-          description: Accepted
+          description: Accepted; the proposal follows in the message (status PENDING until the worker answers)
+          headers:
+            Location:
+              description: /api/v1/unavailability-messages/{id}
+              schema:
+                type: string
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnavailabilityMessage"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          description: More than 10 messages within an hour
+          headers:
+            Retry-After:
+              description: Seconds until the oldest message of the hour leaves the window
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/unavailability-messages/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [unavailabilities]
+      summary: One of the caller's messages, with the proposal once it arrives
+      description: >
+        PENDING until ExtracaoConcluida arrives, then PROPOSED with the periods read (maybe none: the PWA then
+        suggests the form). A message of another member answers 404.
+      operationId: getMyUnavailabilityMessage
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The message, without the free text
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnavailabilityMessage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No message with that ID for the caller (no body)
+    delete:
+      tags: [unavailabilities]
+      summary: Discard one of the caller's messages
+      description: >
+        The free text and its outbox row are deleted and the proposal is not used. 204 also when the message was
+        already closed; another member's answers 404.
+      operationId: discardMyUnavailabilityMessage
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "204":
+          description: Discarded
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No message with that ID for the caller (no body)
+  /api/v1/unavailability-messages/{id}/confirm:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      tags: [unavailabilities]
+      summary: Confirm the periods, as the member edited them
+      description: >
+        The periods are patterns in Lisbon time (the format of ExtracaoConcluida v2). escala-api expands them
+        into continuous periods in UTC and saves them as unavailability with source FREE_TEXT; whole days in a
+        row become one period and overlapping ones are joined. In the same transaction the free text is deleted
+        (AC4). A period that has ended, or that starts or ends more than 6 months after today, rejects the whole
+        confirmation; a period running now keeps only the days that have not ended. At most 10 periods.
+      operationId: confirmMyUnavailabilityMessage
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [periods]
+              properties:
+                periods:
+                  type: array
+                  minItems: 1
+                  maxItems: 10
+                  items:
+                    $ref: "#/components/schemas/ProposedPeriod"
+      responses:
+        "200":
+          description: The periods saved, in UTC, ordered by start
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No message with that ID for the caller (no body)
+        "409":
+          description: No proposal yet, or the message is already confirmed, discarded or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /swaps:
     post:
       tags: [swaps]
@@ -1071,7 +1205,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead]
+                    enum: [required, too_long, invalid, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1104,6 +1238,70 @@ components:
         source:
           type: string
           enum: [FORM, FREE_TEXT]
+          description: FREE_TEXT when confirmed from a message (SCRUM-75)
+    UnavailabilityMessageRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          maxLength: 500
+          description: In the member's words. Empty gives required, more than 500 characters too_long.
+          example: não posso sábado de manhã
+    UnavailabilityMessage:
+      type: object
+      required: [id, status, referenceDate, periods]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, PROPOSED, CONFIRMED, DISCARDED, EXPIRED]
+        referenceDate:
+          type: string
+          format: date
+          description: The day the message was sent, in Lisbon; the worker reads relative dates from it
+        method:
+          type: string
+          nullable: true
+          enum: [MODEL, BASELINE, FALLBACK]
+          description: How the proposal was made (ExtracaoConcluida); null while PENDING
+        periods:
+          type: array
+          description: The proposal; empty while PENDING, or when nothing usable was read
+          items:
+            $ref: "#/components/schemas/ProposedPeriod"
+    ProposedPeriod:
+      type: object
+      description: >
+        The format of ExtracaoConcluida v2 (06): startDate to endDate inclusive, optionally only some weekdays,
+        optionally from startTime to endTime in Europe/Lisbon on each day (an end before the start crosses
+        midnight; both or neither).
+      required: [startDate, endDate]
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        weekdays:
+          type: array
+          items:
+            type: string
+            enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+        startTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        endTime:
+          type: string
+          pattern: "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+      example:
+        startDate: "2026-11-28"
+        endDate: "2026-11-28"
+        startTime: "08:00"
+        endTime: "13:00"
     ErrorResponse:
       type: object
       description: Spring Boot's default error body
