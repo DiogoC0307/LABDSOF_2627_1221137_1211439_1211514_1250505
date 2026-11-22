@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static pt.isep.escala.elegibilidadeworker.extracao.claude.FakeClaudeSupport.TOKEN;
 import static pt.isep.escala.elegibilidadeworker.extracao.claude.FakeClaudeSupport.extractor;
-import static pt.isep.escala.elegibilidadeworker.extracao.claude.FakeClaudeSupport.record;
+import static pt.isep.escala.elegibilidadeworker.extracao.claude.FakeClaudeSupport.recorded;
 
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -81,7 +81,7 @@ class ClaudeCliExtractorTest {
 	void inputAndIsolation() throws Exception {
 		Path rec = recordFile();
 		extractor("ok", rec).extract(TEXT, REF);
-		Properties seen = record(rec);
+		Properties seen = recorded(rec);
 
 		assertThat(seen.getProperty("stdin")).contains("Reference date: 2026-10-26 (Monday)").contains(TEXT);
 		List<String> args = args(seen);
@@ -174,7 +174,7 @@ class ClaudeCliExtractorTest {
 		assertThat(result.outcome()).isEqualTo(Outcome.TIMEOUT);
 		assertThat(result.periods()).isEmpty();
 		assertThat(took).isLessThan(Duration.ofSeconds(20));
-		long pid = Long.parseLong(record(rec).getProperty("pid"));
+		long pid = Long.parseLong(recorded(rec).getProperty("pid"));
 		assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
 	}
 
@@ -187,13 +187,13 @@ class ClaudeCliExtractorTest {
 		extractor("ok", rec, Duration.ofSeconds(30), Map.of("ANTHROPIC_BASE_URL", "https://example.invalid",
 				"ANTHROPIC_AUTH_TOKEN", "outro-token", "SPRING_DATASOURCE_PASSWORD", "segredo-bd",
 				"SPRING_RABBITMQ_PASSWORD", "segredo-mq", "CLAUDE_CONFIG_DIR", tmp.toString())).extract(TEXT, REF);
-		Properties seen = record(rec);
+		Properties seen = recorded(rec);
 
 		assertThat(seen.getProperty("token")).isEqualTo(TOKEN);
 		List<String> names = Arrays.asList(seen.getProperty("env").split(","));
 		assertThat(names).noneMatch(n -> n.toUpperCase(Locale.ROOT).startsWith("ANTHROPIC"))
-				.doesNotContain("SPRING_DATASOURCE_PASSWORD", "SPRING_RABBITMQ_PASSWORD").contains("CLAUDE_CONFIG_DIR");
-		assertThat(names).allMatch(n -> n.equals(ClaudeCliExtractor.TOKEN_VARIABLE)
+				.doesNotContain("SPRING_DATASOURCE_PASSWORD", "SPRING_RABBITMQ_PASSWORD").contains("CLAUDE_CONFIG_DIR")
+				.allMatch(n -> n.equals(ClaudeCliExtractor.TOKEN_VARIABLE)
 				|| ClaudeCliExtractor.PASSED_THROUGH.stream().anyMatch(n::equalsIgnoreCase)
 				// Windows adds a few variables of its own to every process
 				|| WINDOWS);
@@ -203,7 +203,8 @@ class ClaudeCliExtractorTest {
 	@DisplayName("TC-SCRUM-38-06 with ANTHROPIC_API_KEY set the extractor is not created, and the key is not in the error")
 	void refusesApiKey() {
 		var env = FakeClaudeSupport.environment(Map.of("ANTHROPIC_API_KEY", "sk-ant-api-CHAVE-DE-TESTE"));
-		assertThatThrownBy(() -> new ClaudeCliExtractor(ClaudeCliExtractor.Settings.defaults(), env))
+		var settings = ClaudeCliExtractor.Settings.defaults();
+		assertThatThrownBy(() -> new ClaudeCliExtractor(settings, env))
 				.isInstanceOf(IllegalStateException.class).hasMessageContaining("ANTHROPIC_API_KEY")
 				.hasMessageNotContaining("CHAVE-DE-TESTE");
 	}

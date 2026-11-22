@@ -48,6 +48,7 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 	public static final double PRODUCT_TIMEOUT_MS = 10_000;
 
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+	private static final String P95_FIELD = "p95LatencyMs";
 
 	/** The outcome of one case. {@code error} is the type of an exception thrown by the extractor, if any. */
 	public record CaseResult(EvaluationCase testCase, ExtractionResult actual, boolean exact, boolean datesRight,
@@ -158,10 +159,10 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 		putOrNull(root, "datasetCommit", datasetCommit);
 		putOrNull(root, "datasetSha256", datasetSha256);
 		root.put("latencyNote", latencyNote);
-		root.put("p95LatencyMs", round(p95LatencyMs));
+		root.put(P95_FIELD, round(p95LatencyMs));
 		ObjectNode calls = root.putObject("calls");
 		calls.put("p50LatencyMs", round(p50LatencyMs()));
-		calls.put("p95LatencyMs", round(p95LatencyMs));
+		calls.put(P95_FIELD, round(p95LatencyMs));
 		putRate(calls, "shareOver4s", shareSlowerThan(TARGET_P95_MS));
 		putRate(calls, "shareOver10s", shareSlowerThan(PRODUCT_TIMEOUT_MS));
 		ObjectNode outcomeNode = calls.putObject("outcomes");
@@ -182,7 +183,7 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 		targets.put("datesNormal", TARGET_DATES_NORMAL);
 		targets.put("countAll", TARGET_COUNT);
 		targets.put(ADVERSE, TARGET_ADVERSE);
-		targets.put("p95LatencyMs", TARGET_P95_MS);
+		targets.put(P95_FIELD, TARGET_P95_MS);
 		root.set("overall", statsNode(mapper, overall()));
 		ObjectNode categories = root.putObject("categories");
 		for (String category : CATEGORIES) {

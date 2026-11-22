@@ -10,8 +10,10 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Deque;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
@@ -40,12 +42,14 @@ public final class AiEvaluationMain {
 
 	static final String LABEL = "Claude Haiku via the Claude Code CLI, prompt v0";
 	static final Duration MEASUREMENT_TIMEOUT = Duration.ofSeconds(60);
+	private static final String PREFIX = "ai-eval: ";
 
 	private AiEvaluationMain() {
 	}
 
 	public static void main(String[] args) {
-		System.exit(run(args, System.getenv(), System.out));
+		// a command-line tool run by hand in the ai-eval container: the console is its output (Sonar java:S106)
+		System.exit(run(args, System.getenv(), System.out)); // NOSONAR
 	}
 
 	/** Returns the exit code: 0 done, 1 the smoke call gave no valid answer, 2 wrong options or environment. */
@@ -55,7 +59,7 @@ public final class AiEvaluationMain {
 			options = Options.parse(args);
 		}
 		catch (RuntimeException e) { // a bad number or duration too
-			out.println("ai-eval: " + e.getMessage());
+			out.println(PREFIX + e.getMessage());
 			return 2;
 		}
 		if (!"true".equalsIgnoreCase(environment.get("AI_ENABLED"))) {
@@ -68,7 +72,7 @@ public final class AiEvaluationMain {
 		}
 		String token = environment.get(ClaudeCliExtractor.TOKEN_VARIABLE);
 		if (token == null || token.isBlank()) {
-			out.println("ai-eval: " + ClaudeCliExtractor.TOKEN_VARIABLE + " is not set in this shell.");
+			out.println(PREFIX + ClaudeCliExtractor.TOKEN_VARIABLE + " is not set in this shell.");
 			return 2;
 		}
 		ClaudeCliExtractor extractor = new ClaudeCliExtractor(ClaudeCliExtractor.Settings.defaults()
@@ -78,7 +82,7 @@ public final class AiEvaluationMain {
 		}
 		catch (IOException | IllegalArgumentException | NoSuchAlgorithmException e) {
 			// the message of these never holds the token; dataset errors give only a line number
-			out.println("ai-eval: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+			out.println(PREFIX + e.getClass().getSimpleName() + ": " + e.getMessage());
 			return 2;
 		}
 	}
@@ -208,16 +212,18 @@ public final class AiEvaluationMain {
 			String commit = null;
 			List<String> command = new ArrayList<>();
 			boolean smoke = false;
-			for (int i = 0; i < args.length; i++) {
-				switch (args[i]) {
-					case "--dataset" -> dataset = Path.of(value(args, ++i));
-					case "--out" -> out = Path.of(value(args, ++i));
-					case "--runs" -> runs = Integer.parseInt(value(args, ++i));
-					case "--timeout" -> timeout = Duration.parse("PT" + value(args, ++i).toUpperCase(Locale.ROOT));
-					case "--dataset-commit" -> commit = value(args, ++i);
-					case "--command" -> command.add(value(args, ++i));
+			Deque<String> rest = new ArrayDeque<>(List.of(args));
+			while (!rest.isEmpty()) {
+				String option = rest.poll();
+				switch (option) {
+					case "--dataset" -> dataset = Path.of(value(rest, option));
+					case "--out" -> out = Path.of(value(rest, option));
+					case "--runs" -> runs = Integer.parseInt(value(rest, option));
+					case "--timeout" -> timeout = Duration.parse("PT" + value(rest, option).toUpperCase(Locale.ROOT));
+					case "--dataset-commit" -> commit = value(rest, option);
+					case "--command" -> command.add(value(rest, option));
 					case "--smoke" -> smoke = true;
-					default -> throw new IllegalArgumentException("unknown option " + args[i]);
+					default -> throw new IllegalArgumentException("unknown option " + option);
 				}
 			}
 			if (!smoke && dataset == null) {
@@ -226,14 +232,16 @@ public final class AiEvaluationMain {
 			if (runs < 1) {
 				throw new IllegalArgumentException("--runs must be at least 1");
 			}
-			return new Options(dataset, out, runs, timeout, commit, command.isEmpty() ? List.of("claude") : List.copyOf(command), smoke);
+			return new Options(dataset, out, runs, timeout, commit,
+					command.isEmpty() ? List.of("claude") : List.copyOf(command), smoke);
 		}
 
-		private static String value(String[] args, int i) {
-			if (i >= args.length) {
-				throw new IllegalArgumentException("option " + args[i - 1] + " needs a value");
+		private static String value(Deque<String> rest, String option) {
+			String value = rest.poll();
+			if (value == null) {
+				throw new IllegalArgumentException("option " + option + " needs a value");
 			}
-			return args[i];
+			return value;
 		}
 	}
 }
