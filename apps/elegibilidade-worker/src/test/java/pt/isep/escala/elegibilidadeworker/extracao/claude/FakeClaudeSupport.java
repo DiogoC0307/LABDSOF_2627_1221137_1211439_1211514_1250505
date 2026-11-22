@@ -22,9 +22,9 @@ public final class FakeClaudeSupport {
 	}
 
 	/** {@code java -cp <test-classes> FakeClaude <mode> <record>}. */
-	public static List<String> command(String mode, Path record) {
+	public static List<String> command(String mode, Path recordFile) {
 		String java = ProcessHandle.current().info().command().orElse("java");
-		return List.of(java, "-cp", testClasses(), FakeClaude.class.getName(), mode, record.toString());
+		return List.of(java, "-cp", testClasses(), FakeClaude.class.getName(), mode, recordFile.toString());
 	}
 
 	/** The environment of a worker with the token, plus {@code extra}. */
@@ -39,20 +39,20 @@ public final class FakeClaudeSupport {
 		return env;
 	}
 
-	public static ClaudeCliExtractor extractor(String mode, Path record, Duration timeout, Map<String, String> extra) {
+	public static ClaudeCliExtractor extractor(String mode, Path recordFile, Duration timeout, Map<String, String> extra) {
 		return new ClaudeCliExtractor(
-				new ClaudeCliExtractor.Settings(command(mode, record), "haiku", timeout, DayParts.DEFAULT),
+				new ClaudeCliExtractor.Settings(command(mode, recordFile), "haiku", timeout, DayParts.DEFAULT),
 				environment(extra));
 	}
 
-	public static ClaudeCliExtractor extractor(String mode, Path record) {
-		return extractor(mode, record, Duration.ofSeconds(30), Map.of());
+	public static ClaudeCliExtractor extractor(String mode, Path recordFile) {
+		return extractor(mode, recordFile, Duration.ofSeconds(30), Map.of());
 	}
 
 	/** What {@link FakeClaude} recorded. */
-	public static Properties record(Path record) throws IOException {
+	public static Properties recorded(Path recordFile) throws IOException {
 		Properties seen = new Properties();
-		try (InputStream in = Files.newInputStream(record)) {
+		try (InputStream in = Files.newInputStream(recordFile)) {
 			seen.load(in);
 		}
 		return seen;
