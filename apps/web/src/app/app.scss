@@ -135,3 +135,20 @@ button {
 .notice {
   color: #0b5cab;
 }
+
+.menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+}
+
+.sign-out {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.7rem;
+  background: #fff;
+  color: #0b5cab;
+  border: 1px solid #0b5cab;
+}

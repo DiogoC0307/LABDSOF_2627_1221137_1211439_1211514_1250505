@@ -66,9 +66,11 @@ package "Personnel & Qualifications" #E3F2FD {
     }
 
     enum AccessRole {
-        FIREFIGHTER
-        DUTY_CHIEF
-        COMMANDER
+        MEMBER
+        SUPERVISOR
+        ADMIN
+        --
+        ADR 0006, SCRUM-63
     }
 
     class CertificationType {

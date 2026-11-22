@@ -18,6 +18,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.springframework.http.HttpHeaders;
+import pt.isep.escala.escalaapi.auth.MockTokens;
 
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
 @AutoConfigureMockMvc
@@ -50,7 +52,7 @@ class FlywayExistingDatabaseIT {
 				"SELECT count(*) FROM flyway_schema_history WHERE type = 'SQL' AND version = '1'", Integer.class))
 				.isZero();
 
-		mockMvc.perform(get("/api/v1/piquetes"))
+		mockMvc.perform(get("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].id").value("11111111-1111-4111-8111-111111111111"))
 				.andExpect(jsonPath("$[0].slots[0].status").value("ELIGIBLE"));

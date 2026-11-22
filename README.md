@@ -56,7 +56,7 @@ One monorepo, one folder per deployable component. `tools/` is still empty, and 
 │   └── web/                    Angular 22 PWA, port 4200 (8000 in Compose) (walking skeleton)
 ├── contracts/                  openapi.yaml and events/ (JSON Schema of the envelope and the five events)
 ├── tools/
-│   └── ipma-sim/               IPMA simulator container                    (planned, SCRUM-43)
+│   └── ipma-sim/               IPMA fixtures (SCRUM-43); simulator container still planned
 ├── infra/
 │   ├── compose/                nginx.conf of the web container in Compose
 │   ├── rabbitmq/               setup.sh (users, permissions) and definitions.json (exchanges, queues)
