@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { finalize } from 'rxjs';
 import {
   CertificationType,
   InvalidField,
@@ -62,6 +63,8 @@ export class MemberForm implements OnInit {
   protected readonly types = signal<CertificationType[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
   protected readonly loadError = signal<string | null>(null);
+  /** True while the save is in flight: the button is disabled, so a second click sends nothing (SCRUM-158). */
+  protected readonly saving = signal(false);
 
   protected fullName = '';
   protected rank: string = 'FIREFIGHTER_3RD_CLASS';
@@ -116,6 +119,9 @@ export class MemberForm implements OnInit {
   }
 
   protected save(): void {
+    if (this.saving()) {
+      return;
+    }
     const errors = this.check();
     this.errors.set(errors);
     if (errors.length > 0) {
@@ -136,7 +142,8 @@ export class MemberForm implements OnInit {
     const request = this.memberId
       ? this.members.update(this.memberId, details, qualifications)
       : this.members.register(details, qualifications);
-    request.subscribe({
+    this.saving.set(true);
+    request.pipe(finalize(() => this.saving.set(false))).subscribe({
       next: () => void this.router.navigateByUrl('/members'),
       error: (error: unknown) => this.errors.set(this.apiErrors(error)),
     });

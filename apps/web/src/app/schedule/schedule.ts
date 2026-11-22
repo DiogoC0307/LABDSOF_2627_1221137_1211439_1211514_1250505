@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
 import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
 
 interface Slot {
@@ -29,6 +30,8 @@ export class Schedule implements OnInit {
   protected readonly piquetes = signal<Piquete[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly offline = signal(false);
+  /** True while the piquete is being created: the button is disabled, so a second click sends nothing (SCRUM-158). */
+  protected readonly creating = signal(false);
   protected dutyDate = new Date().toISOString().slice(0, 10);
 
   protected readonly today = computed(() => new Date().toISOString().slice(0, 10));
@@ -41,8 +44,12 @@ export class Schedule implements OnInit {
   }
 
   protected create(): void {
+    if (this.creating()) {
+      return;
+    }
     this.error.set(null);
-    this.http.post<Piquete>('/api/v1/piquetes', { dutyDate: this.dutyDate }).subscribe({
+    this.creating.set(true);
+    this.http.post<Piquete>('/api/v1/piquetes', { dutyDate: this.dutyDate }).pipe(finalize(() => this.creating.set(false))).subscribe({
       next: (created) => {
         this.reload();
         this.pollUntilEligible(created.id);

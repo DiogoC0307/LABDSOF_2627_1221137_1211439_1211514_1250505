@@ -32,7 +32,7 @@
       Date
       <input type="date" name="dutyDate" [(ngModel)]="dutyDate" required />
     </label>
-    <button type="submit">Create piquete</button>
+    <button type="submit" [disabled]="creating()">Create piquete</button>
   </form>
 }
 
