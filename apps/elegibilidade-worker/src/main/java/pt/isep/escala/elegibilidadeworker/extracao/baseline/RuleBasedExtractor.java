@@ -36,16 +36,21 @@ public final class RuleBasedExtractor implements UnavailabilityExtractor {
 	static final int MAX_LENGTH = 500;
 
 	private static final Set<String> NEGATION = Set.of("nao", "n", "nunca", "nem");
-	private static final Set<String> CAN = Set.of("posso", "consigo", "disponivel", "disponiveis", "livre", "livres");
-	private static final Set<String> VAGUE = Set.of("talvez", "calhar", "provavelmente", "possivelmente", "acho",
+	private static final String POSSO = "posso";
+	private static final String CONSIGO = "consigo";
+
+	private static final Set<String> CAN = Set.of(POSSO, CONSIGO, "disponivel", "disponiveis", "livre", "livres");
+	private static final Set<String> VAGUE_WORDS = Set.of("talvez", "calhar", "provavelmente", "possivelmente", "acho",
 			"depende");
-	private static final Set<String> FIRST_PERSON = Set.of("posso", "consigo", "estou", "vou", "tenho", "fico", "sou",
+	private static final Set<String> FIRST_PERSON = Set.of(POSSO, CONSIGO, "estou", "vou", "tenho", "fico", "sou",
 			"eu", "podemos", "preciso");
 	private static final Set<String> THIRD_PERSON = Set.of("pode", "podem", "tem", "vai", "vao", "estao", "fica",
 			"ficam", "consegue", "vem", "ele", "ela", "eles", "elas", "estah");
 	private static final Set<String> ABSENT_AFTER_ESTA = Set.of("fora", "ausente", "doente", "indisponivel", "ferias");
 	private static final Set<String> INSTRUCTIONS = Set.of("ignora", "ignore", "ignorar", "ignorando", "esquece",
 			"esquecer", "desconsidera", "instrucoes", "instrucao", "prompt", "apaga", "elimina");
+	/** Words after a comma that start a clause about when the member CAN serve ("..., só posso sábado"). */
+	private static final Set<String> BEFORE_CAN = Set.of(POSSO, "so", CONSIGO, "apenas");
 	private static final Set<String> CONTRAST = Set.of("mas", "porem", "contudo");
 
 	private enum Kind {
@@ -102,7 +107,7 @@ public final class RuleBasedExtractor implements UnavailabilityExtractor {
 		for (int i = 0; i < tokens.size(); i++) {
 			String token = tokens.get(i);
 			boolean commaBeforeCan = token.equals(",") && i + 1 < tokens.size()
-					&& Set.of("posso", "so", "consigo", "apenas").contains(tokens.get(i + 1));
+					&& BEFORE_CAN.contains(tokens.get(i + 1));
 			if (CONTRAST.contains(token) || commaBeforeCan) {
 				parts.add(current);
 				current = new ArrayList<>();
@@ -116,7 +121,7 @@ public final class RuleBasedExtractor implements UnavailabilityExtractor {
 	}
 
 	private static Kind classify(List<String> tokens) {
-		if (tokens.stream().anyMatch(VAGUE::contains) || containsPair(tokens, "nao", "sei")) {
+		if (tokens.stream().anyMatch(VAGUE_WORDS::contains) || containsPair(tokens, "nao", "sei")) {
 			return Kind.VAGUE;
 		}
 		boolean negated = tokens.stream().anyMatch(NEGATION::contains);
