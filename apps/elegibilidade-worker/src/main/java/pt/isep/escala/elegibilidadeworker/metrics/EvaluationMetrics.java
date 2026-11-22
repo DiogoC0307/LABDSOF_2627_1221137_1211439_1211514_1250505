@@ -1,0 +1,45 @@
+package pt.isep.escala.elegibilidadeworker.metrics;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import java.time.Duration;
+import org.springframework.stereotype.Component;
+
+/**
+ * The evaluation metrics of the worker (SCRUM-97):
+ *
+ * <ul>
+ * <li>{@code escala.evaluations.completed{result, source}}: evaluations answered, by result (ELIGIBLE, INELIGIBLE,
+ * FAILED) and by where the answer came from ({@code listener}, or {@code retries_exhausted});</li>
+ * <li>{@code escala.evaluation.processing}: from reading an {@code AvaliacaoPedida} to writing its answer in the
+ * outbox. Part of SCRUM-97's SLI 1, which escala-api measures end to end.</li>
+ * </ul>
+ */
+@Component
+public class EvaluationMetrics {
+
+	public static final String LISTENER = "listener";
+	public static final String RETRIES_EXHAUSTED = "retries_exhausted";
+
+	private final MeterRegistry registry;
+	private final Timer processing;
+
+	public EvaluationMetrics(MeterRegistry registry) {
+		this.registry = registry;
+		this.processing = Timer.builder("escala.evaluation.processing")
+				.description("From reading an AvaliacaoPedida to writing its answer in the outbox")
+				.publishPercentileHistogram().register(registry);
+	}
+
+	public void completed(String result, String source) {
+		Counter.builder("escala.evaluations.completed").description("Evaluations answered by the worker")
+				.tag(MetricTags.RESULT, MetricTags.result(result))
+				.tag(MetricTags.SOURCE, RETRIES_EXHAUSTED.equals(source) ? RETRIES_EXHAUSTED : LISTENER)
+				.register(registry).increment();
+	}
+
+	public void processed(Duration duration) {
+		processing.record(duration);
+	}
+}
