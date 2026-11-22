@@ -14,7 +14,7 @@ The walking skeleton needs a containerised deployment from Sprint 1 (§7.1.2 #10
 
 ## Decision
 
-- **Evaluation and local development:** Docker Compose (`compose.yaml`). One command, `docker compose up --build`, starts the web app, both services, both databases and RabbitMQ. Optional profiles add observability (`observability`) and, once built, the IPMA simulator with the AI off (`evaluation`, SCRUM-43). Compose is the evaluation contract.
+- **Evaluation and local development:** Docker Compose (`compose.yaml`). One command, `docker compose up --build`, starts the web app, both services, both databases and RabbitMQ. Optional profiles add observability (`observability`) and, once built, the IPMA simulator with the AI off (`evaluation`; the SCRUM-43 fixtures are in `tools/ipma-sim/fixtures/`, the container is still to build). Compose is the evaluation contract.
 - **Team environments (dev, QA, production):** Kubernetes with GitOps through Argo CD (`infra/k8s`, `infra/argocd`). GitHub Actions builds the images, tags them with the commit SHA, pushes them to GHCR and writes the new version to a deploy branch. Argo CD applies `deploy/dev` on every merge to `main`, `deploy/qa` for each `release/X.Y.Z` candidate and `deploy/prod` for each GitHub Release. Secrets are Sealed Secrets; observability runs Loki, Tempo, Grafana and Alloy.
 
 ## Alternatives considered
