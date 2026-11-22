@@ -161,4 +161,42 @@ describe('Unavailability in my own words', () => {
     http().expectNone({ method: 'POST', url: `${MESSAGES}/${id}/confirm` });
     expect(page(fixture).querySelector('.proposal [role="alert"]')?.textContent).toContain('before the start');
   });
+
+  it('TC-SCRUM-158-05 two clicks on Send before the answer send the text once; the button is disabled until the answer, then enabled again', async () => {
+    const fixture = await start();
+    const box = page(fixture).querySelector<HTMLTextAreaElement>('textarea[name="text"]')!;
+    box.value = 'não posso amanhã';
+    box.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const sendButton = page(fixture).querySelector<HTMLButtonElement>('.message button.send')!;
+
+    sendButton.click();
+    sendButton.click();
+    fixture.detectChanges();
+
+    const post = http().expectOne({ method: 'POST', url: MESSAGES });
+    expect(sendButton.disabled).toBe(true);
+    post.flush({ status: 429 }, { status: 429, statusText: 'Too Many Requests' });
+    fixture.detectChanges();
+
+    expect(sendButton.disabled).toBe(false);
+  });
+
+  it('TC-SCRUM-158-06 two clicks on Confirm before the answer confirm once; the button is disabled until the answer, then enabled again', async () => {
+    const fixture = await start();
+    await sendAndAnswer(fixture, [saturdayMorning]);
+    const confirm = page(fixture).querySelector<HTMLButtonElement>('.proposal button.confirm')!;
+
+    confirm.click();
+    confirm.click();
+    fixture.detectChanges();
+
+    const post = http().expectOne({ method: 'POST', url: `${MESSAGES}/${id}/confirm` });
+    expect(confirm.disabled).toBe(true);
+    post.flush({ status: 400, errors: [{ field: 'periods[0].endDate', code: 'in_the_past' }] }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(confirm.disabled).toBe(false);
+  });
 });
