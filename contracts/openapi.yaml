@@ -64,9 +64,10 @@ paths:
       description: >
         Spring Boot Actuator, the only endpoint exposed (management.endpoints.web.exposure.include=health,
         details hidden). Answers 503 with status DOWN when the database, RabbitMQ or a listener is down.
-        The connection timeouts are 3 s, so it answers within seconds (SCRUM-88). The Docker Compose
-        healthchecks use this path; the Kubernetes probes use the two groups below. It is where a broker
-        or listener failure shows, since readiness does not include them.
+        The connection timeouts are 3 s, so it answers within seconds (SCRUM-88). No probe or healthcheck
+        uses this path: the Kubernetes probes use the two groups below, and the Docker Compose healthcheck
+        of escala-api uses readiness. It is where a broker or listener failure shows, since readiness does
+        not include them.
       operationId: getHealth
       security: []
       parameters:

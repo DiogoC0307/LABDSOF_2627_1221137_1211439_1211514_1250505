@@ -193,7 +193,8 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
   - `/actuator/health/readiness`: the Kubernetes readiness probe; with a dependency in it down, it answers `503` within seconds (connection timeouts of 3 s for Hikari and RabbitMQ) and the pod leaves the Service.
     - `elegibilidade-worker`: `readinessState`, the database (`db`), RabbitMQ (`rabbit`) and the listener containers (`listeners`, DOWN when one is not running).
     - `escala-api`: `readinessState` and the database (`db`) only. The outbox lets the API keep serving with the broker down (events wait in `outbox_event`), so RabbitMQ and the listeners stay out of readiness and a broker failure does not take every API pod out of the Service.
-  - `/actuator/health`: all indicators (`db`, `rabbit`, `listeners` included), for Docker Compose; on `escala-api` it is where a broker or listener failure shows (`503`).
+  - `/actuator/health`: all indicators (`db`, `rabbit`, `listeners` included); no probe uses it. On `escala-api` it is where a broker or listener failure shows (`503`).
+  - Docker Compose: the `escala-api` healthcheck uses `/actuator/health/readiness`, like the Kubernetes probe, so the API does not turn unhealthy when only the broker is down. The `elegibilidade-worker` healthcheck only opens port 8081.
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - The trace breaks at the outbox today: the relay publishes outside any active span, so Tempo shows separate traces; the application `traceId` in the payload still passes (SCRUM-93).
