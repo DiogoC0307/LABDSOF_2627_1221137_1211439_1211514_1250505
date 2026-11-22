@@ -47,8 +47,7 @@ class BaselineEvaluationTest {
 
 		EvaluationReport report = new EvaluationScorer(new RuleBasedExtractor(),
 				System.getProperty("ai-eval.parser-version", "v0")).score(cases)
-				.withDataset(System.getProperty("ai-eval.dataset-commit"),
-						HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes)));
+				.withDataset(System.getProperty("ai-eval.dataset-commit"), sha256WithLfLineEndings(bytes));
 
 		Path out = Path.of("target", "ai-eval");
 		Files.createDirectories(out);
@@ -62,5 +61,14 @@ class BaselineEvaluationTest {
 		assertThat(report.category("adverse").cases()).isEqualTo(10);
 		assertThat(out.resolve("baseline-results.json")).exists();
 		assertThat(out.resolve("baseline-results.md")).exists();
+	}
+
+	/**
+	 * SHA-256 of the file as git stores it (LF). On Windows git may check the file out with CRLF; removing the CRs makes
+	 * the hash the same on every machine and equal to {@code git show <commit>:<path> | sha256sum}.
+	 */
+	private static String sha256WithLfLineEndings(byte[] bytes) throws NoSuchAlgorithmException {
+		byte[] lf = new String(bytes, StandardCharsets.UTF_8).replace("\r", "").getBytes(StandardCharsets.UTF_8);
+		return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(lf));
 	}
 }
