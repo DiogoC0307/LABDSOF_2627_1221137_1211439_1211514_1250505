@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Date | 2026-10-27 |
-| Status | Proposed |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -57,6 +57,16 @@ We will call Claude Haiku from `elegibilidade-worker` by running the Claude Code
 ## Assignment requirement served
 
 §5.6.2 and §5.6.3 (the AI capability, its human review and the switch that turns AI off); §12, since the `evaluation` profile runs with AI off (ADR 0011).
+
+## Result of the measurement (SCRUM-38)
+
+Accepted on 2026-11-22 by the PO, with the results of SCRUM-38 in [`docs/ai/haiku-results-2026-11-22.md`](../ai/haiku-results-2026-11-22.md): Claude Haiku (the CLI reported `claude-haiku-5-5`) through the Claude Code CLI 2.1.323, prompt v0, 3 runs on the 60-case evaluation dataset, run 1 as the headline.
+
+- **Two targets of 06 are not met.** On the headline run, for the normal cases, periods exactly right are **82.9% against a target of 85%**, and dates right are **82.9% against a target of 95%**. On dates right the model only ties the rule-based baseline (82.9%, SCRUM-99). Runs 2 and 3 reached 91.4% on both, which is still below the 95% for dates right.
+- **The other targets are met** on the headline run: right number of periods 96.7% (≥ 95%), adverse cases handled 100%, p95 latency 3.12 s (< 4 s). No call gave invalid structured output, timed out or failed; none took longer than 10 s; the CLI estimated about 0.0002 USD per call.
+- **The targets do not change.** They stay as fixed on 2026-10-25 on 06, and these results are reported against them as they are.
+- **Why Accepted:** this ADR decides how the model is reached: the CLI, Haiku, the 10 s timeout, behind the flag of ADR 0011, with AI on in dev and QA only. The risk it named, latency, did not happen. The accuracy gap comes from the prompt, and every proposal is confirmed or corrected by the member in editable fields before it counts.
+- **Follow-up: SCRUM-157.** Most failures are one convention: a night on one day ("quinta à noite") comes back with `endDate` on the next day, where the convention keeps it on that day with the window 20:00 to 08:00. Prompt v1 states that convention. It is measured as v1 on new cases, with v0 and v1 side by side, so the prompt is not tuned to the 60 cases it is judged on.
 
 ## Related
 
