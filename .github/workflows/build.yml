@@ -110,6 +110,21 @@ jobs:
             -Dsonar.projectKey=DiogoC0307_LABDSOF_2627_1221137_1211439_1211514_1250505
             -Dsonar.organization=diogoc0307
 
+  contracts:
+    name: contracts (OpenAPI lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      # Redocly CLI at an exact version; the rules are in contracts/redocly.yaml (SCRUM-96). The responses of
+      # escala-api and the events are checked against the contracts by the tests of the backend job.
+      - name: Lint contracts/openapi.yaml
+        run: npx --yes @redocly/cli@2.77.0 lint --config contracts/redocly.yaml contracts/openapi.yaml
+
   security:
     name: security (secrets, dependencies, sbom)
     runs-on: ubuntu-latest
