@@ -116,7 +116,7 @@ Test cases with a `TC-` ID today, both in `apps/web/src/app/app.spec.ts` (story 
 
 - **Seed data:** placeholder members (Member A, Member B…), synthetic certifications and licences, one fictional corps. Path: [TODO: path].
 - **IPMA fixtures:** simulator responses for RCM levels 1–5 and for the four §6.5 cases (unavailable, delayed, incomplete, invalid). Path: `tools/ipma-sim` [TODO: fixture folder].
-- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path [TODO: path]; origin and limitations on **06 · Responsible AI Opportunity Assessment**.
+- **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path `apps/elegibilidade-worker/src/test/resources/ai-eval/unavailability.jsonl` (conventions and limitations in the `README.md` next to it). Written on 2026-10-25, before the extraction parser, and frozen: it is not edited to fit a parser. Origin and limitations on **06 · Responsible AI Opportunity Assessment**.
 - **Clock:** tests use a fixed clock [TODO: how], so boundary cases do not depend on the day the pipeline runs.
 
 > **✏️ Example (illustrative — replace).** One synthetic seed member: `{"code": "M-A", "name": "Member A", "roster": "ACTIVE", "certifications": [{"type": "TAS", "expiresOn": "YYYY-MM-DD"}], "licenceClass": "[TODO: class]"}`. No contacts, no date of birth.
