@@ -62,6 +62,12 @@ export class MemberForm implements OnInit {
   protected readonly types = signal<CertificationType[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
   protected readonly loadError = signal<string | null>(null);
+  /**
+   * False while the member being edited loads, and for good if loading fails: Save is disabled, so an empty form is
+   * never saved over the member. Setting it after the fields are filled is also what renders them: the app is
+   * zoneless and the fields are not signals, so without it the form stayed empty when the member arrived last.
+   */
+  protected readonly ready = signal(this.memberId === null);
 
   protected fullName = '';
   protected rank: string = 'FIREFIGHTER_3RD_CLASS';
@@ -88,6 +94,7 @@ export class MemberForm implements OnInit {
           SERVICE_FUNCTIONS.forEach((fn) => (this.functions[fn] = member.functions.includes(fn)));
           this.licences = member.licences.map((licence) => ({ ...licence }));
           this.certifications = member.certifications.map(({ type, issuedOn, expiresOn }) => ({ type, issuedOn, expiresOn }));
+          this.ready.set(true);
         },
         error: () => this.loadError.set('Could not load the member.'),
       });
@@ -116,6 +123,9 @@ export class MemberForm implements OnInit {
   }
 
   protected save(): void {
+    if (!this.ready()) {
+      return;
+    }
     const errors = this.check();
     this.errors.set(errors);
     if (errors.length > 0) {
