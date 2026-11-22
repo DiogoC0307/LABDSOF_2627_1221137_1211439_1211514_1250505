@@ -721,7 +721,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (no body)
+          description: No message with that ID for the caller (the JSON error body)
     delete:
       tags: [unavailabilities]
       summary: Discard one of the caller's messages
@@ -737,7 +737,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (no body)
+          description: No message with that ID for the caller (the JSON error body)
   /api/v1/unavailability-messages/{id}/confirm:
     parameters:
       - name: id
@@ -786,7 +786,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (no body)
+          description: No message with that ID for the caller (the JSON error body)
         "409":
           description: No proposal yet, or the message is already confirmed, discarded or expired
           content:
