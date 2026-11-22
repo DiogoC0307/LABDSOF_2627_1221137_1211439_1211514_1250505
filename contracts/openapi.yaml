@@ -36,16 +36,27 @@ servers:
     description: prod (Kubernetes), through the web nginx
 tags:
   - name: health
+    description: Actuator health, liveness and readiness of escala-api, without a token
   - name: auth
+    description: Mocked sign-in with the seeded users (ADR 0006)
   - name: members
+    description: Members with their functions, licences and certifications, and the certification types (SCRUM-77)
   - name: me
+    description: The signed-in member's own roster (planned)
   - name: piquetes
+    description: Piquetes and their slots
   - name: assignments
+    description: Assigning a member to a slot (planned)
   - name: unavailabilities
+    description: The signed-in member's own unavailability (SCRUM-64)
   - name: swaps
+    description: Swaps between members (planned)
   - name: presence
+    description: Presence on a slot (planned)
   - name: cover
+    description: Cover requests (planned)
   - name: risk
+    description: Today's operational risk from IPMA (planned)
 paths:
   /me/roster:
     get:
