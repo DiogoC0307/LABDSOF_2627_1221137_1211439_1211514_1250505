@@ -109,6 +109,7 @@ Compose and the Kubernetes ConfigMaps (`infra/k8s/<env>/<service>/configmap.yaml
 | `SPRING_RABBITMQ_USERNAME`, `SPRING_RABBITMQ_PASSWORD` | The service's own RabbitMQ login | from `.env` | from the Secret `rabbitmq-escala-api` or `rabbitmq-elegibilidade-worker` |
 | `SPRING_RABBITMQ_DYNAMIC` | `false`: the service does not declare exchanges or queues; they come from `infra/rabbitmq/definitions.json` | `false` | — |
 | `OTEL_*`, `LOGGING_PATTERN_LEVEL` | OpenTelemetry agent settings and the `[trace_id,span_id]` log pattern | see `compose.yaml` | see the ConfigMaps |
+| `ESCALA_UNAVAILABILITY_RETENTION_DAYS`, `ESCALA_UNAVAILABILITY_RETENTION_CRON` | `escala-api` only: unavailability periods are deleted this many days after they end, by a job at this cron time, in UTC (09; SCRUM-64) | not set: `30`, `0 30 3 * * *` | not set: the same defaults |
 
 The database schema is created and changed by the Flyway migrations of each service (`src/main/resources/db/migration`), which run when the service starts; Hibernate only checks that the entities match it (`spring.jpa.hibernate.ddl-auto=validate`, ADR 0019). Each service touches only its own database. Operational rules such as crew composition (RN04), minimum rest (RN07) and risk-based composition (RN10) are configuration (ADR 0014) [TODO: path of the file that holds them; it does not exist yet, Diogo Costa].
 
