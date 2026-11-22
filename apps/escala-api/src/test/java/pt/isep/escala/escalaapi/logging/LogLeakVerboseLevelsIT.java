@@ -22,6 +22,8 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import org.springframework.http.HttpHeaders;
+import pt.isep.escala.escalaapi.auth.MockTokens;
 
 // What someone could set in a ConfigMap: everything at DEBUG, SQL bind values at TRACE, Spring AMQP at DEBUG.
 @SpringBootTest(properties = {
@@ -54,7 +56,7 @@ class LogLeakVerboseLevelsIT {
 	@Test
 	@DisplayName("TC-SCRUM-94-03 with root DEBUG and SQL binds at TRACE, request and SQL values are not logged")
 	void sqlAndRequestValuesAreNotLogged(CapturedOutput output) throws Exception {
-		mockMvc.perform(post("/api/v1/piquetes")
+		mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"dutyDate\":\"" + DUTY_DATE_MARKER + "\"}"))
 				.andExpect(status().isCreated());

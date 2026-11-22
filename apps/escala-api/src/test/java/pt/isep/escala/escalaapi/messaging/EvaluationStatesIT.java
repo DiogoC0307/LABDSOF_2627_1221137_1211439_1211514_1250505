@@ -28,6 +28,8 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import org.springframework.http.HttpHeaders;
+import pt.isep.escala.escalaapi.auth.MockTokens;
 
 /** The evaluation states a client sees on GET /api/v1/piquetes: PENDING, then ELIGIBLE or EVALUATION_FAILED. */
 @SpringBootTest(properties = {
@@ -124,7 +126,7 @@ class EvaluationStatesIT {
 	}
 
 	private UUID createPiquete() throws Exception {
-		String body = mockMvc.perform(post("/api/v1/piquetes")
+		String body = mockMvc.perform(post("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor())
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"dutyDate\":\"2031-08-02\"}"))
 				.andExpect(status().isCreated())
@@ -137,7 +139,7 @@ class EvaluationStatesIT {
 	}
 
 	private String statusThroughApi(UUID slotId) throws Exception {
-		String body = mockMvc.perform(get("/api/v1/piquetes")).andExpect(status().isOk())
+		String body = mockMvc.perform(get("/api/v1/piquetes").header(HttpHeaders.AUTHORIZATION, MockTokens.member())).andExpect(status().isOk())
 				.andReturn().getResponse().getContentAsString();
 		for (JsonNode piquete : objectMapper.readTree(body)) {
 			for (JsonNode slot : piquete.path("slots")) {
