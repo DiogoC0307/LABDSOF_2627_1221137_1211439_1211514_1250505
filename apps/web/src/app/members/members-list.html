@@ -1,0 +1,34 @@
+<header class="top">
+  <h1>Members</h1>
+  @if (isAdmin()) {
+    <a class="register" routerLink="/members/new">Register member</a>
+  }
+</header>
+
+@if (error()) {
+  <p class="error" role="alert">{{ error() }}</p>
+}
+
+<ul class="members">
+  @for (member of list(); track member.id) {
+    <li [attr.data-member-id]="member.id">
+      <strong>{{ member.fullName }}</strong>
+      <span>{{ member.rank }} · {{ member.rosterStatus }} · {{ member.accessRole }}</span>
+      <span>Functions: {{ member.functions.join(', ') || 'none' }}</span>
+      @for (licence of member.licences; track licence.licenceClass) {
+        <span class="licence">Licence {{ licence.licenceClass }} until {{ licence.expiresOn }}</span>
+      }
+      @for (certification of member.certifications; track certification.type) {
+        <span class="certification">{{ certification.type }} until {{ certification.expiresOn }}</span>
+      }
+      @if (member.contact) {
+        <span class="contact">Contact: {{ member.contact }}</span>
+      }
+      @if (isAdmin()) {
+        <a class="edit" [routerLink]="['/members', member.id, 'edit']">Edit</a>
+      }
+    </li>
+  } @empty {
+    <li class="empty">No members yet.</li>
+  }
+</ul>
