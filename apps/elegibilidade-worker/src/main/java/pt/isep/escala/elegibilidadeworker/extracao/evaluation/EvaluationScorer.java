@@ -75,6 +75,6 @@ public final class EvaluationScorer {
 			return 0;
 		}
 		int rank = (int) Math.ceil(fraction * ascending.length);
-		return ascending[Math.min(Math.max(rank, 1), ascending.length) - 1];
+		return ascending[Math.clamp(rank, 1, ascending.length) - 1];
 	}
 }

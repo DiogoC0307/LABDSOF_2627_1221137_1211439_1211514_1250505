@@ -5,7 +5,15 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.FileSystems;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryFlag;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -63,7 +71,8 @@ public final class ClaudeCliExtractor implements UnavailabilityExtractor {
 			"DISABLE_TELEMETRY");
 
 	private static final int MAX_OUTPUT_BYTES = 1_000_000;
-	private static final Pattern TIME = Pattern.compile("([01][0-9]|2[0-3]):[0-5][0-9]");
+	private static final Pattern TIME = Pattern.compile("([01]\\d|2[0-3]):[0-5]\\d");
+	private static final String PERIODS = "periods";
 	private static final Set<String> PERIOD_FIELDS = Set.of("startDate", "endDate", "weekdays", "startTime",
 			"endTime");
 	private static final Comparator<UnavailabilityPeriod> ORDER = Comparator
@@ -155,7 +164,7 @@ public final class ClaudeCliExtractor implements UnavailabilityExtractor {
 		Path callDir = null;
 		Process process = null;
 		try {
-			callDir = Files.createTempDirectory("claude-call-");
+			callDir = privateTempDirectory();
 			Path workDir = Files.createDirectory(callDir.resolve("work"));
 			Path stdout = callDir.resolve("stdout.json");
 			Path stderr = callDir.resolve("stderr.txt");
@@ -229,15 +238,54 @@ public final class ClaudeCliExtractor implements UnavailabilityExtractor {
 		}
 	}
 
+	/**
+	 * A new folder for one call that only this process's user can read or write (the message goes through it): owner-only
+	 * POSIX permissions where the file system has them (Linux, the container); elsewhere (Windows, for local tests) an
+	 * ACL that allows the owner only.
+	 */
+	private static Path privateTempDirectory() throws IOException {
+		if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
+			return Files.createTempDirectory("claude-call-",
+					PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+		}
+		Path tmp = Path.of(System.getProperty("java.io.tmpdir"));
+		if (Files.getFileAttributeView(tmp, AclFileAttributeView.class) == null) {
+			throw new IOException("cannot restrict the call folder to its owner");
+		}
+		List<AclEntry> ownerOnly = List.of(AclEntry.newBuilder().setType(AclEntryType.ALLOW)
+				.setPrincipal(Files.getOwner(tmp)).setPermissions(EnumSet.allOf(AclEntryPermission.class))
+				.setFlags(AclEntryFlag.FILE_INHERIT, AclEntryFlag.DIRECTORY_INHERIT).build());
+		return Files.createTempDirectory("claude-call-", new FileAttribute<List<AclEntry>>() {
+			@Override
+			public String name() {
+				return "acl:acl";
+			}
+
+			@Override
+			public List<AclEntry> value() {
+				return ownerOnly;
+			}
+		});
+	}
+
 	private static void deleteQuietly(Path dir) {
 		if (dir == null) {
 			return;
 		}
 		try (Stream<Path> paths = Files.walk(dir)) {
-			paths.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
+			paths.sorted(Comparator.reverseOrder()).forEach(ClaudeCliExtractor::deleteIfExists);
 		}
 		catch (IOException e) {
 			// a temporary folder left behind is not worth failing the extraction for
+		}
+	}
+
+	private static void deleteIfExists(Path path) {
+		try {
+			Files.deleteIfExists(path);
+		}
+		catch (IOException e) {
+			// as above: the rest of the folder is still deleted
 		}
 	}
 
@@ -285,47 +333,51 @@ public final class ClaudeCliExtractor implements UnavailabilityExtractor {
 	/** The model that answered, from {@code modelUsage}; otherwise the alias that was asked for. */
 	private String modelOf(JsonNode root) {
 		JsonNode usage = root.get("modelUsage");
-		if (usage != null && usage.isObject()) {
-			for (Map.Entry<String, JsonNode> entry : usage.properties()) {
-				return entry.getKey();
-			}
+		if (usage == null || !usage.isObject()) {
+			return settings.model();
 		}
-		return settings.model();
+		return usage.properties().stream().findFirst().map(Map.Entry::getKey).orElse(settings.model());
 	}
 
 	/** Exactly the schema of 06: an object with only {@code periods}; each period with only the known fields. */
 	private static List<UnavailabilityPeriod> periods(JsonNode structured) {
-		if (structured.size() != 1 || !structured.has("periods") || !structured.get("periods").isArray()) {
+		if (structured.size() != 1 || !structured.has(PERIODS) || !structured.get(PERIODS).isArray()) {
 			throw new IllegalArgumentException("not the period list");
 		}
 		List<UnavailabilityPeriod> periods = new ArrayList<>();
-		for (JsonNode node : structured.get("periods")) {
-			if (!node.isObject()) {
-				throw new IllegalArgumentException("a period is not an object");
-			}
-			for (Map.Entry<String, JsonNode> field : node.properties()) {
-				if (!PERIOD_FIELDS.contains(field.getKey())) {
-					throw new IllegalArgumentException("unknown field");
-				}
-			}
-			Set<DayOfWeek> weekdays = EnumSet.noneOf(DayOfWeek.class);
-			JsonNode days = node.get("weekdays");
-			if (days != null && !days.isNull()) {
-				if (!days.isArray()) {
-					throw new IllegalArgumentException("weekdays is not a list");
-				}
-				for (JsonNode day : days) {
-					if (!weekdays.add(weekday(day.asString()))) {
-						throw new IllegalArgumentException("a weekday is repeated");
-					}
-				}
-			}
-			LocalTime start = time(node.get("startTime"));
-			LocalTime end = time(node.get("endTime"));
-			periods.add(new UnavailabilityPeriod(date(node.get("startDate")), date(node.get("endDate")), weekdays,
-					start, end));
+		for (JsonNode node : structured.get(PERIODS)) {
+			periods.add(period(node));
 		}
 		return periods;
+	}
+
+	private static UnavailabilityPeriod period(JsonNode node) {
+		if (!node.isObject()) {
+			throw new IllegalArgumentException("a period is not an object");
+		}
+		boolean unknownField = node.properties().stream().anyMatch(field -> !PERIOD_FIELDS.contains(field.getKey()));
+		if (unknownField) {
+			throw new IllegalArgumentException("unknown field");
+		}
+		return new UnavailabilityPeriod(date(node.get("startDate")), date(node.get("endDate")),
+				weekdays(node.get("weekdays")), time(node.get("startTime")), time(node.get("endTime")));
+	}
+
+	/** The weekday codes of a repeating period; none when the field is absent or null; each at most once. */
+	private static Set<DayOfWeek> weekdays(JsonNode days) {
+		Set<DayOfWeek> weekdays = EnumSet.noneOf(DayOfWeek.class);
+		if (days == null || days.isNull()) {
+			return weekdays;
+		}
+		if (!days.isArray()) {
+			throw new IllegalArgumentException("weekdays is not a list");
+		}
+		for (JsonNode day : days) {
+			if (!weekdays.add(weekday(day.asString()))) {
+				throw new IllegalArgumentException("a weekday is repeated");
+			}
+		}
+		return weekdays;
 	}
 
 	private static LocalDate date(JsonNode node) {

@@ -25,6 +25,12 @@ import tools.jackson.databind.node.ObjectNode;
 public record EvaluationReport(String parserVersion, String latencyNote, String datasetCommit, String datasetSha256,
 		List<CaseResult> results, double p95LatencyMs) {
 
+	/** The categories of the evaluation dataset (README next to it). */
+	public static final String NORMAL = "normal";
+	public static final String DIFFICULT = "difficult";
+	public static final String ADVERSE = "adverse";
+	public static final List<String> CATEGORIES = List.of(NORMAL, DIFFICULT, ADVERSE);
+
 	/** Targets fixed on 2026-10-25, before any measurement (06). */
 	public static final double TARGET_EXACT_NORMAL = 0.85;
 	public static final double TARGET_DATES_NORMAL = 0.95;
@@ -42,6 +48,7 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 	public static final double PRODUCT_TIMEOUT_MS = 10_000;
 
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+	private static final String P95_FIELD = "p95LatencyMs";
 
 	/** The outcome of one case. {@code error} is the type of an exception thrown by the extractor, if any. */
 	public record CaseResult(EvaluationCase testCase, ExtractionResult actual, boolean exact, boolean datesRight,
@@ -152,10 +159,10 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 		putOrNull(root, "datasetCommit", datasetCommit);
 		putOrNull(root, "datasetSha256", datasetSha256);
 		root.put("latencyNote", latencyNote);
-		root.put("p95LatencyMs", round(p95LatencyMs));
+		root.put(P95_FIELD, round(p95LatencyMs));
 		ObjectNode calls = root.putObject("calls");
 		calls.put("p50LatencyMs", round(p50LatencyMs()));
-		calls.put("p95LatencyMs", round(p95LatencyMs));
+		calls.put(P95_FIELD, round(p95LatencyMs));
 		putRate(calls, "shareOver4s", shareSlowerThan(TARGET_P95_MS));
 		putRate(calls, "shareOver10s", shareSlowerThan(PRODUCT_TIMEOUT_MS));
 		ObjectNode outcomeNode = calls.putObject("outcomes");
@@ -175,11 +182,11 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 		targets.put("exactNormal", TARGET_EXACT_NORMAL);
 		targets.put("datesNormal", TARGET_DATES_NORMAL);
 		targets.put("countAll", TARGET_COUNT);
-		targets.put("adverse", TARGET_ADVERSE);
-		targets.put("p95LatencyMs", TARGET_P95_MS);
+		targets.put(ADVERSE, TARGET_ADVERSE);
+		targets.put(P95_FIELD, TARGET_P95_MS);
 		root.set("overall", statsNode(mapper, overall()));
 		ObjectNode categories = root.putObject("categories");
-		for (String category : List.of("normal", "difficult", "adverse")) {
+		for (String category : CATEGORIES) {
 			categories.set(category, statsNode(mapper, category(category)));
 		}
 		ArrayNode failed = root.putArray("failures");
@@ -255,8 +262,8 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 
 	public String toMarkdown() {
 		Stats overall = overall();
-		Stats normal = category("normal");
-		Stats adverse = category("adverse");
+		Stats normal = category(NORMAL);
+		Stats adverse = category(ADVERSE);
 		StringBuilder md = new StringBuilder();
 		double[] costs = costsUsd();
 		md.append("# Evaluation results: ").append(parserVersion).append("\n\n");
@@ -287,7 +294,7 @@ public record EvaluationReport(String parserVersion, String latencyNote, String 
 
 		md.append("## Per category\n\n");
 		md.append("| Category | Cases | Exact | Dates right | Right number |\n|---|---|---|---|---|\n");
-		for (String category : List.of("normal", "difficult", "adverse")) {
+		for (String category : CATEGORIES) {
 			Stats s = category(category);
 			md.append("| ").append(category).append(" | ").append(s.cases()).append(" | ")
 					.append(fraction(s.exact(), s.cases())).append(" | ")

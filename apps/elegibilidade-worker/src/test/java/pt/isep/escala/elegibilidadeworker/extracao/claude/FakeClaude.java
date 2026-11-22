@@ -1,7 +1,6 @@
 package pt.isep.escala.elegibilidadeworker.extracao.claude;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -29,7 +28,7 @@ public final class FakeClaude {
 
 	public static void main(String[] args) throws Exception {
 		String mode = args[0];
-		Path record = Path.of(args[1]);
+		Path recordFile = Path.of(args[1]);
 		byte[] stdin = System.in.readAllBytes();
 		Properties seen = new Properties();
 		seen.setProperty("pid", String.valueOf(ProcessHandle.current().pid()));
@@ -45,13 +44,16 @@ public final class FakeClaude {
 		seen.setProperty("env", String.join(",", new TreeSet<>(System.getenv().keySet())));
 		String token = System.getenv("CLAUDE_CODE_OAUTH_TOKEN");
 		seen.setProperty("token", token == null ? "" : token);
-		try (OutputStream out = Files.newOutputStream(record)) {
+		try (OutputStream out = Files.newOutputStream(recordFile)) {
 			seen.store(out, "FakeClaude");
 		}
 		answer(mode, new String(stdin, StandardCharsets.UTF_8), token);
 	}
 
-	private static void answer(String mode, String stdin, String token) throws IOException, InterruptedException {
+	// java:S2925: the "sleep" mode stands for a CLI that never answers in time; it is a separate process, not a test
+	// that waits on the clock
+	@SuppressWarnings("java:S2925")
+	private static void answer(String mode, String stdin, String token) throws InterruptedException {
 		String periodsOk = "{\"type\":\"result\",\"is_error\":false,\"result\":\"\",\"structured_output\":%s,"
 				+ "\"total_cost_usd\":0.0009}";
 		if (mode.equals("by-text")) {

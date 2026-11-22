@@ -34,6 +34,7 @@ package "Personnel & Qualifications" #E3F2FD {
         + rank: Rank
         + rosterStatus: RosterStatus
         + accessRole: AccessRole
+        + functions: Set<SlotRole>
         + withinAgeLimit: Boolean
         + contact: String
         + active: Boolean
