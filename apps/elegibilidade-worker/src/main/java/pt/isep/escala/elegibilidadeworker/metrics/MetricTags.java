@@ -24,7 +24,7 @@ public final class MetricTags {
 	}
 
 	/** A result of {@code AvaliacaoConcluida} ({@code contracts/events/avaliacao-concluida.schema.json}). */
-	public static String result(String value) {
+	public static String resultValue(String value) {
 		return value != null && RESULTS.contains(value) ? value : OTHER;
 	}
 }

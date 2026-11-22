@@ -30,14 +30,14 @@ class ApiMetricsTest {
 	@Test
 	@DisplayName("TC-SCRUM-97-03 purpose takes ASSIGNMENT, SWAP, COVER and CANDIDATE (SCRUM-65); anything else is OTHER")
 	void purposeValues() {
-		assertThat(MetricTags.purpose("ASSIGNMENT")).isEqualTo("ASSIGNMENT");
-		assertThat(MetricTags.purpose("SWAP")).isEqualTo("SWAP");
-		assertThat(MetricTags.purpose("COVER")).isEqualTo("COVER");
-		assertThat(MetricTags.purpose("CANDIDATE")).isEqualTo("CANDIDATE");
-		assertThat(MetricTags.purpose("free text")).isEqualTo(MetricTags.OTHER);
-		assertThat(MetricTags.purpose(null)).isEqualTo(MetricTags.OTHER);
-		assertThat(MetricTags.result("INELIGIBLE")).isEqualTo("INELIGIBLE");
-		assertThat(MetricTags.result("x")).isEqualTo(MetricTags.OTHER);
+		assertThat(MetricTags.purposeValue("ASSIGNMENT")).isEqualTo("ASSIGNMENT");
+		assertThat(MetricTags.purposeValue("SWAP")).isEqualTo("SWAP");
+		assertThat(MetricTags.purposeValue("COVER")).isEqualTo("COVER");
+		assertThat(MetricTags.purposeValue("CANDIDATE")).isEqualTo("CANDIDATE");
+		assertThat(MetricTags.purposeValue("free text")).isEqualTo(MetricTags.OTHER);
+		assertThat(MetricTags.purposeValue(null)).isEqualTo(MetricTags.OTHER);
+		assertThat(MetricTags.resultValue("INELIGIBLE")).isEqualTo("INELIGIBLE");
+		assertThat(MetricTags.resultValue("x")).isEqualTo(MetricTags.OTHER);
 	}
 
 	@Test

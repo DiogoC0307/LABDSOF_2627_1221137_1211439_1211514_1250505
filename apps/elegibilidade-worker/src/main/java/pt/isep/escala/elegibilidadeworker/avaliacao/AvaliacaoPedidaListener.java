@@ -27,6 +27,9 @@ class AvaliacaoPedidaListener {
 
 	private static final Logger log = LoggerFactory.getLogger(AvaliacaoPedidaListener.class);
 
+	/** The only result while the engine is SEMPRE_ELEGIVEL. */
+	private static final String ELIGIBLE = "ELIGIBLE";
+
 	private final ObjectMapper objectMapper;
 	private final ProcessedEventRepository processed;
 	private final EvaluationRepository evaluations;
@@ -64,7 +67,7 @@ class AvaliacaoPedidaListener {
 					UUID.randomUUID(),
 					requestEventId,
 					assignmentId,
-					"ELIGIBLE",
+					ELIGIBLE,
 					Evaluation.ENGINE_SEMPRE_ELEGIVEL,
 					traceId,
 					Instant.now()));
@@ -72,10 +75,10 @@ class AvaliacaoPedidaListener {
 			outbox.save(new OutboxEvent(
 					resultEventId,
 					ROUTING_AVALIACAO_CONCLUIDA,
-					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, "ELIGIBLE"),
+					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, ELIGIBLE),
 					Instant.now()));
 			processed.save(new ProcessedEvent(requestEventId, Instant.now()));
-			metrics.completed("ELIGIBLE", EvaluationMetrics.LISTENER);
+			metrics.completed(ELIGIBLE, EvaluationMetrics.LISTENER);
 			metrics.processed(Duration.ofNanos(System.nanoTime() - started));
 			log.info(
 					"SEMPRE_ELEGIVEL written requestEventId={} assignmentId={} resultEventId={} traceId={}",

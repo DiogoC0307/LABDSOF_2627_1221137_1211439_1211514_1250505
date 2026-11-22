@@ -49,11 +49,11 @@ class WorkerMetricsTest {
 	@Test
 	@DisplayName("TC-SCRUM-97-08 a result outside the contract's values is OTHER, never the value itself")
 	void resultValues() {
-		assertThat(MetricTags.result("ELIGIBLE")).isEqualTo("ELIGIBLE");
-		assertThat(MetricTags.result("INELIGIBLE")).isEqualTo("INELIGIBLE");
-		assertThat(MetricTags.result("FAILED")).isEqualTo("FAILED");
-		assertThat(MetricTags.result("membro 123 com consulta")).isEqualTo(MetricTags.OTHER);
-		assertThat(MetricTags.result(null)).isEqualTo(MetricTags.OTHER);
+		assertThat(MetricTags.resultValue("ELIGIBLE")).isEqualTo("ELIGIBLE");
+		assertThat(MetricTags.resultValue("INELIGIBLE")).isEqualTo("INELIGIBLE");
+		assertThat(MetricTags.resultValue("FAILED")).isEqualTo("FAILED");
+		assertThat(MetricTags.resultValue("membro 123 com consulta")).isEqualTo(MetricTags.OTHER);
+		assertThat(MetricTags.resultValue(null)).isEqualTo(MetricTags.OTHER);
 	}
 
 	@Test

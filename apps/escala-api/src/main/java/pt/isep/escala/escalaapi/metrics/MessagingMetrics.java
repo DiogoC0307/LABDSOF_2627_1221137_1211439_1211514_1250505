@@ -104,7 +104,7 @@ public class MessagingMetrics {
 			try {
 				QueueInformation info = admin.getQueueInfo(queue);
 				if (info != null) {
-					messagesByQueue.put(queue, (long) info.getMessageCount());
+					messagesByQueue.put(queue, info.getMessageCount());
 				}
 			}
 			catch (RuntimeException e) {

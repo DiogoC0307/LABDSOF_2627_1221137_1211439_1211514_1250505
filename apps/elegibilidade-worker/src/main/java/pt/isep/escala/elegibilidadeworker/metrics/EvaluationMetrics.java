@@ -40,7 +40,7 @@ public class EvaluationMetrics {
 	}
 
 	public void completed(String result, String source) {
-		Counter counter = completedCounter(MetricTags.result(result),
+		Counter counter = completedCounter(MetricTags.resultValue(result),
 				RETRIES_EXHAUSTED.equals(source) ? RETRIES_EXHAUSTED : LISTENER);
 		afterCommit(counter::increment);
 	}
@@ -55,17 +55,17 @@ public class EvaluationMetrics {
 	}
 
 	/** Inside a transaction, after it commits (a rolled-back delivery is retried and must not count twice); else now. */
-	static void afterCommit(Runnable record) {
+	static void afterCommit(Runnable action) {
 		if (TransactionSynchronizationManager.isSynchronizationActive()) {
 			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
-					record.run();
+					action.run();
 				}
 			});
 		}
 		else {
-			record.run();
+			action.run();
 		}
 	}
 }

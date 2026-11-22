@@ -73,7 +73,7 @@ class AvaliacaoConcluidaListener {
 	/** The AvaliacaoPedida this answers, for SLI 1; a missing or broken one only means no latency is recorded. */
 	private static UUID requestEventId(JsonNode body) {
 		try {
-			return UUID.fromString(body.path("requestEventId").asText(""));
+			return UUID.fromString(body.path("requestEventId").asString(""));
 		} catch (IllegalArgumentException e) {
 			return null;
 		}

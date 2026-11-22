@@ -27,12 +27,12 @@ public final class MetricTags {
 	private MetricTags() {
 	}
 
-	public static String purpose(String value) {
+	public static String purposeValue(String value) {
 		return value != null && PURPOSES.contains(value) ? value : OTHER;
 	}
 
 	/** A result of {@code AvaliacaoConcluida} ({@code contracts/events/avaliacao-concluida.schema.json}). */
-	public static String result(String value) {
+	public static String resultValue(String value) {
 		return value != null && RESULTS.contains(value) ? value : OTHER;
 	}
 }

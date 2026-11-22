@@ -49,7 +49,7 @@ public class EvaluationMetrics {
 	}
 
 	public void requested(String purpose) {
-		requestedCounter(MetricTags.purpose(purpose)).increment();
+		requestedCounter(MetricTags.purposeValue(purpose)).increment();
 	}
 
 	private Counter requestedCounter(String purpose) {
@@ -67,7 +67,7 @@ public class EvaluationMetrics {
 	 * still in this service's outbox, which is always the case unless the outbox rows were cleaned.
 	 */
 	public void completed(UUID requestEventId, String result, boolean applied, Instant appliedAt) {
-		String tag = MetricTags.result(result);
+		String tag = MetricTags.resultValue(result);
 		Optional<Instant> start = requestedAt(requestEventId);
 		afterCommit(() -> {
 			completedCounter(tag, applied).increment();
@@ -94,17 +94,17 @@ public class EvaluationMetrics {
 	}
 
 	/** Inside a transaction, after it commits (a rolled-back delivery is retried and must not count twice); else now. */
-	static void afterCommit(Runnable record) {
+	static void afterCommit(Runnable action) {
 		if (TransactionSynchronizationManager.isSynchronizationActive()) {
 			TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
 				@Override
 				public void afterCommit() {
-					record.run();
+					action.run();
 				}
 			});
 		}
 		else {
-			record.run();
+			action.run();
 		}
 	}
 }
