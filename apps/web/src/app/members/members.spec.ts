@@ -162,6 +162,128 @@ describe('Members', () => {
     expect(page(fixture).querySelector('[role="alert"] [data-field="licences"]')?.textContent).toContain('driving licence');
   });
 
+  /**
+   * Opens the edit form the way the browser renders it: no detectChanges() by hand, and the member answers after
+   * the certification types (the order that left the form empty in dev, SCRUM-77).
+   */
+  async function openEdit(fixture: ComponentFixture<App>) {
+    http().expectOne('/api/v1/certification-types').flush(types);
+    await fixture.whenStable();
+    http().expectOne(`/api/v1/members/${driver.id}`).flush({ ...driver, contact: 'synthetic@example.test' });
+    await fixture.whenStable();
+  }
+
+  it('TC-SCRUM-77-06 editing a driver with a class C licence and a TAS shows those values in the form', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    await openEdit(fixture);
+
+    expect(field<HTMLInputElement>(fixture, 'fullName').value).toBe('Synthetic Driver One');
+    expect(field<HTMLSelectElement>(fixture, 'rank').value).toBe('FIREFIGHTER_1ST_CLASS');
+    expect(field<HTMLInputElement>(fixture, 'contact').value).toBe('synthetic@example.test');
+    expect(field<HTMLInputElement>(fixture, 'function-DRIVER').checked).toBe(true);
+    expect(field<HTMLInputElement>(fixture, 'function-CREW_CHIEF').checked).toBe(false);
+    expect(field<HTMLSelectElement>(fixture, 'licenceClass-0').value).toBe('C');
+    expect(field<HTMLInputElement>(fixture, 'licenceExpiresOn-0').value).toBe('2030-06-30');
+    expect(field<HTMLSelectElement>(fixture, 'certType-0').value).toBe('TAS');
+    expect(field<HTMLInputElement>(fixture, 'certIssuedOn-0').value).toBe('2024-04-01');
+    expect(field<HTMLInputElement>(fixture, 'certExpiresOn-0').value).toBe('2027-03-31');
+    expect(page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!.disabled).toBe(false);
+  });
+
+  it('TC-SCRUM-77-07 saving the edit form without changes sends the same data the member has', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    await openEdit(fixture);
+
+    page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!.click();
+
+    const details = http().expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
+    expect(details.request.body).toEqual({
+      fullName: 'Synthetic Driver One',
+      rank: 'FIREFIGHTER_1ST_CLASS',
+      rosterStatus: 'ACTIVE_ROSTER',
+      withinAgeLimit: true,
+      contact: 'synthetic@example.test',
+      functions: ['DRIVER'],
+    });
+    details.flush(driver);
+    const qualifications = http().expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}/certifications` });
+    expect(qualifications.request.body).toEqual({
+      licences: [{ licenceClass: 'C', expiresOn: '2030-06-30' }],
+      certifications: [{ type: 'TAS', issuedOn: '2024-04-01', expiresOn: '2027-03-31' }],
+    });
+    qualifications.flush(driver);
+    await fixture.whenStable();
+    http().expectOne('/api/v1/members').flush([driver]);
+  });
+
+  it('TC-SCRUM-77-08 Save member is disabled until the member is loaded, and stays disabled with an error if loading fails', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    http().expectOne('/api/v1/certification-types').flush(types);
+    await fixture.whenStable();
+    const save = page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+    expect(save.disabled).toBe(true);
+
+    http().expectOne(`/api/v1/members/${driver.id}`).flush('fail', { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    expect(page(fixture).querySelector('[role="alert"]')?.textContent).toContain('Could not load the member');
+    expect(save.disabled).toBe(true);
+    save.click();
+    // Submitting the form itself (as the Enter key may) is refused too, not only the disabled button.
+    page(fixture).querySelector('form')!.dispatchEvent(new Event('submit'));
+    await fixture.whenStable();
+    http().expectNone({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
+    expect(page(fixture).querySelectorAll('[role="alert"] li')).toHaveLength(0);
+  });
+
+  /** The visible text of a label, without the text of a control inside it (e.g. the options of a select). */
+  function visibleText(label: HTMLLabelElement): string {
+    return [...label.childNodes]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent ?? '')
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  it('TC-SCRUM-77-10 every select and date field of the member form has a visible label that is its accessible name (WCAG 2.5.3)', async () => {
+    const fixture = await start('/members/new');
+    http().expectOne('/api/v1/certification-types').flush(types);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    page(fixture).querySelector<HTMLButtonElement>('button.add-licence')!.click();
+    page(fixture).querySelector<HTMLButtonElement>('button.add-certification')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const expected: Record<string, string> = {
+      rank: 'Rank',
+      rosterStatus: 'Roster',
+      'licenceClass-0': 'Licence class 1',
+      'licenceExpiresOn-0': 'Licence 1 expires on',
+      'certType-0': 'Certification type 1',
+      'certIssuedOn-0': 'Certification 1 issued on',
+      'certExpiresOn-0': 'Certification 1 expires on',
+    };
+    const controls = page(fixture).querySelectorAll<HTMLSelectElement | HTMLInputElement>(
+      'form select, form input[type="date"]',
+    );
+    expect(controls.length).toBe(Object.keys(expected).length);
+    controls.forEach((control) => {
+      const name = control.getAttribute('name')!;
+      expect(control.getAttribute('aria-label'), name).toBeNull();
+      expect(control.getAttribute('aria-labelledby'), name).toBeNull();
+      expect(control.labels?.length, name).toBe(1);
+      expect(visibleText(control.labels![0]), name).toBe(expected[name]);
+    });
+    page(fixture)
+      .querySelectorAll<HTMLInputElement>('form input[type="checkbox"]')
+      .forEach((box) => {
+        expect(box.getAttribute('aria-label'), box.name).toBeNull();
+        expect(visibleText(box.labels![0]), box.name).not.toBe('');
+      });
+  });
+
   it('the admin edits a member: details and certifications are saved, then the list is shown', async () => {
     const fixture = await start(`/members/${driver.id}/edit`);
     http().expectOne('/api/v1/certification-types').flush(types);
