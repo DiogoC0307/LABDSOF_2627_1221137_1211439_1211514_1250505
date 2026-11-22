@@ -9,7 +9,8 @@ info:
 
     Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
     under /api/v1/auth, the members and certification types under /api/v1/members and
-    /api/v1/certification-types (SCRUM-77), and the three Actuator health endpoints under /actuator/health. Every other path
+    /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
+    (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -550,18 +551,114 @@ paths:
           description: Missing or invalid token
         "403":
           description: Role not allowed
-  /unavailabilities:
+  /api/v1/unavailabilities:
+    get:
+      tags: [unavailabilities]
+      summary: The caller's own unavailability periods ("When I can't", SCRUM-64)
+      description: Any role. Only the caller's periods, ordered by start. Dates and times only, never a reason (09).
+      operationId: listMyUnavailabilities
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The caller's periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unavailability"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [unavailabilities]
-      summary: Declare unavailability by form or free text; 202 without waiting for extraction
-      operationId: createUnavailability
+      summary: Declare a period of unavailability by form (SCRUM-64)
+      description: >
+        Any role, for the caller only: the member comes from the token, never from the body (T-03). Answers in
+        under 500 ms (RNF02): it is one insert, with no event. Overlapping periods are kept as they are.
+        A period that has already ended (in_the_past) or that starts more than 6 months ahead
+        (too_far_ahead, the same limit as on 06) is refused. There is no PUT: a change is DELETE and POST.
+        Free text (SCRUM-75) has its own path, /api/v1/unavailability-messages.
+      operationId: declareUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnavailabilityRequest"
+      responses:
+        "201":
+          description: Saved
+          headers:
+            Location:
+              description: /api/v1/unavailabilities/{id} of the new period
+              schema:
+                type: string
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/unavailabilities/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [unavailabilities]
+      summary: One of the caller's periods
+      description: A period of another member answers 404, not 403, so its existence is not revealed.
+      operationId: getMyUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailability"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No period with that ID for the caller (no body)
+    delete:
+      tags: [unavailabilities]
+      summary: Remove one of the caller's periods
+      description: A period of another member answers 404 and nothing changes.
+      operationId: deleteMyUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "204":
+          description: Removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No period with that ID for the caller (no body)
+  /api/v1/unavailability-messages:
+    post:
+      tags: [unavailabilities]
+      summary: Declare unavailability in free text, read automatically (planned, SCRUM-75)
+      description: >
+        Not implemented yet. 202 without waiting for the extraction; the member confirms the proposed periods
+        before they count (06).
+      operationId: declareUnavailabilityMessage
       responses:
         "202":
           description: Accepted
         "401":
           description: Missing or invalid token
-        "403":
-          description: Role not allowed
   /swaps:
     post:
       tags: [swaps]
@@ -687,7 +784,7 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     ValidationError:
       description: >
-        Invalid fields, each with a code and never the value (SCRUM-77). A body that is not valid JSON, or a
+        Invalid fields, each with a code and never the value (SCRUM-77, SCRUM-64). A body that is not valid JSON, or a
         value outside an enum, answers 400 with Spring Boot's error body and no errors list; SCRUM-88 aligns
         the other errors with this format.
       headers:
@@ -974,7 +1071,39 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence]
+                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead]
+    UnavailabilityRequest:
+      type: object
+      required: [startsAt, endsAt]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+          description: ISO 8601 with an offset or Z. A day without a time starts at 00:00 in Europe/Lisbon (the PWA sends it so).
+          example: "2026-12-05T00:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          description: Exclusive, after startsAt (code ends_before_start). A whole day ends at 00:00 of the next day, in Lisbon.
+          example: "2026-12-08T00:00:00Z"
+    Unavailability:
+      type: object
+      required: [id, startsAt, endsAt, source]
+      properties:
+        id:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+          description: In UTC (ADR 0012)
+        endsAt:
+          type: string
+          format: date-time
+          description: In UTC, exclusive. Deleted 30 days after it (09).
+        source:
+          type: string
+          enum: [FORM, FREE_TEXT]
     ErrorResponse:
       type: object
       description: Spring Boot's default error body
