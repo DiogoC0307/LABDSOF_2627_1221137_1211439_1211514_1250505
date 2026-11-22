@@ -56,7 +56,7 @@ class ExtracaoPedidaListener {
 	@RabbitListener(queues = QUEUE)
 	void onPedido(Message message) {
 		JsonNode body = EventFields.body(objectMapper, message);
-		String traceId = body.path("traceId").asText("");
+		String traceId = body.path("traceId").asString("");
 		MDC.put("trace_id", traceId);
 		try {
 			UUID requestEventId = EventFields.uuid(body, "eventId");
@@ -99,7 +99,7 @@ class ExtracaoPedidaListener {
 
 	private static LocalDate referenceDate(JsonNode body) {
 		try {
-			return LocalDate.parse(body.path("referenceDate").asText(""));
+			return LocalDate.parse(body.path("referenceDate").asString(""));
 		}
 		catch (DateTimeParseException e) {
 			throw new MalformedEventException("referenceDate is not a date");

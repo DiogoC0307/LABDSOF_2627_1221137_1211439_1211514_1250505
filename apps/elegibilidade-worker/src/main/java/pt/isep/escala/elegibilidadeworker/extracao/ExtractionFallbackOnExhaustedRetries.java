@@ -43,7 +43,7 @@ class ExtractionFallbackOnExhaustedRetries implements RetriesExhaustedHandler {
 		JsonNode body = EventFields.body(objectMapper, message);
 		UUID requestEventId = EventFields.uuid(body, "eventId");
 		UUID unavailabilityRequestId = EventFields.uuid(body, "unavailabilityRequestId");
-		String traceId = body.path("traceId").asText("");
+		String traceId = body.path("traceId").asString("");
 		UUID resultEventId = UUID.randomUUID();
 		outbox.save(new OutboxEvent(resultEventId, ExtracaoPedidaListener.ROUTING_EXTRACAO_CONCLUIDA,
 				ExtracaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, unavailabilityRequestId, traceId,
