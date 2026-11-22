@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Component;
-import pt.isep.escala.escalaapi.member.InvalidRequestException.InvalidField;
+import pt.isep.escala.escalaapi.validation.InvalidRequestException;
+import pt.isep.escala.escalaapi.validation.InvalidRequestException.InvalidField;
 
 /**
  * Checks a member request and collects every invalid field in one answer: the bean constraints (required, length)
