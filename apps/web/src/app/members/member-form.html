@@ -50,12 +50,18 @@
     <legend>Driving licences</legend>
     @for (licence of licences; track $index; let i = $index) {
       <div class="row">
-        <select [name]="'licenceClass-' + i" [attr.name]="'licenceClass-' + i" [(ngModel)]="licence.licenceClass" aria-label="Licence class">
-          @for (value of licenceClasses; track value) {
-            <option [value]="value">{{ value }}</option>
-          }
-        </select>
-        <input type="date" [name]="'licenceExpiresOn-' + i" [attr.name]="'licenceExpiresOn-' + i" [(ngModel)]="licence.expiresOn" aria-label="Licence expires on" />
+        <div class="field">
+          <label [attr.for]="'licence-class-' + i">Licence class {{ i + 1 }}</label>
+          <select [id]="'licence-class-' + i" [name]="'licenceClass-' + i" [attr.name]="'licenceClass-' + i" [(ngModel)]="licence.licenceClass">
+            @for (value of licenceClasses; track value) {
+              <option [value]="value">{{ value }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label [attr.for]="'licence-expires-' + i">Licence {{ i + 1 }} expires on</label>
+          <input type="date" [id]="'licence-expires-' + i" [name]="'licenceExpiresOn-' + i" [attr.name]="'licenceExpiresOn-' + i" [(ngModel)]="licence.expiresOn" />
+        </div>
         <button type="button" class="secondary" (click)="removeLicence(i)">Remove</button>
       </div>
     }
@@ -66,13 +72,22 @@
     <legend>Certifications</legend>
     @for (certification of certifications; track $index; let i = $index) {
       <div class="row">
-        <select [name]="'certType-' + i" [attr.name]="'certType-' + i" [(ngModel)]="certification.type" aria-label="Certification type">
-          @for (type of types(); track type.code) {
-            <option [value]="type.code">{{ type.code }} · {{ type.name }}</option>
-          }
-        </select>
-        <input type="date" [name]="'certIssuedOn-' + i" [attr.name]="'certIssuedOn-' + i" [(ngModel)]="certification.issuedOn" aria-label="Issued on" />
-        <input type="date" [name]="'certExpiresOn-' + i" [attr.name]="'certExpiresOn-' + i" [(ngModel)]="certification.expiresOn" aria-label="Expires on" />
+        <div class="field">
+          <label [attr.for]="'cert-type-' + i">Certification type {{ i + 1 }}</label>
+          <select [id]="'cert-type-' + i" [name]="'certType-' + i" [attr.name]="'certType-' + i" [(ngModel)]="certification.type">
+            @for (type of types(); track type.code) {
+              <option [value]="type.code">{{ type.code }} · {{ type.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label [attr.for]="'cert-issued-' + i">Certification {{ i + 1 }} issued on</label>
+          <input type="date" [id]="'cert-issued-' + i" [name]="'certIssuedOn-' + i" [attr.name]="'certIssuedOn-' + i" [(ngModel)]="certification.issuedOn" />
+        </div>
+        <div class="field">
+          <label [attr.for]="'cert-expires-' + i">Certification {{ i + 1 }} expires on</label>
+          <input type="date" [id]="'cert-expires-' + i" [name]="'certExpiresOn-' + i" [attr.name]="'certExpiresOn-' + i" [(ngModel)]="certification.expiresOn" />
+        </div>
         <button type="button" class="secondary" (click)="removeCertification(i)">Remove</button>
       </div>
     }
@@ -87,5 +102,5 @@
     </ul>
   }
 
-  <button type="submit" [disabled]="saving()">Save member</button>
+  <button type="submit" [disabled]="!ready() || saving()">Save member</button>
 </form>

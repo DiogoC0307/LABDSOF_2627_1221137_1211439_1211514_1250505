@@ -65,6 +65,12 @@ export class MemberForm implements OnInit {
   protected readonly loadError = signal<string | null>(null);
   /** True while the save is in flight: the button is disabled, so a second click sends nothing (SCRUM-158). */
   protected readonly saving = signal(false);
+  /**
+   * False while the member being edited loads, and for good if loading fails: Save is disabled, so an empty form is
+   * never saved over the member. Setting it after the fields are filled is also what renders them: the app is
+   * zoneless and the fields are not signals, so without it the form stayed empty when the member arrived last.
+   */
+  protected readonly ready = signal(this.memberId === null);
 
   protected fullName = '';
   protected rank: string = 'FIREFIGHTER_3RD_CLASS';
@@ -91,6 +97,7 @@ export class MemberForm implements OnInit {
           SERVICE_FUNCTIONS.forEach((fn) => (this.functions[fn] = member.functions.includes(fn)));
           this.licences = member.licences.map((licence) => ({ ...licence }));
           this.certifications = member.certifications.map(({ type, issuedOn, expiresOn }) => ({ type, issuedOn, expiresOn }));
+          this.ready.set(true);
         },
         error: () => this.loadError.set('Could not load the member.'),
       });
@@ -119,7 +126,7 @@ export class MemberForm implements OnInit {
   }
 
   protected save(): void {
-    if (this.saving()) {
+    if (!this.ready() || this.saving()) {
       return;
     }
     const errors = this.check();

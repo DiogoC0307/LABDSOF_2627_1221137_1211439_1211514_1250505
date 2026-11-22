@@ -32,6 +32,8 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 import pt.isep.escala.escalaapi.auth.MockTokens;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 /** The admin registers members with their functions, licences and certifications (SCRUM-77, AC1 and AC2). */
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
@@ -198,6 +200,58 @@ class RegisterMemberIT {
 		});
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM member_function WHERE member_id IN (?, ?, ?)", Long.class,
 				MockTokens.MEMBER_ID, MockTokens.SUPERVISOR_ID, MockTokens.ADMIN_ID)).isEqualTo(2);
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-77-09 saving a member's edit form unchanged (PUT details and certifications with the data the GET returned) changes nothing")
+	void unchangedEditChangesNothing() throws Exception {
+		String location = mockMvc.perform(post("/api/v1/members")
+						.header(HttpHeaders.AUTHORIZATION, MockTokens.admin())
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(MemberRequests.driverWithTas("Synthetic Driver Unchanged", "synthetic.unchanged@example.test")))
+				.andExpect(status().isCreated())
+				.andReturn().getResponse().getHeader("Location");
+		String before = mockMvc.perform(get(location).header(HttpHeaders.AUTHORIZATION, MockTokens.admin()))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		List<Map<String, Object>> rowsBefore = memberRows(location);
+		JsonNode member = objectMapper.readTree(before);
+
+		ObjectNode details = objectMapper.createObjectNode();
+		for (String field : List.of("fullName", "rank", "rosterStatus", "withinAgeLimit", "contact", "functions")) {
+			details.set(field, member.get(field));
+		}
+		ObjectNode qualifications = objectMapper.createObjectNode();
+		qualifications.set("licences", member.get("licences"));
+		ArrayNode certifications = qualifications.putArray("certifications");
+		member.get("certifications").forEach(certification -> certifications.addObject()
+				.put("type", certification.path("type").asString())
+				.put("issuedOn", certification.path("issuedOn").asString())
+				.put("expiresOn", certification.path("expiresOn").asString()));
+
+		mockMvc.perform(put(location).header(HttpHeaders.AUTHORIZATION, MockTokens.admin())
+						.contentType(MediaType.APPLICATION_JSON).content(details.toString()))
+				.andExpect(status().isOk());
+		mockMvc.perform(put(location + "/certifications").header(HttpHeaders.AUTHORIZATION, MockTokens.admin())
+						.contentType(MediaType.APPLICATION_JSON).content(qualifications.toString()))
+				.andExpect(status().isOk());
+
+		String after = mockMvc.perform(get(location).header(HttpHeaders.AUTHORIZATION, MockTokens.admin()))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		assertThat(objectMapper.readTree(after)).isEqualTo(member);
+		assertThat(memberRows(location)).isEqualTo(rowsBefore);
+	}
+
+	/** The member's rows in the four member tables, without generated row IDs. */
+	private List<Map<String, Object>> memberRows(String location) {
+		String id = location.substring(location.lastIndexOf('/') + 1);
+		List<Map<String, Object>> rows = new java.util.ArrayList<>();
+		rows.addAll(jdbc.queryForList("SELECT full_name, rank, roster_status, within_age_limit, contact, access_role, active FROM member WHERE id = ?::uuid", id));
+		rows.addAll(jdbc.queryForList("SELECT service_function FROM member_function WHERE member_id = ?::uuid ORDER BY 1", id));
+		rows.addAll(jdbc.queryForList("SELECT licence_class, expires_on FROM member_driving_licence WHERE member_id = ?::uuid ORDER BY 1", id));
+		rows.addAll(jdbc.queryForList("SELECT type_code, issued_on, expires_on FROM member_certification WHERE member_id = ?::uuid ORDER BY 1", id));
+		return rows;
 	}
 
 	private JsonNode named(JsonNode members, String fullName) {
