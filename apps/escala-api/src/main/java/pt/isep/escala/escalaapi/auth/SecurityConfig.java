@@ -25,10 +25,11 @@ class SecurityConfig {
 	@Bean
 	SecurityFilterChain apiSecurity(HttpSecurity http, MemberRepository members) {
 		return http
-				// CSRF protection is for credentials the browser sends by itself (cookies, sessions). Here the token is
-				// sent by the PWA in the Authorization header and there is no session, so a forged cross-site request
-				// carries no credentials and gets 401.
-				.csrf(AbstractHttpConfigurer::disable)
+				// CSRF protection stays on, but not for /api/**. CSRF guards credentials the browser sends by itself
+				// (cookies, a session). The API is stateless: the PWA sends the token in the Authorization header and
+				// there is no cookie or session, so a forged cross-site request carries no credentials and gets 401.
+				// A CSRF token on /api/** would only break the PWA's POST requests.
+				.csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
 				.httpBasic(AbstractHttpConfigurer::disable)
 				.formLogin(AbstractHttpConfigurer::disable)
 				.logout(AbstractHttpConfigurer::disable)
