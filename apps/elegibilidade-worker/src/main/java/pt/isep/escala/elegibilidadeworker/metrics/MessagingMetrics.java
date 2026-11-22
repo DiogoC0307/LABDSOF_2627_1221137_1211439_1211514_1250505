@@ -1,12 +1,14 @@
 package pt.isep.escala.elegibilidadeworker.metrics;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.MultiGauge;
 import io.micrometer.core.instrument.Tags;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.core.Declarables;
@@ -22,11 +24,12 @@ import org.springframework.stereotype.Component;
  * The messaging metrics of SCRUM-97, read every 15 s (a scrape is every 30 s):
  *
  * <ul>
- * <li>{@code escala.outbox.pending{routing_key}}: outbox rows not published yet;</li>
+ * <li>{@code escala.outbox.pending}: outbox rows not published yet (0 when there are none);</li>
  * <li>{@code escala.dlq.messages{queue}}: messages in this service's dead-letter queues, asked from the broker with a
  * passive declare (the service's broker user may do that on its own {@code worker.*} queues);</li>
  * <li>{@code escala.messages.dead_lettered{queue}}: messages this service rejected to a DLQ (malformed, or retries
- * exhausted), counted by {@code BrokerRetryAdvice}. It feeds SLI 2.</li>
+ * exhausted), counted by {@code BrokerRetryAdvice}; {@code queue} is the queue they were consumed from, not the DLQ.
+ * It feeds SLI 2.</li>
  * </ul>
  *
  * The DLQs are found from the queues this service declares, so a new consumed queue is measured without a change here.
@@ -42,9 +45,8 @@ public class MessagingMetrics {
 	private final JdbcTemplate jdbc;
 	private final RabbitAdmin admin;
 	private final List<String> deadLetterQueues;
-	private final MultiGauge outboxPending;
+	private final AtomicLong outboxPending = new AtomicLong();
 	private final MultiGauge dlqMessages;
-	private final Map<String, Long> pendingByRoutingKey = new ConcurrentHashMap<>();
 	private final Map<String, Long> messagesByQueue = new ConcurrentHashMap<>();
 
 	public MessagingMetrics(MeterRegistry registry, JdbcTemplate jdbc, ConnectionFactory connectionFactory,
@@ -57,11 +59,12 @@ public class MessagingMetrics {
 				.map(Queue::getName)
 				.filter(name -> name.startsWith(OWN_QUEUE_PREFIX) && name.endsWith(".dlq"))
 				.distinct().sorted().toList();
-		this.outboxPending = MultiGauge.builder("escala.outbox.pending")
+		Gauge.builder("escala.outbox.pending", outboxPending, AtomicLong::get)
 				.description("Outbox rows not published to the broker yet").register(registry);
 		this.dlqMessages = MultiGauge.builder("escala.dlq.messages")
 				.description("Messages in the dead-letter queues of this service").register(registry);
-		deadLetterQueues.forEach(queue -> deadLettered(queue, 0));
+		// every consumed queue shows 0 from the start, so a rate over time works before the first dead letter
+		deadLetterQueues.forEach(dlq -> deadLettered(dlq.substring(0, dlq.length() - ".dlq".length()), 0));
 	}
 
 	/** Called by {@code BrokerRetryAdvice} for every message it rejects to the dead-letter queue. */
@@ -87,14 +90,8 @@ public class MessagingMetrics {
 
 	void refreshOutbox() {
 		try {
-			pendingByRoutingKey.replaceAll((key, count) -> 0L);
-			jdbc.query("select routing_key, count(*) from outbox_event where published_at is null group by routing_key",
-					row -> {
-						pendingByRoutingKey.put(row.getString(1), row.getLong(2));
-					});
-			outboxPending.register(pendingByRoutingKey.entrySet().stream()
-					.map(e -> MultiGauge.Row.of(Tags.of(MetricTags.ROUTING_KEY, e.getKey()), e.getValue())).toList(),
-					true);
+			Long pending = jdbc.queryForObject("select count(*) from outbox_event where published_at is null", Long.class);
+			outboxPending.set(pending == null ? 0 : pending);
 		}
 		catch (RuntimeException e) {
 			// the database is down: keep the last values; readiness already reports it

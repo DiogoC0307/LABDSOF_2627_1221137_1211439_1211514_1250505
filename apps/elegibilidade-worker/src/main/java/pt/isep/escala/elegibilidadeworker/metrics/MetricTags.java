@@ -11,12 +11,10 @@ public final class MetricTags {
 
 	public static final String RESULT = "result";
 	public static final String SOURCE = "source";
-	public static final String ROUTING_KEY = "routing_key";
 	public static final String QUEUE = "queue";
 
 	/** Tag keys allowed on {@code escala.*} meters; {@link MetricsConfiguration} drops a meter that uses another. */
-	public static final Set<String> ALLOWED_KEYS = Set.of("purpose", RESULT, "applied", SOURCE, ROUTING_KEY, QUEUE,
-			"application");
+	public static final Set<String> ALLOWED_KEYS = Set.of("purpose", RESULT, "applied", SOURCE, QUEUE, "application");
 
 	public static final String OTHER = "OTHER";
 
