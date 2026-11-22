@@ -232,6 +232,54 @@ describe('Members', () => {
     http().expectNone({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
   });
 
+  /** The visible text of a label, without the text of a control inside it (e.g. the options of a select). */
+  function visibleText(label: HTMLLabelElement): string {
+    return [...label.childNodes]
+      .filter((node) => node.nodeType === Node.TEXT_NODE)
+      .map((node) => node.textContent ?? '')
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  it('TC-SCRUM-77-10 every select and date field of the member form has a visible label that is its accessible name (WCAG 2.5.3)', async () => {
+    const fixture = await start('/members/new');
+    http().expectOne('/api/v1/certification-types').flush(types);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    page(fixture).querySelector<HTMLButtonElement>('button.add-licence')!.click();
+    page(fixture).querySelector<HTMLButtonElement>('button.add-certification')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const expected: Record<string, string> = {
+      rank: 'Rank',
+      rosterStatus: 'Roster',
+      'licenceClass-0': 'Licence class 1',
+      'licenceExpiresOn-0': 'Licence 1 expires on',
+      'certType-0': 'Certification type 1',
+      'certIssuedOn-0': 'Certification 1 issued on',
+      'certExpiresOn-0': 'Certification 1 expires on',
+    };
+    const controls = page(fixture).querySelectorAll<HTMLSelectElement | HTMLInputElement>(
+      'form select, form input[type="date"]',
+    );
+    expect(controls.length).toBe(Object.keys(expected).length);
+    controls.forEach((control) => {
+      const name = control.getAttribute('name')!;
+      expect(control.getAttribute('aria-label'), name).toBeNull();
+      expect(control.getAttribute('aria-labelledby'), name).toBeNull();
+      expect(control.labels?.length, name).toBe(1);
+      expect(visibleText(control.labels![0]), name).toBe(expected[name]);
+    });
+    page(fixture)
+      .querySelectorAll<HTMLInputElement>('form input[type="checkbox"]')
+      .forEach((box) => {
+        expect(box.getAttribute('aria-label'), box.name).toBeNull();
+        expect(visibleText(box.labels![0]), box.name).not.toBe('');
+      });
+  });
+
   it('the admin edits a member: details and certifications are saved, then the list is shown', async () => {
     const fixture = await start(`/members/${driver.id}/edit`);
     http().expectOne('/api/v1/certification-types').flush(types);
