@@ -162,6 +162,47 @@ describe('Members', () => {
     expect(page(fixture).querySelector('[role="alert"] [data-field="licences"]')?.textContent).toContain('driving licence');
   });
 
+  it('TC-SCRUM-158-01 two clicks on Save member before the answer send one registration; the button is disabled until the answer, then enabled again', async () => {
+    const fixture = await start('/members/new');
+    await fillDriver(fixture, '2027-03-31');
+    const save = page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+
+    save.click();
+    save.click();
+    fixture.detectChanges();
+
+    const post = http().expectOne({ method: 'POST', url: '/api/v1/members' });
+    expect(save.disabled).toBe(true);
+    post.flush({ status: 400, errors: [{ field: 'fullName', code: 'required' }] }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(save.disabled).toBe(false);
+    expect(TestBed.inject(Router).url).toBe('/members/new');
+  });
+
+  it('TC-SCRUM-158-02 two clicks on Save member while editing send the change once; the button is enabled again after an error', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    http().expectOne('/api/v1/certification-types').flush(types);
+    http().expectOne(`/api/v1/members/${driver.id}`).flush(driver);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    const save = page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+
+    save.click();
+    save.click();
+    fixture.detectChanges();
+
+    http().expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}` }).flush(driver);
+    expect(save.disabled).toBe(true);
+    http()
+      .expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}/certifications` })
+      .flush('fail', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(save.disabled).toBe(false);
+  });
+
   it('the admin edits a member: details and certifications are saved, then the list is shown', async () => {
     const fixture = await start(`/members/${driver.id}/edit`);
     http().expectOne('/api/v1/certification-types').flush(types);
