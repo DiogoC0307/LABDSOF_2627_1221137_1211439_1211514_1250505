@@ -1,0 +1,106 @@
+<header class="top">
+  <h1>{{ editing ? 'Edit member' : 'Register member' }}</h1>
+</header>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+}
+
+<form (ngSubmit)="save()" aria-label="Member">
+  <label>
+    Name
+    <input name="fullName" [(ngModel)]="fullName" maxlength="120" required />
+  </label>
+  <label>
+    Rank
+    <select name="rank" [(ngModel)]="rank">
+      @for (value of ranks; track value) {
+        <option [value]="value">{{ value }}</option>
+      }
+    </select>
+  </label>
+  <label>
+    Roster
+    <select name="rosterStatus" [(ngModel)]="rosterStatus">
+      @for (value of rosterStatuses; track value) {
+        <option [value]="value">{{ value }}</option>
+      }
+    </select>
+  </label>
+  <label class="row">
+    <input type="checkbox" name="withinAgeLimit" [(ngModel)]="withinAgeLimit" />
+    Within the age limit
+  </label>
+  <label>
+    Contact (seen only by the admin and the member)
+    <input name="contact" [(ngModel)]="contact" maxlength="120" />
+  </label>
+
+  <fieldset>
+    <legend>Functions</legend>
+    @for (fn of serviceFunctions; track fn) {
+      <label class="row">
+        <input type="checkbox" [name]="'function-' + fn" [attr.name]="'function-' + fn" [(ngModel)]="functions[fn]" />
+        {{ fn }}
+      </label>
+    }
+  </fieldset>
+
+  <fieldset>
+    <legend>Driving licences</legend>
+    @for (licence of licences; track $index; let i = $index) {
+      <div class="row">
+        <div class="field">
+          <label [attr.for]="'licence-class-' + i">Licence class {{ i + 1 }}</label>
+          <select [id]="'licence-class-' + i" [name]="'licenceClass-' + i" [attr.name]="'licenceClass-' + i" [(ngModel)]="licence.licenceClass">
+            @for (value of licenceClasses; track value) {
+              <option [value]="value">{{ value }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label [attr.for]="'licence-expires-' + i">Licence {{ i + 1 }} expires on</label>
+          <input type="date" [id]="'licence-expires-' + i" [name]="'licenceExpiresOn-' + i" [attr.name]="'licenceExpiresOn-' + i" [(ngModel)]="licence.expiresOn" />
+        </div>
+        <button type="button" class="secondary" (click)="removeLicence(i)">Remove</button>
+      </div>
+    }
+    <button type="button" class="secondary add-licence" (click)="addLicence()">Add licence</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Certifications</legend>
+    @for (certification of certifications; track $index; let i = $index) {
+      <div class="row">
+        <div class="field">
+          <label [attr.for]="'cert-type-' + i">Certification type {{ i + 1 }}</label>
+          <select [id]="'cert-type-' + i" [name]="'certType-' + i" [attr.name]="'certType-' + i" [(ngModel)]="certification.type">
+            @for (type of types(); track type.code) {
+              <option [value]="type.code">{{ type.code }} · {{ type.name }}</option>
+            }
+          </select>
+        </div>
+        <div class="field">
+          <label [attr.for]="'cert-issued-' + i">Certification {{ i + 1 }} issued on</label>
+          <input type="date" [id]="'cert-issued-' + i" [name]="'certIssuedOn-' + i" [attr.name]="'certIssuedOn-' + i" [(ngModel)]="certification.issuedOn" />
+        </div>
+        <div class="field">
+          <label [attr.for]="'cert-expires-' + i">Certification {{ i + 1 }} expires on</label>
+          <input type="date" [id]="'cert-expires-' + i" [name]="'certExpiresOn-' + i" [attr.name]="'certExpiresOn-' + i" [(ngModel)]="certification.expiresOn" />
+        </div>
+        <button type="button" class="secondary" (click)="removeCertification(i)">Remove</button>
+      </div>
+    }
+    <button type="button" class="secondary add-certification" (click)="addCertification()">Add certification</button>
+  </fieldset>
+
+  @if (errors().length > 0) {
+    <ul class="error" role="alert">
+      @for (error of errors(); track error.field + error.code) {
+        <li [attr.data-field]="error.field">{{ message(error) }}</li>
+      }
+    </ul>
+  }
+
+  <button type="submit" [disabled]="!ready()">Save member</button>
+</form>

@@ -8,7 +8,9 @@ info:
 
 
     Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
-    under /api/v1/auth and the three Actuator health endpoints under /actuator/health. Every other path
+    under /api/v1/auth, the members and certification types under /api/v1/members and
+    /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
+    (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -35,6 +37,7 @@ servers:
 tags:
   - name: health
   - name: auth
+  - name: members
   - name: me
   - name: piquetes
   - name: assignments
@@ -307,6 +310,176 @@ paths:
           description: memberId missing, or the body is not valid JSON or memberId is not a UUID
         "401":
           description: Unknown or inactive member. No body, no token.
+  /api/v1/members:
+    get:
+      tags: [members]
+      summary: The members with their functions, licences and certifications (SCRUM-77)
+      description: SUPERVISOR and ADMIN. The contact is in the answer only for the admin (09).
+      operationId: listMembers
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: Members, ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [members]
+      summary: Register a member (ADMIN)
+      description: >
+        A new member always has the access role MEMBER; changing a role waits for audit records (09, T-06).
+        Every invalid field is answered at once, with a code and never the value.
+      operationId: registerMember
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberRequest"
+      responses:
+        "201":
+          description: Registered
+          headers:
+            Location:
+              description: /api/v1/members/{id} of the new member
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/members/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [members]
+      summary: One member
+      description: >
+        SUPERVISOR and ADMIN read any member; a MEMBER reads only themself (403 for anyone else). The contact
+        is in the answer only for the admin and the member themself (09).
+      operationId: getMember
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [members]
+      summary: Change a member's details and functions (ADMIN)
+      description: Licences and certifications change through /api/v1/members/{id}/certifications.
+      operationId: changeMemberDetails
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberDetailsRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/members/{id}/certifications:
+    put:
+      tags: [members]
+      summary: Replace a member's driving licences and certifications (ADMIN)
+      description: >
+        The lists are what the member holds after the change: a type or class already held is renewed
+        (new dates, no history), a new one is added and one not listed is removed. A member or a supervisor
+        gets 403 and nothing changes (SCRUM-77 AC5).
+      operationId: replaceMemberQualifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualificationsRequest"
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/certification-types:
+    get:
+      tags: [members]
+      summary: The certification types (SUPERVISOR and ADMIN)
+      operationId: listCertificationTypes
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: TAS and TAT
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CertificationType"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /piquetes/{id}/publish:
     post:
       tags: [piquetes]
@@ -378,18 +551,114 @@ paths:
           description: Missing or invalid token
         "403":
           description: Role not allowed
-  /unavailabilities:
+  /api/v1/unavailabilities:
+    get:
+      tags: [unavailabilities]
+      summary: The caller's own unavailability periods ("When I can't", SCRUM-64)
+      description: Any role. Only the caller's periods, ordered by start. Dates and times only, never a reason (09).
+      operationId: listMyUnavailabilities
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The caller's periods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Unavailability"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags: [unavailabilities]
-      summary: Declare unavailability by form or free text; 202 without waiting for extraction
-      operationId: createUnavailability
+      summary: Declare a period of unavailability by form (SCRUM-64)
+      description: >
+        Any role, for the caller only: the member comes from the token, never from the body (T-03). Answers in
+        under 500 ms (RNF02): it is one insert, with no event. Overlapping periods are kept as they are.
+        A period that has already ended (in_the_past) or that starts more than 6 months ahead
+        (too_far_ahead, the same limit as on 06) is refused. There is no PUT: a change is DELETE and POST.
+        Free text (SCRUM-75) has its own path, /api/v1/unavailability-messages.
+      operationId: declareUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UnavailabilityRequest"
+      responses:
+        "201":
+          description: Saved
+          headers:
+            Location:
+              description: /api/v1/unavailabilities/{id} of the new period
+              schema:
+                type: string
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/unavailabilities/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [unavailabilities]
+      summary: One of the caller's periods
+      description: A period of another member answers 404, not 403, so its existence is not revealed.
+      operationId: getMyUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The period
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unavailability"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No period with that ID for the caller (no body)
+    delete:
+      tags: [unavailabilities]
+      summary: Remove one of the caller's periods
+      description: A period of another member answers 404 and nothing changes.
+      operationId: deleteMyUnavailability
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "204":
+          description: Removed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No period with that ID for the caller (no body)
+  /api/v1/unavailability-messages:
+    post:
+      tags: [unavailabilities]
+      summary: Declare unavailability in free text, read automatically (planned, SCRUM-75)
+      description: >
+        Not implemented yet. 202 without waiting for the extraction; the member confirms the proposed periods
+        before they count (06).
+      operationId: declareUnavailabilityMessage
       responses:
         "202":
           description: Accepted
         "401":
           description: Missing or invalid token
-        "403":
-          description: Role not allowed
   /swaps:
     post:
       tags: [swaps]
@@ -509,6 +778,24 @@ components:
       headers:
         X-Trace-Id:
           $ref: "#/components/headers/TraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: >
+        Invalid fields, each with a code and never the value (SCRUM-77, SCRUM-64). A body that is not valid JSON, or a
+        value outside an enum, answers 400 with Spring Boot's error body and no errors list; SCRUM-88 aligns
+        the other errors with this format.
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/TraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+    NotFound:
+      description: No member with that ID (Spring Boot error body)
       content:
         application/json:
           schema:
@@ -633,6 +920,190 @@ components:
               items:
                 type: string
               example: [liveness, readiness]
+    Rank:
+      type: string
+      description: Career category; it grants no permission (see AccessRole).
+      enum: [CADET, TRAINEE, FIREFIGHTER_3RD_CLASS, FIREFIGHTER_2ND_CLASS, FIREFIGHTER_1ST_CLASS, SUB_CHIEF, CHIEF, OFFICER, COMMANDER]
+    RosterStatus:
+      type: string
+      description: Only the active roster can be scheduled (RN01, checked by the eligibility rules).
+      enum: [COMMAND_ROSTER, ACTIVE_ROSTER, RESERVE_ROSTER, HONORARY_ROSTER]
+    ServiceFunction:
+      type: string
+      description: A function a member can take on a slot (the slot roles).
+      enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
+    LicenceClass:
+      type: string
+      enum: [B, C1, C, C1E, CE]
+    Licence:
+      type: object
+      required: [licenceClass, expiresOn]
+      properties:
+        licenceClass:
+          $ref: "#/components/schemas/LicenceClass"
+        expiresOn:
+          type: string
+          format: date
+    CertificationRequest:
+      type: object
+      required: [type, issuedOn, expiresOn]
+      properties:
+        type:
+          type: string
+          description: A code from /api/v1/certification-types
+          example: TAS
+        issuedOn:
+          type: string
+          format: date
+        expiresOn:
+          type: string
+          format: date
+          description: Not before issuedOn (code expires_before_issued)
+    Certification:
+      allOf:
+        - $ref: "#/components/schemas/CertificationRequest"
+        - type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+              example: Tripulante de Ambulância de Socorro
+    CertificationType:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          example: TAS
+        name:
+          type: string
+          example: Tripulante de Ambulância de Socorro
+    MemberDetailsRequest:
+      type: object
+      required: [fullName, rank, rosterStatus, withinAgeLimit, functions]
+      properties:
+        fullName:
+          type: string
+          maxLength: 120
+        rank:
+          $ref: "#/components/schemas/Rank"
+        rosterStatus:
+          $ref: "#/components/schemas/RosterStatus"
+        withinAgeLimit:
+          type: boolean
+          description: Stored as yes or no; no date of birth (09)
+        contact:
+          type: string
+          nullable: true
+          maxLength: 120
+          description: Optional. Seen only by the admin and the member themself; never logged (09).
+        functions:
+          type: array
+          description: DRIVER needs at least one driving licence (code driver_without_licence)
+          items:
+            $ref: "#/components/schemas/ServiceFunction"
+    QualificationsRequest:
+      type: object
+      required: [licences, certifications]
+      properties:
+        licences:
+          type: array
+          description: One per class (code duplicate)
+          items:
+            $ref: "#/components/schemas/Licence"
+        certifications:
+          type: array
+          description: One per type (code duplicate)
+          items:
+            $ref: "#/components/schemas/CertificationRequest"
+    MemberRequest:
+      allOf:
+        - $ref: "#/components/schemas/MemberDetailsRequest"
+        - $ref: "#/components/schemas/QualificationsRequest"
+    Member:
+      type: object
+      required: [id, fullName, accessRole, active, rosterStatus, withinAgeLimit, functions, licences, certifications]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        accessRole:
+          $ref: "#/components/schemas/AccessRole"
+        active:
+          type: boolean
+        rank:
+          $ref: "#/components/schemas/Rank"
+        rosterStatus:
+          $ref: "#/components/schemas/RosterStatus"
+        withinAgeLimit:
+          type: boolean
+        contact:
+          type: string
+          description: Only in answers to the admin and to the member themself; absent otherwise.
+        functions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceFunction"
+        licences:
+          type: array
+          items:
+            $ref: "#/components/schemas/Licence"
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
+    ValidationErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorResponse"
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field:
+                    type: string
+                    example: certifications[0].expiresOn
+                  code:
+                    type: string
+                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead]
+    UnavailabilityRequest:
+      type: object
+      required: [startsAt, endsAt]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+          description: ISO 8601 with an offset or Z. A day without a time starts at 00:00 in Europe/Lisbon (the PWA sends it so).
+          example: "2026-12-05T00:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          description: Exclusive, after startsAt (code ends_before_start). A whole day ends at 00:00 of the next day, in Lisbon.
+          example: "2026-12-08T00:00:00Z"
+    Unavailability:
+      type: object
+      required: [id, startsAt, endsAt, source]
+      properties:
+        id:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+          description: In UTC (ADR 0012)
+        endsAt:
+          type: string
+          format: date-time
+          description: In UTC, exclusive. Deleted 30 days after it (09).
+        source:
+          type: string
+          enum: [FORM, FREE_TEXT]
     ErrorResponse:
       type: object
       description: Spring Boot's default error body

@@ -21,6 +21,12 @@ import pt.isep.escala.escalaapi.member.MemberRepository;
 class SecurityConfig {
 
 	static final String PIQUETES = "/api/v1/piquetes";
+	static final String MEMBERS = "/api/v1/members";
+	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
+
+	private static final String MEMBER = "MEMBER";
+	private static final String SUPERVISOR = "SUPERVISOR";
+	private static final String ADMIN = "ADMIN";
 
 	@Bean
 	SecurityFilterChain apiSecurity(HttpSecurity http, MemberRepository members) {
@@ -46,8 +52,19 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/mock-users").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
-						.requestMatchers(HttpMethod.GET, PIQUETES).hasAnyRole("MEMBER", "SUPERVISOR", "ADMIN")
-						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole("SUPERVISOR")
+						.requestMatchers(HttpMethod.GET, PIQUETES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
+						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
+						// only themself (checked in MemberController); the contact only for the admin and the member.
+						.requestMatchers(HttpMethod.GET, MEMBERS, "/api/v1/certification-types").hasAnyRole(SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.GET, MEMBERS + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.POST, MEMBERS).hasRole(ADMIN)
+						.requestMatchers(HttpMethod.PUT, MEMBERS + "/*", MEMBERS + "/*/certifications").hasRole(ADMIN)
+						// SCRUM-64: every role declares its own unavailability (09); only one's own periods are
+						// found (checked in UnavailabilityService); a change is DELETE and POST, there is no PUT.
+						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.POST, UNAVAILABILITIES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.anyRequest().denyAll())
 				.build();
 	}
