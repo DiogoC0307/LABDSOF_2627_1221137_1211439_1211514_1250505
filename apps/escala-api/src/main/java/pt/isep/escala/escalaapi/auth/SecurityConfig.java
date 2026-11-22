@@ -22,6 +22,7 @@ class SecurityConfig {
 
 	static final String PIQUETES = "/api/v1/piquetes";
 	static final String MEMBERS = "/api/v1/members";
+	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
 
 	private static final String MEMBER = "MEMBER";
 	private static final String SUPERVISOR = "SUPERVISOR";
@@ -59,6 +60,11 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, MEMBERS + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, MEMBERS).hasRole(ADMIN)
 						.requestMatchers(HttpMethod.PUT, MEMBERS + "/*", MEMBERS + "/*/certifications").hasRole(ADMIN)
+						// SCRUM-64: every role declares its own unavailability (09); only one's own periods are
+						// found (checked in UnavailabilityService); a change is DELETE and POST, there is no PUT.
+						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.POST, UNAVAILABILITIES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.anyRequest().denyAll())
 				.build();
 	}
