@@ -195,8 +195,7 @@ class UnavailabilityMessageIT {
 				.andExpect(jsonPath("$[0].source").value("FREE_TEXT"));
 
 		Map<String, Object> row = jdbc.queryForMap("SELECT free_text, status FROM unavailability_message WHERE id = ?", id);
-		assertThat(row.get("free_text")).isNull();
-		assertThat(row.get("status")).isEqualTo("CONFIRMED");
+		assertThat(row).containsEntry("free_text", null).containsEntry("status", "CONFIRMED");
 		assertThat(tablesContaining("MARKER-75-04")).isEmpty();
 		mockMvc.perform(get("/api/v1/unavailabilities").header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
 				.andExpect(jsonPath("$[0].source").value("FREE_TEXT"));
@@ -258,8 +257,7 @@ class UnavailabilityMessageIT {
 
 		for (UUID id : List.of(old, oldProposed)) {
 			Map<String, Object> row = jdbc.queryForMap("SELECT free_text, status FROM unavailability_message WHERE id = ?", id);
-			assertThat(row.get("free_text")).isNull();
-			assertThat(row.get("status")).isEqualTo("EXPIRED");
+			assertThat(row).containsEntry("free_text", null).containsEntry("status", "EXPIRED");
 		}
 		assertThat(jdbc.queryForObject("SELECT free_text FROM unavailability_message WHERE id = ?", String.class, recent))
 				.isEqualTo("Synthetic text 75-07 recent");
