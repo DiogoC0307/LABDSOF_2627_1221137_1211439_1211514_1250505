@@ -185,6 +185,13 @@ button {
   align-items: flex-end;
 }
 
+/* A control with its own visible label (for/id), inside a row: the label above the control (SCRUM-77, WCAG 2.5.3). */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
 /* A checkbox sits beside its text, not above it (SCRUM-77): label is a column and inputs are tall by default. */
 label:has(> input[type='checkbox']) {
   flex-direction: row;
