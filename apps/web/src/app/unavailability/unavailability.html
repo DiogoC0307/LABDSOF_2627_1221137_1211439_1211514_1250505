@@ -1,0 +1,53 @@
+<header class="top">
+  <h1>When I can't</h1>
+</header>
+<p class="lead">Only dates and times, in Lisbon time. Nobody sees why.</p>
+
+<form (ngSubmit)="save()" aria-label="Unavailability">
+  <div class="row">
+    <label>
+      From
+      <input type="date" name="startDate" [(ngModel)]="startDate" required />
+    </label>
+    <label>
+      at (optional)
+      <input type="time" name="startTime" [(ngModel)]="startTime" />
+    </label>
+  </div>
+  <div class="row">
+    <label>
+      Until
+      <input type="date" name="endDate" [(ngModel)]="endDate" required />
+    </label>
+    <label>
+      at (optional, whole day if empty)
+      <input type="time" name="endTime" [(ngModel)]="endTime" />
+    </label>
+  </div>
+
+  @if (errors().length > 0) {
+    <ul class="error" role="alert">
+      @for (error of errors(); track error.field + error.code) {
+        <li [attr.data-field]="error.field">{{ message(error) }}</li>
+      }
+    </ul>
+  }
+
+  <button type="submit">Save</button>
+</form>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+}
+
+<h2>My periods</h2>
+<ul class="list periods">
+  @for (period of periods(); track period.id) {
+    <li [attr.data-id]="period.id">
+      <span>{{ format(period.startsAt) }} → {{ format(period.endsAt) }}</span>
+      <button type="button" class="secondary delete" (click)="remove(period)">Remove</button>
+    </li>
+  } @empty {
+    <li class="empty">No periods.</li>
+  }
+</ul>
