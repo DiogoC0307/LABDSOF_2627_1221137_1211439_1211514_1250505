@@ -122,7 +122,8 @@ Test cases of story SCRUM-46 (the installable phone PWA), in `apps/web/src/app/s
 > **ℹ️ Guidance.** Assignment §11: "Real personal or sensitive data should not be used when synthetic or anonymized data is sufficient." For Escala synthetic data is always sufficient, so every test uses it. Say where each data set lives and how it is produced; never copy real rosters, certifications or messages, even anonymised.
 
 - **Seed data:** placeholder members (Member A, Member B…), synthetic certifications and licences, one fictional corps. Path: [TODO: path].
-- **IPMA fixtures:** simulator responses for RCM levels 1–5 and for the four §6.5 cases (unavailable, delayed, incomplete, invalid). Path: `tools/ipma-sim` [TODO: fixture folder].
+- **IPMA fixtures (SCRUM-43):** `tools/ipma-sim/fixtures/`. `rcm-d0.json` and `warnings_www.json` are the bodies fetched on 2026-11-21. `rcm-d0-municipality-missing.json`, `invalid.json` and `empty.json` are fixed bodies for the unusable responses the live API did not return that day: the corps municipality missing, a body that is not JSON, and an empty body (ADR 0013). The simulator container and the unavailable and delayed modes are still to build.
+rcm-d0-municipality-missing.json, invalid.json and empty.json are fixed bodies for the unusable responses the live API did not return that day: the corps municipality missing, a body that is not JSON, and an empty JSON body (ADR 0013).
 - **AI evaluation dataset:** 60 team-written cases (35 normal / 15 difficult / 10 adverse), JSONL, path [TODO: path]; origin and limitations on **06 · Responsible AI Opportunity Assessment**.
 - **Clock:** tests use a fixed clock [TODO: how], so boundary cases do not depend on the day the pipeline runs.
 
