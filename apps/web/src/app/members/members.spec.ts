@@ -162,6 +162,76 @@ describe('Members', () => {
     expect(page(fixture).querySelector('[role="alert"] [data-field="licences"]')?.textContent).toContain('driving licence');
   });
 
+  /**
+   * Opens the edit form the way the browser renders it: no detectChanges() by hand, and the member answers after
+   * the certification types (the order that left the form empty in dev, SCRUM-77).
+   */
+  async function openEdit(fixture: ComponentFixture<App>) {
+    http().expectOne('/api/v1/certification-types').flush(types);
+    await fixture.whenStable();
+    http().expectOne(`/api/v1/members/${driver.id}`).flush({ ...driver, contact: 'synthetic@example.test' });
+    await fixture.whenStable();
+  }
+
+  it('TC-SCRUM-77-06 editing a driver with a class C licence and a TAS shows those values in the form', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    await openEdit(fixture);
+
+    expect(field<HTMLInputElement>(fixture, 'fullName').value).toBe('Synthetic Driver One');
+    expect(field<HTMLSelectElement>(fixture, 'rank').value).toBe('FIREFIGHTER_1ST_CLASS');
+    expect(field<HTMLInputElement>(fixture, 'contact').value).toBe('synthetic@example.test');
+    expect(field<HTMLInputElement>(fixture, 'function-DRIVER').checked).toBe(true);
+    expect(field<HTMLInputElement>(fixture, 'function-CREW_CHIEF').checked).toBe(false);
+    expect(field<HTMLSelectElement>(fixture, 'licenceClass-0').value).toBe('C');
+    expect(field<HTMLInputElement>(fixture, 'licenceExpiresOn-0').value).toBe('2030-06-30');
+    expect(field<HTMLSelectElement>(fixture, 'certType-0').value).toBe('TAS');
+    expect(field<HTMLInputElement>(fixture, 'certIssuedOn-0').value).toBe('2024-04-01');
+    expect(field<HTMLInputElement>(fixture, 'certExpiresOn-0').value).toBe('2027-03-31');
+    expect(page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!.disabled).toBe(false);
+  });
+
+  it('TC-SCRUM-77-07 saving the edit form without changes sends the same data the member has', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    await openEdit(fixture);
+
+    page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!.click();
+
+    const details = http().expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
+    expect(details.request.body).toEqual({
+      fullName: 'Synthetic Driver One',
+      rank: 'FIREFIGHTER_1ST_CLASS',
+      rosterStatus: 'ACTIVE_ROSTER',
+      withinAgeLimit: true,
+      contact: 'synthetic@example.test',
+      functions: ['DRIVER'],
+    });
+    details.flush(driver);
+    const qualifications = http().expectOne({ method: 'PUT', url: `/api/v1/members/${driver.id}/certifications` });
+    expect(qualifications.request.body).toEqual({
+      licences: [{ licenceClass: 'C', expiresOn: '2030-06-30' }],
+      certifications: [{ type: 'TAS', issuedOn: '2024-04-01', expiresOn: '2027-03-31' }],
+    });
+    qualifications.flush(driver);
+    await fixture.whenStable();
+    http().expectOne('/api/v1/members').flush([driver]);
+  });
+
+  it('TC-SCRUM-77-08 Save member is disabled until the member is loaded, and stays disabled with an error if loading fails', async () => {
+    const fixture = await start(`/members/${driver.id}/edit`);
+    http().expectOne('/api/v1/certification-types').flush(types);
+    await fixture.whenStable();
+    const save = page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+    expect(save.disabled).toBe(true);
+
+    http().expectOne(`/api/v1/members/${driver.id}`).flush('fail', { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+
+    expect(page(fixture).querySelector('[role="alert"]')?.textContent).toContain('Could not load the member');
+    expect(save.disabled).toBe(true);
+    save.click();
+    http().expectNone({ method: 'PUT', url: `/api/v1/members/${driver.id}` });
+  });
+
   it('the admin edits a member: details and certifications are saved, then the list is shown', async () => {
     const fixture = await start(`/members/${driver.id}/edit`);
     http().expectOne('/api/v1/certification-types').flush(types);
