@@ -64,7 +64,7 @@ Split by question: published roster versus slow or external work. If the worker 
 | Workflow | Trigger | Result | Why async |
 |---|---|---|---|
 | Function check | `AvaliacaoPedida` (`SWAP` / `COVER` / `ASSIGNMENT`) | `AvaliacaoConcluida` | Product path: 202 without waiting (RNF02); schedule changes only after `ELIGIBLE` (RF24). Walking skeleton `POST /api/v1/piquetes` returns 201 + `Location` |
-| Extraction | `ExtracaoPedida` | `ExtracaoConcluida` | Model may be down; form stays up (RF35) |
+| Extraction | `ExtracaoPedida` (free text and the reference date only; no name or member ID) | `ExtracaoConcluida` (`schemaVersion` 2, SCRUM-75): a list of `periods` in the format of 06 and of the evaluation dataset (`startDate`, `endDate` inclusive; optional `weekdays` and `startTime`/`endTime` in Lisbon time), with `method` `MODEL` / `BASELINE` / `FALLBACK`. An empty list means no proposal: the form is shown. The member edits and confirms before anything counts (RF32) | Model may be down; form stays up (RF35) |
 | Risk update | Hourly poll | `RiscoAtualizado` | Display only; does not change slots |
 
 ```mermaid

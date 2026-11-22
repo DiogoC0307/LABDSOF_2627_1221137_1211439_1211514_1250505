@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://escala.local/contracts/events/extracao-concluida.schema.json",
   "title": "ExtracaoConcluida",
+  "description": "The worker's proposal for one ExtracaoPedida: a list of unavailability periods in the format of 06 · Responsible AI Opportunity Assessment (the same as expected.periods in the evaluation dataset). Version 2 (SCRUM-75) replaces the single interval of version 1 (proposedType, proposedStart, proposedEnd), which nothing produced or consumed. The member edits and confirms the periods in escala-api before they count; free text never travels in this event.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,24 +13,63 @@
     "traceId",
     "requestEventId",
     "unavailabilityRequestId",
-    "proposedType",
+    "periods",
     "method"
   ],
   "properties": {
     "eventId": { "type": "string", "format": "uuid" },
     "type": { "const": "ExtracaoConcluida" },
-    "schemaVersion": { "type": "integer", "const": 1 },
+    "schemaVersion": { "type": "integer", "const": 2 },
     "occurredAt": { "type": "string", "format": "date-time" },
     "traceId": { "type": "string", "minLength": 1 },
     "requestEventId": { "type": "string", "format": "uuid" },
     "unavailabilityRequestId": { "type": "string", "format": "uuid" },
-    "proposedType": {
-      "type": "string",
-      "enum": ["UNAVAILABLE", "PARTIAL", "NOT_AN_UNAVAILABILITY"]
+    "periods": {
+      "description": "Zero or more proposed periods. Empty: nothing usable was found (vague text, a message about when the member CAN serve or about someone else, prompt injection, dates in the past or more than 6 months ahead, AI off or failed), and escala-api shows the form.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/period" }
     },
-    "proposedStart": { "type": ["string", "null"], "format": "date-time" },
-    "proposedEnd": { "type": ["string", "null"], "format": "date-time" },
-    "method": { "type": "string", "enum": ["MODEL", "BASELINE", "FALLBACK"] },
+    "method": {
+      "description": "MODEL: the language model (ADR 0016). BASELINE: the rule-based parser (SCRUM-99). FALLBACK: no extraction was made (AI off, timeout, invalid output; ADR 0011); periods is then empty.",
+      "type": "string",
+      "enum": ["MODEL", "BASELINE", "FALLBACK"]
+    },
+    "model": {
+      "description": "Which model or parser produced the periods, e.g. the model name reported by the CLI or the parser version; null for FALLBACK.",
+      "type": ["string", "null"]
+    },
     "latencyMs": { "type": ["integer", "null"], "minimum": 0 }
+  },
+  "$defs": {
+    "period": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startDate", "endDate"],
+      "properties": {
+        "startDate": { "type": "string", "format": "date", "description": "First day, inclusive." },
+        "endDate": { "type": "string", "format": "date", "description": "Last day, inclusive; not before startDate." },
+        "weekdays": {
+          "description": "Only these days within the range (a repeating pattern, e.g. every Sunday). Absent: every day.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "enum": ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"] }
+        },
+        "startTime": {
+          "description": "Local time in Europe/Lisbon, applied to every day of the period. With endTime; absent: the whole day.",
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        },
+        "endTime": {
+          "description": "Local time in Europe/Lisbon. Before startTime: the window crosses midnight (e.g. 20:00 to 08:00).",
+          "type": "string",
+          "pattern": "^([01][0-9]|2[0-3]):[0-5][0-9]$"
+        }
+      },
+      "dependentRequired": {
+        "startTime": ["endTime"],
+        "endTime": ["startTime"]
+      }
+    }
   }
 }
