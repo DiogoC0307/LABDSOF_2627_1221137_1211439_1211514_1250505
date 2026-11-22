@@ -8,7 +8,8 @@ info:
 
 
     Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
-    under /api/v1/auth and the three Actuator health endpoints under /actuator/health. Every other path
+    under /api/v1/auth, the members and certification types under /api/v1/members and
+    /api/v1/certification-types (SCRUM-77), and the three Actuator health endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -35,6 +36,7 @@ servers:
 tags:
   - name: health
   - name: auth
+  - name: members
   - name: me
   - name: piquetes
   - name: assignments
@@ -307,6 +309,176 @@ paths:
           description: memberId missing, or the body is not valid JSON or memberId is not a UUID
         "401":
           description: Unknown or inactive member. No body, no token.
+  /api/v1/members:
+    get:
+      tags: [members]
+      summary: The members with their functions, licences and certifications (SCRUM-77)
+      description: SUPERVISOR and ADMIN. The contact is in the answer only for the admin (09).
+      operationId: listMembers
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: Members, ordered by name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [members]
+      summary: Register a member (ADMIN)
+      description: >
+        A new member always has the access role MEMBER; changing a role waits for audit records (09, T-06).
+        Every invalid field is answered at once, with a code and never the value.
+      operationId: registerMember
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberRequest"
+      responses:
+        "201":
+          description: Registered
+          headers:
+            Location:
+              description: /api/v1/members/{id} of the new member
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/members/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      tags: [members]
+      summary: One member
+      description: >
+        SUPERVISOR and ADMIN read any member; a MEMBER reads only themself (403 for anyone else). The contact
+        is in the answer only for the admin and the member themself (09).
+      operationId: getMember
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [members]
+      summary: Change a member's details and functions (ADMIN)
+      description: Licences and certifications change through /api/v1/members/{id}/certifications.
+      operationId: changeMemberDetails
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberDetailsRequest"
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/members/{id}/certifications:
+    put:
+      tags: [members]
+      summary: Replace a member's driving licences and certifications (ADMIN)
+      description: >
+        The lists are what the member holds after the change: a type or class already held is renewed
+        (new dates, no history), a new one is added and one not listed is removed. A member or a supervisor
+        gets 403 and nothing changes (SCRUM-77 AC5).
+      operationId: replaceMemberQualifications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QualificationsRequest"
+      responses:
+        "200":
+          description: Replaced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/certification-types:
+    get:
+      tags: [members]
+      summary: The certification types (SUPERVISOR and ADMIN)
+      operationId: listCertificationTypes
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: TAS and TAT
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CertificationType"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /piquetes/{id}/publish:
     post:
       tags: [piquetes]
@@ -513,6 +685,24 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    ValidationError:
+      description: >
+        Invalid fields, each with a code and never the value (SCRUM-77). A body that is not valid JSON, or a
+        value outside an enum, answers 400 with Spring Boot's error body and no errors list; SCRUM-88 aligns
+        the other errors with this format.
+      headers:
+        X-Trace-Id:
+          $ref: "#/components/headers/TraceId"
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrorResponse"
+    NotFound:
+      description: No member with that ID (Spring Boot error body)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   parameters:
     TraceId:
       name: X-Trace-Id
@@ -633,6 +823,158 @@ components:
               items:
                 type: string
               example: [liveness, readiness]
+    Rank:
+      type: string
+      description: Career category; it grants no permission (see AccessRole).
+      enum: [CADET, TRAINEE, FIREFIGHTER_3RD_CLASS, FIREFIGHTER_2ND_CLASS, FIREFIGHTER_1ST_CLASS, SUB_CHIEF, CHIEF, OFFICER, COMMANDER]
+    RosterStatus:
+      type: string
+      description: Only the active roster can be scheduled (RN01, checked by the eligibility rules).
+      enum: [COMMAND_ROSTER, ACTIVE_ROSTER, RESERVE_ROSTER, HONORARY_ROSTER]
+    ServiceFunction:
+      type: string
+      description: A function a member can take on a slot (the slot roles).
+      enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
+    LicenceClass:
+      type: string
+      enum: [B, C1, C, C1E, CE]
+    Licence:
+      type: object
+      required: [licenceClass, expiresOn]
+      properties:
+        licenceClass:
+          $ref: "#/components/schemas/LicenceClass"
+        expiresOn:
+          type: string
+          format: date
+    CertificationRequest:
+      type: object
+      required: [type, issuedOn, expiresOn]
+      properties:
+        type:
+          type: string
+          description: A code from /api/v1/certification-types
+          example: TAS
+        issuedOn:
+          type: string
+          format: date
+        expiresOn:
+          type: string
+          format: date
+          description: Not before issuedOn (code expires_before_issued)
+    Certification:
+      allOf:
+        - $ref: "#/components/schemas/CertificationRequest"
+        - type: object
+          required: [name]
+          properties:
+            name:
+              type: string
+              example: Tripulante de Ambulância de Socorro
+    CertificationType:
+      type: object
+      required: [code, name]
+      properties:
+        code:
+          type: string
+          example: TAS
+        name:
+          type: string
+          example: Tripulante de Ambulância de Socorro
+    MemberDetailsRequest:
+      type: object
+      required: [fullName, rank, rosterStatus, withinAgeLimit, functions]
+      properties:
+        fullName:
+          type: string
+          maxLength: 120
+        rank:
+          $ref: "#/components/schemas/Rank"
+        rosterStatus:
+          $ref: "#/components/schemas/RosterStatus"
+        withinAgeLimit:
+          type: boolean
+          description: Stored as yes or no; no date of birth (09)
+        contact:
+          type: string
+          nullable: true
+          maxLength: 120
+          description: Optional. Seen only by the admin and the member themself; never logged (09).
+        functions:
+          type: array
+          description: DRIVER needs at least one driving licence (code driver_without_licence)
+          items:
+            $ref: "#/components/schemas/ServiceFunction"
+    QualificationsRequest:
+      type: object
+      required: [licences, certifications]
+      properties:
+        licences:
+          type: array
+          description: One per class (code duplicate)
+          items:
+            $ref: "#/components/schemas/Licence"
+        certifications:
+          type: array
+          description: One per type (code duplicate)
+          items:
+            $ref: "#/components/schemas/CertificationRequest"
+    MemberRequest:
+      allOf:
+        - $ref: "#/components/schemas/MemberDetailsRequest"
+        - $ref: "#/components/schemas/QualificationsRequest"
+    Member:
+      type: object
+      required: [id, fullName, accessRole, active, rosterStatus, withinAgeLimit, functions, licences, certifications]
+      properties:
+        id:
+          type: string
+          format: uuid
+        fullName:
+          type: string
+        accessRole:
+          $ref: "#/components/schemas/AccessRole"
+        active:
+          type: boolean
+        rank:
+          $ref: "#/components/schemas/Rank"
+        rosterStatus:
+          $ref: "#/components/schemas/RosterStatus"
+        withinAgeLimit:
+          type: boolean
+        contact:
+          type: string
+          description: Only in answers to the admin and to the member themself; absent otherwise.
+        functions:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceFunction"
+        licences:
+          type: array
+          items:
+            $ref: "#/components/schemas/Licence"
+        certifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/Certification"
+    ValidationErrorResponse:
+      allOf:
+        - $ref: "#/components/schemas/ErrorResponse"
+        - type: object
+          required: [errors]
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                required: [field, code]
+                properties:
+                  field:
+                    type: string
+                    example: certifications[0].expiresOn
+                  code:
+                    type: string
+                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence]
     ErrorResponse:
       type: object
       description: Spring Boot's default error body
