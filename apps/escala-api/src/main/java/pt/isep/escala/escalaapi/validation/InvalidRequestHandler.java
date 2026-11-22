@@ -1,4 +1,4 @@
-package pt.isep.escala.escalaapi.member;
+package pt.isep.escala.escalaapi.validation;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Answers an invalid member request with Spring Boot's error body plus {@code errors: [{field, code}]}, never the
- * rejected values (SCRUM-77, documented in openapi.yaml as ValidationErrorResponse). Nothing is logged here.
+ * Answers an invalid request (members, unavailability) with Spring Boot's error body plus {@code errors: [{field, code}]}, never the
+ * rejected values (SCRUM-77, SCRUM-64; documented in openapi.yaml as ValidationErrorResponse). Nothing is logged here.
  */
-@RestControllerAdvice(assignableTypes = MemberController.class)
+@RestControllerAdvice
 class InvalidRequestHandler {
 
 	@ExceptionHandler(InvalidRequestException.class)

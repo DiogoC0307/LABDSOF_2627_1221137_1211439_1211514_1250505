@@ -2,6 +2,7 @@
   @if (auth.session(); as session) {
     <nav class="menu" aria-label="Menu">
       <a routerLink="/">Schedule</a>
+      <a routerLink="/unavailability">When I can't</a>
       @if (seesMembers()) {
         <a routerLink="/members">Members</a>
       }
