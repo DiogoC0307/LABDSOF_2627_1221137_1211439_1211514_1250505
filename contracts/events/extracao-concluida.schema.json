@@ -25,7 +25,7 @@
     "requestEventId": { "type": "string", "format": "uuid" },
     "unavailabilityRequestId": { "type": "string", "format": "uuid" },
     "periods": {
-      "description": "Zero or more proposed periods. Empty: nothing usable was found (vague text, a message about when the member CAN serve or about someone else, prompt injection, dates in the past or more than 6 months ahead, AI off or failed), and escala-api shows the form.",
+      "description": "Zero or more proposed periods. Empty: nothing usable was found (vague text, a message about when the member CAN serve or about someone else, prompt injection, AI off or failed), and escala-api shows the form. If any proposed period has already ended or starts more than 6 months after the reference date, the whole proposal is rejected and periods is empty; periods are never dropped one by one (06; as RuleBasedExtractor does, SCRUM-99).",
       "type": "array",
       "items": { "$ref": "#/$defs/period" }
     },
