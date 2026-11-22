@@ -165,9 +165,14 @@ Consistency is strong inside each database and eventual between services (visibl
   - Functions are the slot roles (`CREW_CHIEF`, `DRIVER`, `CREW_MEMBER`). There is one certification per type and one licence per class: a renewal replaces the dates, with no history. A driver needs a licence; a certification cannot expire before it was issued.
   - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); SCRUM-88 aligns the other errors with it. Tests: TC-SCRUM-77-01, 02 and 05.
   - No qualification rule (RN01, RN02) runs in `escala-api`: the eligibility rules belong to the worker (ADR 0007, SCRUM-65 and SCRUM-79).
+- Unavailability by form (SCRUM-64): `GET` and `POST /api/v1/unavailabilities`, `GET` and `DELETE /api/v1/unavailabilities/{id}`.
+  - Every role declares its own periods; the member comes from the token, never from the body (T-03). A period of another member answers `404`, not `403`, and nothing changes.
+  - Dates and times only, never a reason (09). `startsAt` and `endsAt` are ISO 8601 with an offset, stored in UTC (ADR 0012); the end is exclusive. In the PWA, a day without a time runs from 00:00 to 00:00 of the next day in Europe/Lisbon, and periods are shown in Lisbon time.
+  - `201` with `Location` in under 500 ms (RNF02): one insert, no event. A period that has already ended (`in_the_past`) or starts more than 6 months ahead (`too_far_ahead`, as on 06) is refused; overlapping periods are kept; a change is `DELETE` and `POST`, there is no `PUT`.
+  - A daily job (`UnavailabilityRetention`, 03:30 UTC) deletes the periods that ended more than 30 days ago (09, "Retention and deletion"). Tests: TC-SCRUM-64-01 to 04.
 - Header: `X-Trace-Id` (RF37)
 
-Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /unavailabilities` (202) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
+Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /api/v1/unavailability-messages` (free text, 202, SCRUM-75) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
 
 ## Deployment view
 
