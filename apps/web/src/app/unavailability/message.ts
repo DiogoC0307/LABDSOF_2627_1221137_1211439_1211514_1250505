@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, inject, output, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
 
 /** A period in the ExtracaoConcluida v2 format: dates inclusive, optional weekdays and Lisbon times (06). */
 interface ProposedPeriod {
@@ -74,6 +75,9 @@ export class UnavailabilityMessage implements OnDestroy {
   protected readonly periods = signal<EditablePeriod[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
   protected readonly sendError = signal<string | null>(null);
+  /** True while the text, or the confirmation, is in flight: its button is disabled (SCRUM-158). */
+  protected readonly sending = signal(false);
+  protected readonly confirming = signal(false);
 
   protected text = '';
 
@@ -85,21 +89,28 @@ export class UnavailabilityMessage implements OnDestroy {
   }
 
   protected send(): void {
+    if (this.sending()) {
+      return;
+    }
     if (this.text.trim() === '') {
       this.sendError.set(ERRORS['required']);
       return;
     }
     this.sendError.set(null);
     this.errors.set([]);
-    this.http.post<MessageView>(MESSAGES, { text: this.text }).subscribe({
-      next: (message) => {
-        this.text = '';
-        this.messageId = message.id;
-        this.state.set('reading');
-        this.poll(message.id, 0);
-      },
-      error: (error: unknown) => this.sendError.set(this.sendProblem(error)),
-    });
+    this.sending.set(true);
+    this.http
+      .post<MessageView>(MESSAGES, { text: this.text })
+      .pipe(finalize(() => this.sending.set(false)))
+      .subscribe({
+        next: (message) => {
+          this.text = '';
+          this.messageId = message.id;
+          this.state.set('reading');
+          this.poll(message.id, 0);
+        },
+        error: (error: unknown) => this.sendError.set(this.sendProblem(error)),
+      });
   }
 
   protected hasDay(period: EditablePeriod, day: string): boolean {
@@ -117,19 +128,26 @@ export class UnavailabilityMessage implements OnDestroy {
   }
 
   protected confirm(): void {
+    if (this.confirming()) {
+      return;
+    }
     const local = this.localErrors();
     this.errors.set(local);
     if (local.length > 0 || this.messageId === null) {
       return;
     }
     const periods = this.periods().map(toProposed);
-    this.http.post(`${MESSAGES}/${this.messageId}/confirm`, { periods }).subscribe({
-      next: () => {
-        this.reset();
-        this.confirmed.emit();
-      },
-      error: (error: unknown) => this.errors.set(this.apiErrors(error)),
-    });
+    this.confirming.set(true);
+    this.http
+      .post(`${MESSAGES}/${this.messageId}/confirm`, { periods })
+      .pipe(finalize(() => this.confirming.set(false)))
+      .subscribe({
+        next: () => {
+          this.reset();
+          this.confirmed.emit();
+        },
+        error: (error: unknown) => this.errors.set(this.apiErrors(error)),
+      });
   }
 
   protected discard(): void {

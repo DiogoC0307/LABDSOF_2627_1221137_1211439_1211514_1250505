@@ -5,7 +5,7 @@
       When can't you serve?
       <textarea name="text" maxlength="500" rows="2" placeholder="não posso sábado de manhã" [(ngModel)]="text"></textarea>
     </label>
-    <button type="submit" class="send">Send</button>
+    <button type="submit" class="send" [disabled]="sending()">Send</button>
   </form>
 
   @if (sendError()) {
@@ -68,7 +68,7 @@
         </ul>
       }
 
-      <button type="button" class="confirm" (click)="confirm()">Confirm</button>
+      <button type="button" class="confirm" [disabled]="confirming()" (click)="confirm()">Confirm</button>
       <button type="button" class="secondary discard" (click)="discard()">Discard</button>
     </div>
   }
