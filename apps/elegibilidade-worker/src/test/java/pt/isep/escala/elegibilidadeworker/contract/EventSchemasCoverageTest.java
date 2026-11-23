@@ -16,8 +16,8 @@ class EventSchemasCoverageTest {
 	static final Map<String, String> WORKER = Map.of(
 			"avaliacao-pedida.schema.json", "consumed: TC-SCRUM-96-11",
 			"avaliacao-concluida.schema.json", "produced: TC-SCRUM-96-10",
-			"extracao-pedida.schema.json", "not in main yet: consumed with SCRUM-75 (#77)",
-			"extracao-concluida.schema.json", "not in main yet: produced with SCRUM-75 (#77)",
+			"extracao-pedida.schema.json", "consumed: TC-SCRUM-96-15",
+			"extracao-concluida.schema.json", "produced: TC-SCRUM-96-14",
 			"risco-atualizado.schema.json", "not built yet");
 
 	@Test
