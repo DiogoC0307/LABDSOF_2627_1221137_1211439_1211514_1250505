@@ -39,3 +39,7 @@ We will accept a mocked bearer token that carries `memberId` and `role` (`MEMBER
 - Other ADRs or pages: **09 · Security and Privacy Assessment** (access-control matrix, T-01, T-12)
 - Date evidence: the roles member, supervisor and admin were fixed when the Sprint 2 stories were written on 2026-10-27 (SCRUM-63); the mock itself was first proposed on 2026-10-02 in the 08 index.
 - Drafted by Pedro Costa (branch `docs/SCRUM-39-technical`, 2026-10-26); revised for SCRUM-40 with the current roles.
+
+## Note (2026-11-22, SCRUM-88)
+
+The decision is unchanged. The health paths it names as `/health` and `/health/ready` are Spring Boot Actuator's `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness`; all three stay unauthenticated (SCRUM-63), and the Kubernetes probes use the last two.
