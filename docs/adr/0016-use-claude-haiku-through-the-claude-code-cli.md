@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | Date | 2026-10-27 |
-| Status | Proposed |
+| Status | Accepted |
 | Deciders | Diogo Pereira, Diogo Sousa, Pedro Costa, Diogo Costa |
 
 ## Context
@@ -20,19 +20,19 @@ Escala is an academic project. It is used only for tests and for demonstrations 
 We will call Claude Haiku from `elegibilidade-worker` by running the Claude Code CLI in non-interactive mode, authenticated with a team member's Claude subscription.
 
 - **How the worker calls it:** the worker starts `claude -p --model haiku --output-format json --json-schema <schema>`. The free text and the reference date go in the prompt. The JSON schema forces the answer into the period list defined on 06: `startDate` and `endDate`, and optionally `weekdays`, `startTime` and `endTime`. An empty list means nothing usable was found.
-- **Where it runs:** inside the worker's container. The image includes Node and the CLI [TODO: CLI version]. The image gets bigger, so the worker's memory limit (today 640Mi in dev and qa, 768Mi in prod) must be checked again with the CLI running.
+- **Where it runs:** inside the worker's container. The image includes Claude Code 2.1.323 (the npm dist-tag `stable` on 2026-11-22), fixed in the `Dockerfile`; the build fails if the CLI does not start. The CLI is a native binary, so the final image has **no Node**: Node 24.22.3 is used only in a build stage, to install the CLI with npm, and one file is copied from there. The image is about 362 MB larger (layers 442 MB to 804 MB; compressed 194 MB to 363 MB), all of it the CLI. The same image goes to every environment, so prod carries it too, but with AI off the CLI never starts. The worker's memory limit (today 640Mi in dev and qa, 768Mi in prod) must be checked again with the CLI running (SCRUM-38 measures it).
 - **What it can access:** each call runs in an empty working directory, with no tools allowed, no MCP servers and our own system prompt, so free text cannot make the model read files or run commands.
 - **Credentials:** a long-lived OAuth token of Diogo Pereira's or Diogo Sousa's Claude subscription, created with `claude setup-token` (valid for one year). It is sealed as the Secret `claude-code-auth` in the worker's folder (`infra/k8s/<env>/elegibilidade-worker/`) and read with `secretKeyRef` into the environment variable `CLAUDE_CODE_OAUTH_TOKEN`; never in the image or in the repository in clear (RNF07). `ANTHROPIC_API_KEY` is never set in the worker, because it takes precedence over the token. Work item: SCRUM-90.
 - **Where AI is on:** dev and qa. AI stays off in prod (the feature flag of ADR 0011).
 - **Timeout:** 10 s. When the CLI does not answer in time, or returns no valid structured output, the worker returns "no proposal" and the member uses the form (RF35, ADR 0011).
 - **Rate limit:** at most 10 requests per member per hour, configurable (09, T-11).
-- **Replaceable client:** the call sits behind an interface (`LlmClient`). `ClaudeCliClient` is the one in use. `AnthropicApiClient` (Anthropic Messages API with an API key) is written but not used, so moving to the API is a configuration change.
+- **Replaceable client:** the call sits behind the extractor interface, `UnavailabilityExtractor` (the same one the rule-based baseline of SCRUM-99 implements, so both are scored by the same evaluator). `ClaudeCliExtractor` is the one in use. `AnthropicApiExtractor` (Anthropic Messages API with an API key) is written later, when it is needed, so moving to the API is a configuration change.
 
 ## Alternatives considered
 
 | Alternative | Why rejected |
 |---|---|
-| Anthropic Messages API with an API key | The right option for a product used by the public: faster, no limit on parallel use, and a clear data policy for commercial use. For a demonstration with one user at a time it adds a cost and a billing account the team does not need. It stays ready as `AnthropicApiClient`. |
+| Anthropic Messages API with an API key | The right option for a product used by the public: faster, no limit on parallel use, and a clear data policy for commercial use. For a demonstration with one user at a time it adds a cost and a billing account the team does not need. It is the next implementation, `AnthropicApiExtractor`. |
 | Local open model (e.g. Ollama on the VM) | The VM cannot run a model large enough to read Portuguese dates well, and the team has no GPU; a smaller model is unlikely to reach dates right ≥ 95 %. It would also add a heavy container to run and monitor. |
 | Mount the CLI's stored login from the VM into the worker (Secret volume or `hostPath`) | The stored login is a short-lived token that the CLI rewrites when it refreshes it. A Secret volume is read-only, so the refresh fails; a `hostPath` mount would work around that, but it ties the pod to the VM's disk and bypasses the Sealed Secrets handling of every other secret. |
 | Another hosted provider (e.g. OpenAI, Google) | The team already works with Claude and has subscriptions; one provider keeps the AI evaluation and the AI usage declaration simple. |
@@ -51,12 +51,22 @@ We will call Claude Haiku from `elegibilidade-worker` by running the Claude Code
   - **Data leaves Escala.** The free text goes to Anthropic and may contain sensitive reasons such as health. The UI says so next to the text box and offers the form; only the text and the reference date are sent; Escala deletes the free text after confirmation (RNF09); demonstrations use synthetic text only; the account owner turns off the use of chats to improve the models [TODO: confirm].
   - **The token is a secret.** Anyone with access to the worker container or to the Secret `claude-code-auth` can use that member's Claude account until the token expires or is revoked.
   - **The token expires after one year.** It must be created again with `claude setup-token` and resealed before then.
-  - **A bigger worker image.** Node and the CLI add to the image and to the memory the worker needs.
+  - **A bigger worker image.** The CLI adds about 362 MB to the image (no Node in the final image) and to the memory the worker needs while a call runs.
 - **Trade-offs:** we accept a slower, single-user setup valid only for demonstration, in exchange for the AI capability working end to end at no cost, with the move to an API key ready as a configuration change.
 
 ## Assignment requirement served
 
 §5.6.2 and §5.6.3 (the AI capability, its human review and the switch that turns AI off); §12, since the `evaluation` profile runs with AI off (ADR 0011).
+
+## Result of the measurement (SCRUM-38)
+
+Accepted on 2026-11-22 by the PO, with the results of SCRUM-38 in [`docs/ai/haiku-results-2026-11-22.md`](../ai/haiku-results-2026-11-22.md): Claude Haiku (the CLI reported `claude-haiku-5-5`) through the Claude Code CLI 2.1.323, prompt v0, 3 runs on the 60-case evaluation dataset, run 1 as the headline.
+
+- **Two targets of 06 are not met.** On the headline run, for the normal cases, periods exactly right are **82.9% against a target of 85%**, and dates right are **82.9% against a target of 95%**. On dates right the model only ties the rule-based baseline (82.9%, SCRUM-99). Runs 2 and 3 reached 91.4% on both, which is still below the 95% for dates right.
+- **The other targets are met** on the headline run: right number of periods 96.7% (≥ 95%), adverse cases handled 100%, p95 latency 3.12 s (< 4 s). No call gave invalid structured output, timed out or failed; none took longer than 10 s; the CLI estimated about 0.0002 USD per call.
+- **The targets do not change.** They stay as fixed on 2026-10-25 on 06, and these results are reported against them as they are.
+- **Why Accepted:** this ADR decides how the model is reached: the CLI, Haiku, the 10 s timeout, behind the flag of ADR 0011, with AI on in dev and QA only. The risk it named, latency, did not happen. The accuracy gap comes from the prompt, and every proposal is confirmed or corrected by the member in editable fields before it counts.
+- **Follow-up: SCRUM-157.** Most failures are one convention: a night on one day ("quinta à noite") comes back with `endDate` on the next day, where the convention keeps it on that day with the window 20:00 to 08:00. Prompt v1 states that convention. It is measured as v1 on new cases, with v0 and v1 side by side, so the prompt is not tuned to the 60 cases it is judged on.
 
 ## Related
 
@@ -64,5 +74,5 @@ We will call Claude Haiku from `elegibilidade-worker` by running the Claude Code
 - Requirements: RF31–RF33, RF35, RNF07, RNF09
 - Supersedes: —
 - Other ADRs or pages: 0007, 0011, 0015; **06 · Responsible AI Opportunity Assessment**; **09 · Security and Privacy Assessment**; **AI Usage and Third-Party Attribution**
-- Date evidence: decided by the PO on 2026-10-27 after a draft of 2026-10-26; stays Proposed until SCRUM-38 measures it. Credentials changed on 2026-11-07 (Diogo Costa): a `setup-token` in a Sealed Secret instead of the CLI login mounted from the VM.
+- Date evidence: decided by the PO on 2026-10-27 after a draft of 2026-10-26; stays Proposed until SCRUM-38 measures it. Credentials changed on 2026-11-07 (Diogo Costa): a `setup-token` in a Sealed Secret instead of the CLI login mounted from the VM. Updated on 2026-11-22 (SCRUM-90): the CLI version and the image size are filled in, and Node is left in the build stage only (SCRUM-90 decision of 2026-11-22: the CLI is a native binary), and the client is named `ClaudeCliExtractor` behind `UnavailabilityExtractor` instead of `LlmClient` (the page 06 already said "one extractor interface with two implementations"). Still Proposed.
 - Source: Claude Code documentation, "Run Claude Code programmatically" (`-p`, `--bare`, `--output-format json`, `--json-schema`), https://code.claude.com/docs/en/headless

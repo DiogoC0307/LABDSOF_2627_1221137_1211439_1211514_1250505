@@ -46,7 +46,7 @@ class BaselineEvaluationTest {
 		List<EvaluationCase> cases = EvaluationCase.readAll(new ByteArrayInputStream(bytes), MAPPER);
 
 		EvaluationReport report = new EvaluationScorer(new RuleBasedExtractor(),
-				System.getProperty("ai-eval.parser-version", "v0")).score(cases)
+				System.getProperty("ai-eval.parser-version", "rule-based parser v0")).score(cases)
 				.withDataset(System.getProperty("ai-eval.dataset-commit"), sha256WithLfLineEndings(bytes));
 
 		Path out = Path.of("target", "ai-eval");
