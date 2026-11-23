@@ -56,16 +56,18 @@ paths:
         "200":
           description: Own roster
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /actuator/health:
     get:
       tags: [health]
       summary: Overall health, including the database and the broker
       description: >
         Spring Boot Actuator, the only endpoint exposed (management.endpoints.web.exposure.include=health,
-        details hidden). Answers 503 with status DOWN when a dependency is down: checked locally with
-        RabbitMQ stopped. With the database stopped the request did not answer within 10 seconds.
-        The Kubernetes probes and the Docker Compose healthchecks use this path.
+        details hidden). Answers 503 with status DOWN when the database, RabbitMQ or a listener is down.
+        The connection timeouts are 3 s, so it answers within seconds (SCRUM-88). No probe or healthcheck
+        uses this path: the Kubernetes probes use the two groups below, and the Docker Compose healthcheck
+        of escala-api uses readiness. It is where a broker or listener failure shows, since readiness does
+        not include them.
       operationId: getHealth
       security: []
       parameters:
@@ -111,7 +113,8 @@ paths:
       tags: [health]
       summary: Liveness
       description: >
-        The application state only. It stayed 200 with RabbitMQ and the database stopped (checked locally).
+        The application state only (livenessState): it stays 200 with the database, RabbitMQ or a listener
+        down, so a dependency that is down never restarts the pod. The Kubernetes liveness probe (SCRUM-88).
       operationId: getHealthLiveness
       security: []
       parameters:
@@ -144,9 +147,11 @@ paths:
       tags: [health]
       summary: Readiness
       description: >
-        The application state only; no database or broker indicator is configured in it. It stayed 200
-        with RabbitMQ and the database stopped (checked locally), so it does not tell whether the
-        dependencies are reachable: use /actuator/health for that.
+        readinessState and the database only: 503 within a few seconds when the database is down, so the
+        pod leaves the Service. RabbitMQ and the listener containers are not part of it: with the broker
+        down or a listener stopped the API keeps serving (events wait in the outbox), readiness stays 200
+        and /actuator/health answers 503. The Kubernetes readiness probe (SCRUM-88). The
+        elegibilidade-worker's readiness, which has no API, also includes RabbitMQ and the listeners.
       operationId: getHealthReadiness
       security: []
       parameters:
@@ -221,8 +226,7 @@ paths:
           headers:
             Location:
               description: >
-                /api/v1/piquetes/{id} of the new piquete. There is no endpoint for that path yet:
-                a GET on it answers 404.
+                /api/v1/piquetes/{id} of the new piquete; GET /api/v1/piquetes/{id} answers it (SCRUM-88).
               schema:
                 type: string
                 example: /api/v1/piquetes/9f6456d9-0df5-46db-9adc-6c412207a4df
@@ -233,16 +237,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/PiqueteResponse"
         "400":
-          description: >
-            dutyDate missing or null (empty body), or the body is absent, not valid JSON or dutyDate is not
-            a date (Spring Boot error body)
-          headers:
-            X-Trace-Id:
-              $ref: "#/components/headers/TraceId"
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -252,6 +247,40 @@ paths:
           headers:
             X-Trace-Id:
               $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/piquetes/{id}:
+    get:
+      tags: [piquetes]
+      summary: One piquete, the Location of POST /api/v1/piquetes (SCRUM-88)
+      description: Any signed-in role.
+      operationId: getPiquete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The piquete with its slots
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PiqueteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: No piquete with that ID (the JSON error body)
           content:
             application/json:
               schema:
@@ -307,9 +336,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/MockSignInResponse"
         "400":
-          description: memberId missing, or the body is not valid JSON or memberId is not a UUID
+          $ref: "#/components/responses/ValidationError"
         "401":
-          description: Unknown or inactive member. No body, no token.
+          description: Unknown or inactive member. The JSON error body, no token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/members:
     get:
       tags: [members]
@@ -496,9 +529,9 @@ paths:
         "200":
           description: Published
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /assignments:
     post:
       tags: [assignments]
@@ -508,9 +541,9 @@ paths:
         "202":
           description: Accepted, evaluation pending
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /slots/{id}/candidates:
     get:
       tags: [assignments]
@@ -527,9 +560,9 @@ paths:
         "200":
           description: Candidate list
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /assignments/{id}/confirm:
     post:
       tags: [assignments]
@@ -548,9 +581,9 @@ paths:
         "409":
           description: Confirmation blocked (pending, failed, ineligible, or outdated)
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /api/v1/unavailabilities:
     get:
       tags: [unavailabilities]
@@ -631,7 +664,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No period with that ID for the caller (no body)
+          description: No period with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [unavailabilities]
       summary: Remove one of the caller's periods
@@ -645,7 +682,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No period with that ID for the caller (no body)
+          description: No period with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/unavailability-messages:
     post:
       tags: [unavailabilities]
@@ -668,7 +709,7 @@ paths:
         "201":
           description: Created
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /swaps/{id}/accept:
     post:
       tags: [swaps]
@@ -687,7 +728,7 @@ paths:
         "409":
           description: Check failed or approval required
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /swaps/{id}/approve:
     post:
       tags: [swaps]
@@ -704,9 +745,9 @@ paths:
         "200":
           description: Approved
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /slots/{id}/presence:
     post:
       tags: [presence]
@@ -723,7 +764,7 @@ paths:
         "202":
           description: Recorded; cannot opens a cover request
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /cover-requests/{id}/accept:
     post:
       tags: [cover]
@@ -742,7 +783,7 @@ paths:
         "409":
           description: Slot already filled or check ineligible
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /risk/today:
     get:
       tags: [risk]
@@ -752,7 +793,7 @@ paths:
         "200":
           description: Risk read model
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     bearerAuth:
@@ -784,9 +825,10 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     ValidationError:
       description: >
-        Invalid fields, each with a code and never the value (SCRUM-77, SCRUM-64). A body that is not valid JSON, or a
-        value outside an enum, answers 400 with Spring Boot's error body and no errors list; SCRUM-88 aligns
-        the other errors with this format.
+        Every 400 of the API has this body (SCRUM-88): Spring Boot's error fields and errors, each with the
+        field and a code, never the value. A value Jackson cannot read (a date, an enum value) gives the field
+        and invalid; no body or a body that is not JSON gives body and not_readable; a path parameter of the
+        wrong type gives the parameter and invalid. Always JSON, whatever the Accept header.
       headers:
         X-Trace-Id:
           $ref: "#/components/headers/TraceId"
@@ -1071,7 +1113,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead]
+                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1106,7 +1148,9 @@ components:
           enum: [FORM, FREE_TEXT]
     ErrorResponse:
       type: object
-      description: Spring Boot's default error body
+      description: >
+        Spring Boot's error body, for every error of the API (400 adds errors). Always JSON, whatever the
+        Accept header: there is no HTML error page (SCRUM-88).
       properties:
         timestamp:
           type: string

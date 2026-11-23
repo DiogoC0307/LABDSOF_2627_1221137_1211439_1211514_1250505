@@ -1,0 +1,87 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (dev | qa | prod)'
+        type: choice
+        required: true
+        default: prod
+        options:
+          - prod
+          - qa
+          - dev
+      tag:
+        description: 'Image tag to redeploy (e.g. 0.3.0, 0.3.0-rc.3, or commit SHA)'
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  verify-and-rollback:
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    outputs:
+      gh_env: ${{ steps.env.outputs.gh_env }}
+      overlay: ${{ steps.env.outputs.overlay }}
+    steps:
+      - name: Map environment to Kustomize overlay
+        id: env
+        env:
+          ENV_INPUT: ${{ inputs.environment }}
+        run: |
+          case "$ENV_INPUT" in
+            dev)
+              echo "gh_env=dev" >> "$GITHUB_OUTPUT"
+              echo "overlay=dev" >> "$GITHUB_OUTPUT"
+              ;;
+            qa)
+              echo "gh_env=qa" >> "$GITHUB_OUTPUT"
+              echo "overlay=qa" >> "$GITHUB_OUTPUT"
+              ;;
+            prod)
+              echo "gh_env=production" >> "$GITHUB_OUTPUT"
+              echo "overlay=prod" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::Unsupported environment '$ENV_INPUT'"
+              exit 1
+              ;;
+          esac
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify target image tag exists in GHCR
+        env:
+          TAG: ${{ inputs.tag }}
+          OVERLAY: ${{ steps.env.outputs.overlay }}
+        run: |
+          set -euo pipefail
+          OWNER=${GITHUB_REPOSITORY_OWNER,,}
+          for i in escala-api elegibilidade-worker escala-web; do
+            IMG="ghcr.io/$OWNER/$i:$TAG"
+            docker buildx imagetools inspect "$IMG" >/dev/null 2>&1 || {
+              echo "::error::Image $IMG not found in GHCR. Check available tags (e.g. git log deploy/$OVERLAY)."
+              exit 1
+            }
+          done
+
+  publish:
+    needs: verify-and-rollback
+    permissions:
+      contents: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      environment: ${{ needs.verify-and-rollback.outputs.gh_env }}
+      overlay: ${{ needs.verify-and-rollback.outputs.overlay }}
+      tag: ${{ inputs.tag }}
