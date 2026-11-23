@@ -51,7 +51,7 @@ docker compose up --build
 The first build takes several minutes. It works when:
 
 - `docker compose ps` shows every service as healthy
-- `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`; on `escala-api`, `/actuator/health/liveness` and `/actuator/health/readiness` also answer `{"status":"UP"}`. RF36 names `/health/ready`; the services expose Spring Boot Actuator's `/actuator/health` [TODO: align the endpoint name with RF36, Diogo Costa]
+- `GET http://localhost:8080/actuator/health` and `GET http://localhost:8081/actuator/health` answer `{"status":"UP", …}` with the groups `liveness` and `readiness`; `/actuator/health/liveness` and `/actuator/health/readiness` also answer `{"status":"UP"}` on both services (RF36). Readiness answers `503` when the database is down, and on `elegibilidade-worker` also when RabbitMQ or a listener is down; on `escala-api` those two make only `/actuator/health` answer `503`. Liveness never does (SCRUM-88).
 - `GET http://localhost:8000/api/actuator/health` answers the same through the web nginx; it is the same path as on Kubernetes (`https://escala-<env>.duckdns.org/api/actuator/health`)
 - the walking skeleton works. Sign in as the synthetic supervisor (mocked sign-in, ADR 0006), create a piquete and look at its slot a few seconds later:
 
@@ -252,7 +252,7 @@ Not rehearsed: the SQL and the order come from the code of both versions, not fr
   - In `escala-api`, an unreadable request body (`400`) or a database failure (`500`, with the constraint name) is logged the same way; the response body is unchanged.
 - **Do not turn on `DEBUG` for a library with an environment variable** (for example `LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_AMQP=DEBUG` in a ConfigMap). `LibraryLogFilter` drops those lines anyway, because at `DEBUG` libraries write request and message bodies and SQL values, which can hold free text or a contact (T-07). If a library's debug output is really needed, change `LibraryLogFilter` in a pull request, use synthetic data only, and revert it in the same sprint.
 - **Not covered:** an exception that no handler catches is still logged by the server with its message. The known cases (unreadable body, database failure, listener failure) are handled; new handlers follow the same rule.
-- **Health:** `/actuator/health` on both services, with the groups `liveness` and `readiness`; Kubernetes probes use it.
+- **Health:** `/actuator/health` on both services, with the groups `liveness` (the process) and `readiness`. On `elegibilidade-worker`, readiness is the process, the database, RabbitMQ and the listeners. On `escala-api` it is the process and the database only: the outbox lets the API keep serving with the broker down, so a broker failure does not take every API pod out of the Service; RabbitMQ and the listeners still make `/actuator/health` answer `503`, which is where that failure shows. The Kubernetes liveness probe uses `/actuator/health/liveness` and the readiness probe `/actuator/health/readiness` (SCRUM-88): a dependency in readiness that is down takes the pod out of the Service without restarting it. In Docker Compose, the `escala-api` healthcheck uses `/actuator/health/readiness` as well, so the API stays healthy when only RabbitMQ is down; the `elegibilidade-worker` healthcheck only opens port 8081. `web` waits for `escala-api` to start (`service_started`), not to be healthy.
 - **Metrics:** none are exposed yet: only the `health` endpoint is exposed (`management.endpoints.web.exposure.include=health`) [TODO: Prometheus metrics (RF38), Diogo Costa].
 - **Error reporting:** [TODO: how errors reach the team, e.g. an error-rate panel and alerts, Diogo Costa]
 - **SLI 1:** eligibility evaluation p95 latency; target < 5 s (RNF01). It is not measured yet.
@@ -311,7 +311,7 @@ In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue with
 
 - The worker's database down: the worker cannot write the `FAILED` answer, so the slot stays `PENDING` (not `EVALUATION_FAILED`) until the DLQ is replayed.
 - In dev, qa and prod the broker has no persistent volume: a restart of its pod loses the messages in every queue, the DLQs included (SCRUM-155, with publisher confirms for the outbox).
-- A listener that stops does not make the readiness probe fail yet (SCRUM-88).
+- A listener that stops (SCRUM-88): on `elegibilidade-worker` readiness answers `503`, the pod leaves the Service, and `kubectl get pods` shows it not Ready. On `escala-api` the pod stays Ready and keeps serving; only `/actuator/health` answers `503`, so the stopped listener shows there and not in the pod status.
 - In Compose, before SCRUM-95 the broker's data folder was named after the container ID, so a recreated container started empty. The container now has `hostname: rabbitmq`; the old folders `rabbit@<container ID>` stay in the volume and can be deleted (see [Run locally](#run-locally)).
 
 ## Runbook — degraded modes

@@ -52,7 +52,7 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/mock-users").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
-						.requestMatchers(HttpMethod.GET, PIQUETES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.GET, PIQUETES, PIQUETES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
 						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
 						// only themself (checked in MemberController); the contact only for the admin and the member.
