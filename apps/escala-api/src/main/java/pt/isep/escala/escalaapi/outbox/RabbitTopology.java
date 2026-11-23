@@ -22,4 +22,15 @@ class RabbitTopology {
 	Declarables apiAvaliacaoConcluida() {
 		return EventQueues.queue("api.avaliacao-concluida", "avaliacao.concluida");
 	}
+
+	// SCRUM-75: free-text extraction. Both are already in infra/rabbitmq/definitions.json (TC-SCRUM-95-05).
+	@Bean
+	Declarables workerExtracaoPedida() {
+		return EventQueues.queue("worker.extracao-pedida", "extracao.pedida");
+	}
+
+	@Bean
+	Declarables apiExtracaoConcluida() {
+		return EventQueues.queue("api.extracao-concluida", "extracao.concluida");
+	}
 }
