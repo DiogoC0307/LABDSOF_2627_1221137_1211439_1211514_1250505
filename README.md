@@ -167,7 +167,11 @@ The workflows are in `.github/workflows`: `build-images.yml` (build and push), `
 3. **Release (prod).** On GitHub, Releases, Draft a new release: tag `v1.2.0`, target `release/1.2.0` (the last commit qa tested), Publish. The pipeline checks that the tag is on `release/1.2.0`, retags the exact images qa tested (nothing is rebuilt) and publishes `deploy/prod`. Approve the `production` environment if asked, then click **Sync** on `escala-prod` in Argo CD.
 4. **Finish.** Open a pull request `release/1.2.0` into `main` so the fixes made during qa are not lost, then delete the release branch.
 5. **Hotfix on prod.** Branch `release/1.2.1` from the tag `v1.2.0`, fix, let qa test it, publish `v1.2.1` and merge it back into `main`.
-6. **Rollback.** In Argo CD open `escala-prod`, History and rollback, and pick the previous revision. Old images stay in the registry. Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available; use Argo CD. A rollback was rehearsed on qa on 2026-11-01 and took a little over a minute; on qa, turn off auto-sync first (`escala-prod` has none). Details in [Rollback](docs/operations/deployment-and-operations.md#rollback).
+6. **Rollback (one command).** Run the `Rollback` workflow with the target environment and previous tag (check `git log -n 5 deploy/prod` for recent tags; omit a leading `v` for release tags such as `0.3.0`):
+   ```bash
+   gh workflow run rollback.yml -f environment=prod -f tag=0.3.0
+   ```
+   It verifies the images exist in GHCR and publishes that tag's rendered manifests to `deploy/prod` (for `qa` and `dev`, Argo CD auto-syncs; for `prod`, click **Sync** in Argo CD). Kubernetes keeps no old ReplicaSets (`revisionHistoryLimit: 0` on every Deployment), so `kubectl rollout undo` is not available. A rollback was rehearsed on qa on 2026-11-01 and took a little over a minute. Details in [Rollback](docs/operations/deployment-and-operations.md#rollback).
 
 ## Security, backups and observability
 
