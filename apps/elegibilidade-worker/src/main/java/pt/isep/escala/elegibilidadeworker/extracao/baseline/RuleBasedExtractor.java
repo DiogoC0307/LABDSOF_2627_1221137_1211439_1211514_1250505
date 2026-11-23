@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import pt.isep.escala.elegibilidadeworker.extracao.ExtractionResult;
+import pt.isep.escala.elegibilidadeworker.extracao.ProposalRules;
 import pt.isep.escala.elegibilidadeworker.extracao.UnavailabilityExtractor;
 import pt.isep.escala.elegibilidadeworker.extracao.UnavailabilityPeriod;
 
@@ -31,9 +32,6 @@ import pt.isep.escala.elegibilidadeworker.extracao.UnavailabilityPeriod;
  * with no date ("à noite não posso"), and reasons that are spread over two clauses.
  */
 public final class RuleBasedExtractor implements UnavailabilityExtractor {
-
-	/** 06: "Very long: above 500 characters, rejected and the form shown". */
-	static final int MAX_LENGTH = 500;
 
 	private static final Set<String> NEGATION = Set.of("nao", "n", "nunca", "nem");
 	private static final String POSSO = "posso";
@@ -70,7 +68,7 @@ public final class RuleBasedExtractor implements UnavailabilityExtractor {
 	@Override
 	public ExtractionResult extract(String text, LocalDate referenceDate) {
 		Objects.requireNonNull(referenceDate, "referenceDate");
-		if (text == null || text.isBlank() || text.length() > MAX_LENGTH) {
+		if (!ProposalRules.isUsableInput(text)) {
 			return ExtractionResult.empty();
 		}
 		List<String> allTokens = PortugueseDateLexicon.tokens(PortugueseDateLexicon.normalize(text));
@@ -86,10 +84,7 @@ public final class RuleBasedExtractor implements UnavailabilityExtractor {
 				}
 			}
 		}
-		LocalDate latest = referenceDate.plusMonths(6);
-		boolean outOfRange = periods.stream()
-				.anyMatch(p -> p.startDate().isBefore(referenceDate) || p.endDate().isAfter(latest));
-		if (outOfRange) {
+		if (!ProposalRules.withinWindow(periods, referenceDate)) {
 			return ExtractionResult.empty();
 		}
 		return new ExtractionResult(periods.stream().distinct().sorted(ORDER).toList());
