@@ -56,7 +56,7 @@ paths:
         "200":
           description: Own roster
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /actuator/health:
     get:
       tags: [health]
@@ -529,9 +529,9 @@ paths:
         "200":
           description: Published
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /assignments:
     post:
       tags: [assignments]
@@ -541,9 +541,9 @@ paths:
         "202":
           description: Accepted, evaluation pending
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /slots/{id}/candidates:
     get:
       tags: [assignments]
@@ -560,9 +560,9 @@ paths:
         "200":
           description: Candidate list
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /assignments/{id}/confirm:
     post:
       tags: [assignments]
@@ -581,9 +581,9 @@ paths:
         "409":
           description: Confirmation blocked (pending, failed, ineligible, or outdated)
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /api/v1/unavailabilities:
     get:
       tags: [unavailabilities]
@@ -664,7 +664,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No period with that ID for the caller (no body)
+          description: No period with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [unavailabilities]
       summary: Remove one of the caller's periods
@@ -678,7 +682,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No period with that ID for the caller (no body)
+          description: No period with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/unavailability-messages:
     post:
       tags: [unavailabilities]
@@ -701,7 +709,7 @@ paths:
         "201":
           description: Created
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /swaps/{id}/accept:
     post:
       tags: [swaps]
@@ -720,7 +728,7 @@ paths:
         "409":
           description: Check failed or approval required
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /swaps/{id}/approve:
     post:
       tags: [swaps]
@@ -737,9 +745,9 @@ paths:
         "200":
           description: Approved
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
         "403":
-          description: Role not allowed
+          $ref: "#/components/responses/Forbidden"
   /slots/{id}/presence:
     post:
       tags: [presence]
@@ -756,7 +764,7 @@ paths:
         "202":
           description: Recorded; cannot opens a cover request
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /cover-requests/{id}/accept:
     post:
       tags: [cover]
@@ -775,7 +783,7 @@ paths:
         "409":
           description: Slot already filled or check ineligible
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
   /risk/today:
     get:
       tags: [risk]
@@ -785,7 +793,7 @@ paths:
         "200":
           description: Risk read model
         "401":
-          description: Missing or invalid token
+          $ref: "#/components/responses/Unauthorized"
 components:
   securitySchemes:
     bearerAuth:
