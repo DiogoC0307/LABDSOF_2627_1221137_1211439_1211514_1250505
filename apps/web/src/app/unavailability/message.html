@@ -13,13 +13,13 @@
   }
   @switch (state()) {
     @case ('reading') {
-      <p role="status">Reading…</p>
+      <output>Reading…</output>
     }
     @case ('nothing') {
-      <p role="status">Nothing could be read automatically. Use the form above.</p>
+      <output>Nothing could be read automatically. Use the form above.</output>
     }
     @case ('slow') {
-      <p role="status">Still reading. Use the form above if you cannot wait.</p>
+      <output>Still reading. Use the form above if you cannot wait.</output>
     }
   }
 
@@ -48,7 +48,8 @@
               <input type="time" [attr.name]="'endTime-' + i" [(ngModel)]="period.endTime" />
             </label>
           </div>
-          <div class="weekdays" role="group" aria-label="Only on (every day if none)">
+          <fieldset class="weekdays">
+            <legend>Only on (every day if none)</legend>
             @for (day of weekdays; track day) {
               <label>
                 <input type="checkbox" [attr.name]="'weekday-' + i + '-' + day" [checked]="hasDay(period, day)"
@@ -56,7 +57,7 @@
                 {{ day }}
               </label>
             }
-          </div>
+          </fieldset>
         </fieldset>
       }
 

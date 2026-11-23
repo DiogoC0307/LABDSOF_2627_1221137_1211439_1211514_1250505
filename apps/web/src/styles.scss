@@ -76,6 +76,12 @@ h2 {
   font-weight: 600;
 }
 
+/* A live status message (SCRUM-75): <output> has the status role; shown as a paragraph. */
+output {
+  display: block;
+  margin: 0 0 1rem;
+}
+
 form {
   display: flex;
   flex-direction: column;
@@ -212,6 +218,21 @@ fieldset {
   border: 1px solid #ddd;
   border-radius: 0.25rem;
   margin: 0 0 1rem;
+}
+
+/* The weekdays of a proposed period (SCRUM-75): a fieldset for its legend, without the browser's fieldset box. */
+.weekdays {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-inline-size: 0;
+}
+
+/* Styled like the other labels: the same size, and the same gap before the fields. */
+.weekdays > legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
 }
 
 .secondary {
