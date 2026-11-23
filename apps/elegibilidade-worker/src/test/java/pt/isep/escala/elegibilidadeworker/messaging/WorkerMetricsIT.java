@@ -29,11 +29,9 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 /**
  * TC-SCRUM-97-01, 06, 08, 09 and 10 for the worker, against a real PostgreSQL and RabbitMQ. Spring Boot leaves metrics
- * export off in tests unless {@link AutoConfigureMetrics} is there. The endpoint is exposed by a test property here; in
- * the application it is one line of application.properties (after SCRUM-88).
+ * export off in tests unless {@link AutoConfigureMetrics} is there.
  */
-@SpringBootTest(properties = { "spring.rabbitmq.dynamic=true",
-		"management.endpoints.web.exposure.include=health,prometheus" })
+@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
 @AutoConfigureMockMvc
 @AutoConfigureMetrics
 @Testcontainers

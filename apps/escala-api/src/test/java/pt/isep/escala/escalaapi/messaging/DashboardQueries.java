@@ -22,6 +22,10 @@ final class DashboardQueries {
 
 	static final Path DASHBOARD = Path.of("../../infra/observability/dashboards/escala-operations.json");
 
+	/** The copy kustomize puts in the grafana-dashboards ConfigMap (it cannot read files outside its folder). */
+	static final Path KUBERNETES_COPY = Path.of(
+			"../../infra/k8s/observability/grafana/dashboards/escala-operations.json");
+
 	private static final Pattern SELECTOR = Pattern.compile("([a-zA-Z_:][a-zA-Z0-9_:]*)\\{([^}]*)}");
 	private static final Pattern APPLICATION = Pattern.compile("application(=~|=)\"([^\"]*)\"");
 

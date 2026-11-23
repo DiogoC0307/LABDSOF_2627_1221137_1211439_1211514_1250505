@@ -48,8 +48,10 @@ public class EvaluationMetrics {
 		}
 	}
 
+	/** An AvaliacaoPedida written to the outbox; counted after the transaction commits. */
 	public void requested(String purpose) {
-		requestedCounter(MetricTags.purposeValue(purpose)).increment();
+		Counter counter = requestedCounter(MetricTags.purposeValue(purpose));
+		afterCommit(counter::increment);
 	}
 
 	private Counter requestedCounter(String purpose) {

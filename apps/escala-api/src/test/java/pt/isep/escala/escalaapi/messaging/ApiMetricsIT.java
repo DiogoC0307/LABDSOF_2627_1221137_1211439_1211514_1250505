@@ -3,6 +3,8 @@ package pt.isep.escala.escalaapi.messaging;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
@@ -10,6 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.prometheusmetrics.PrometheusMeterRegistry;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -27,6 +30,7 @@ import org.springframework.boot.micrometer.metrics.test.autoconfigure.AutoConfig
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
@@ -37,8 +41,8 @@ import pt.isep.escala.escalaapi.auth.MockTokens;
 import tools.jackson.databind.JsonNode;
 
 /**
- * TC-SCRUM-97-04, 06, 07, 08 and 10 for escala-api, against a real PostgreSQL and RabbitMQ. The Prometheus output is read
- * from the registry: the endpoint itself is opened in SecurityConfig with SCRUM-88.
+ * TC-SCRUM-97-01, 03, 04, 06, 07, 08 and 10 for escala-api, against a real PostgreSQL and RabbitMQ. Spring Boot leaves
+ * metrics export off in tests unless {@link AutoConfigureMetrics} is there.
  */
 @SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
 @AutoConfigureMockMvc
@@ -127,6 +131,26 @@ class ApiMetricsIT {
 	}
 
 	@Test
+	@DisplayName("TC-SCRUM-97-01 escala-api exposes its metrics on /actuator/prometheus without a token, with the application tag")
+	void exposesPrometheus() throws Exception {
+		String scrape = mockMvc.perform(get("/actuator/prometheus")).andExpect(status().isOk()).andReturn().getResponse()
+				.getContentAsString(StandardCharsets.UTF_8);
+		assertThat(scrape).contains("escala_evaluations_requested_total", "escala_evaluation_latency_seconds_bucket",
+				"escala_outbox_pending", "escala_messages_dead_lettered_total", "application=\"escala-api\"");
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-97-03 a new piquete counts one AvaliacaoPedida requested, with purpose ASSIGNMENT")
+	void countsRequested() throws Exception {
+		double before = registry.get("escala.evaluations.requested").tag("purpose", "ASSIGNMENT").counter().count();
+		mockMvc.perform(post("/api/v1/piquetes").header("Authorization", MockTokens.supervisor())
+				.contentType(MediaType.APPLICATION_JSON).content("{\"dutyDate\":\"2026-12-04\"}"))
+				.andExpect(status().isCreated());
+		assertThat(registry.get("escala.evaluations.requested").tag("purpose", "ASSIGNMENT").counter().count())
+				.isEqualTo(before + 1);
+	}
+
+	@Test
 	@DisplayName("TC-SCRUM-97-06 a malformed AvaliacaoConcluida is counted as dead-lettered and shows in the DLQ gauge")
 	void countsDeadLetters() {
 		double before = registry.get("escala.messages.dead_lettered").tag("queue", MessagingTestSupport.QUEUE).counter()
@@ -165,6 +189,10 @@ class ApiMetricsIT {
 			assertThat(panel.path("targets")).as(title).isNotEmpty();
 		}
 		assertThat(dashboard.selectorsWithoutApplication()).isEmpty();
+		// the same JSON, whatever line endings the checkout gave each file
+		assertThat(Files.readString(DashboardQueries.KUBERNETES_COPY).replace("\r", ""))
+				.as("the copy in the grafana-dashboards ConfigMap of Kubernetes")
+				.isEqualTo(Files.readString(DashboardQueries.DASHBOARD).replace("\r", ""));
 		Set<String> byService = new TreeSet<>(dashboard.metricsOf("escala-api"));
 		byService.addAll(dashboard.metricsOf("elegibilidade-worker"));
 		assertThat(byService).isEqualTo(dashboard.allMetrics());

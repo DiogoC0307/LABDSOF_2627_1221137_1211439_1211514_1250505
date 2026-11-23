@@ -198,10 +198,10 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - The trace breaks at the outbox today: the relay publishes outside any active span, so Tempo shows separate traces; the application `traceId` in the payload still passes (SCRUM-93).
-- Metrics: checks, DLQ, IPMA age, extraction fallbacks, time-to-fill (RF38)
-- Dashboard: Grafana `http://localhost:3000` (RF39)
-- SLI 1: function-check p95 < 5 s (RNF01), from `AvaliacaoPedida` outbox to applied `AvaliacaoConcluida`
-- SLI 2: ≥ 95 % of checks without DLQ replay or exceptional assignment
+- Metrics (RF38, SCRUM-97): `/actuator/prometheus` on both services, scraped by Prometheus every 30 s and not forwarded by the web proxy. Checks requested and completed, the latency of SLI 1, outbox rows not published, DLQ depth and dead-lettered messages; tags only from closed lists (no IDs, no free text, T-07). IPMA age, extraction fallbacks and time-to-fill are not measured yet.
+- Dashboard: Grafana `http://localhost:3000` (RF39), *Escala - operations*, kept in Git in `infra/observability/dashboards/`
+- SLI 1: function-check p95 < 5 s (RNF01), from `AvaliacaoPedida` outbox to applied `AvaliacaoConcluida`: `escala_evaluation_latency_seconds`, measured in `escala-api` from the `created_at` of the request's outbox row
+- SLI 2: ≥ 95 % of checks without DLQ replay or exceptional assignment: dead-lettered messages of both services against `escala_evaluations_requested_total`; exceptional assignment has no metric yet
 
 ## Done when
 
