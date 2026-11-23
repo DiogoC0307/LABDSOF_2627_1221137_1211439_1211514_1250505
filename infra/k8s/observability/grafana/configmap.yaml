@@ -19,6 +19,13 @@ data:
             tags:
               - key: host.name
                 value: pod
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        jsonData:
+          timeInterval: 30s
       - name: Loki
         uid: loki
         type: loki

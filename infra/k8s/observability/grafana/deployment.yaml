@@ -33,8 +33,16 @@ spec:
           volumeMounts:
             - { name: data, mountPath: /var/lib/grafana }
             - { name: datasources, mountPath: /etc/grafana/provisioning/datasources }
+            - { name: dashboard-provider, mountPath: /etc/grafana/provisioning/dashboards }
+            - { name: dashboards, mountPath: /etc/grafana/dashboards }
       volumes:
         - name: data
           persistentVolumeClaim: { claimName: grafana-data }
         - name: datasources
           configMap: { name: grafana-datasources }
+        - name: dashboard-provider
+          configMap: { name: grafana-dashboard-provider }
+        # the dashboards themselves (SCRUM-97, the escala-operations JSON) come in their own ConfigMap; optional, so
+        # Grafana starts before it exists
+        - name: dashboards
+          configMap: { name: grafana-dashboards, optional: true }

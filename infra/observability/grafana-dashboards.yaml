@@ -1,0 +1,9 @@
+# Grafana loads the dashboards kept in Git (SCRUM-97) from infra/observability/dashboards, mounted read-only.
+apiVersion: 1
+providers:
+  - name: escala
+    folder: Escala
+    type: file
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/dashboards
