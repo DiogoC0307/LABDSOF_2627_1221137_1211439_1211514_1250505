@@ -21,7 +21,7 @@ final class AvaliacaoConcluidaJson {
 		root.put("traceId", traceId);
 		root.put("requestEventId", requestEventId.toString());
 		root.put("assignmentId", assignmentId.toString());
-		root.put("result", result);
+		root.put("outcome", result);
 		root.set("violatedRules", objectMapper.createArrayNode());
 		root.put("engineVersion", Evaluation.ENGINE_SEMPRE_ELEGIVEL);
 		return objectMapper.writeValueAsString(root);
