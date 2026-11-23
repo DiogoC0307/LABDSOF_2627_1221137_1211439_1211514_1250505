@@ -93,7 +93,8 @@ public final class Contracts {
 	/**
 	 * The violations of a real response against the spec: the status must be documented for the operation, and the
 	 * body must match the schema of its content type ({@code application/json} when none is given). An empty body is
-	 * only allowed for a response without content.
+	 * only allowed for a success without content (a 204); an error must have a body, and the spec must describe it
+	 * (every error of escala-api is a JSON ErrorResponse since SCRUM-88).
 	 */
 	public static List<String> responseErrors(String method, String pathTemplate, int status, String contentType,
 			String body) {
@@ -107,7 +108,34 @@ public final class Contracts {
 			return List.of(method + " " + pathTemplate + " answered " + status + ", which the spec does not document");
 		}
 		pointer = resolve(pointer + "/" + escape(key));
-		return contentErrors(pointer, method + " " + pathTemplate + " " + status, contentType, body);
+		String what = method + " " + pathTemplate + " " + status;
+		if (status >= 400 && !hasContent(pointer)) {
+			return List.of(what + " is an error the spec describes without a body");
+		}
+		if (status >= 400 && (body == null || body.isBlank())) {
+			return List.of(what + " is an error without a body");
+		}
+		return contentErrors(pointer, what, contentType, body);
+	}
+
+	/**
+	 * The error responses (4XX, 5XX) of an operation that the spec describes without a body, as
+	 * {@code "GET /api/v1/members/{id} 404"}.
+	 */
+	public static List<String> errorResponsesWithoutBody(String method, String pathTemplate) {
+		String pointer = "/paths/" + escape(pathTemplate) + "/" + method.toLowerCase(Locale.ROOT) + "/responses";
+		List<String> missing = new ArrayList<>();
+		for (String key : openApi().at(pointer).propertyNames()) {
+			if ((key.startsWith("4") || key.startsWith("5")) && !hasContent(resolve(pointer + "/" + escape(key)))) {
+				missing.add(method + " " + pathTemplate + " " + key);
+			}
+		}
+		return missing;
+	}
+
+	private static boolean hasContent(String pointer) {
+		JsonNode content = at(pointer).path("content");
+		return !content.isMissingNode() && !content.isEmpty();
 	}
 
 	/** The violations of a request body against the request body schema of the operation. */

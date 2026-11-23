@@ -9,6 +9,7 @@ import java.net.http.HttpResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -34,9 +35,10 @@ import pt.isep.escala.escalaapi.auth.MockTokens;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * TC-SCRUM-96-01 to 06: the real HTTP responses of escala-api, error bodies included, against
+ * TC-SCRUM-96-01 to 06 and 16: the real HTTP responses of escala-api, error bodies included, against
  * {@code contracts/openapi.yaml}. Every call checks that the status is documented for the operation and that the body
- * matches its schema; the request bodies sent are checked against the spec too, except the invalid ones sent on purpose.
+ * matches its schema; an error must have a body, which the spec describes (ErrorResponse, SCRUM-88). The request bodies
+ * sent are checked against the spec too, except the invalid ones sent on purpose.
  * A real server (random port), not MockMvc, so the error bodies are the ones Spring Boot really writes.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.rabbitmq.dynamic=true")
@@ -65,15 +67,6 @@ class ApiContractIT {
 	static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:4.0-management-alpine");
 
 	private static final HttpClient HTTP = HttpClient.newHttpClient();
-
-	/**
-	 * Drift between main and the spec that this test found and that another pull request fixes: in main these errors
-	 * come without a body, because the error dispatch does not reach the Spring Boot error page; the spec describes an
-	 * ErrorResponse. SCRUM-88 (#78) adds the JSON error controller. The test checks that the drift is still exactly
-	 * this, and fails once it is gone, so the entry is removed when #78 is merged.
-	 */
-	private static final Set<String> KNOWN_DRIFT_UNTIL_SCRUM_88 = Set.of("POST /api/v1/piquetes 400",
-			"GET /api/v1/members/{id} 404");
 
 	@LocalServerPort
 	int port;
@@ -105,15 +98,8 @@ class ApiContractIT {
 		String contentType = response.headers().firstValue("Content-Type").orElse(null);
 		List<String> errors = Contracts.responseErrors(method, template, response.statusCode(), contentType,
 				response.body());
-		String what = method + " " + template + " " + response.statusCode();
-		if (KNOWN_DRIFT_UNTIL_SCRUM_88.contains(what)) {
-			assertThat(errors).as(what + " is listed as known drift; if it is fixed, remove it from the list")
-					.containsExactly(what + " has no body, the spec describes one");
-		}
-		else {
-			assertThat(errors).as(method + " " + uri + " answered " + response.statusCode() + " " + response.body())
-					.isEmpty();
-		}
+		assertThat(errors).as(method + " " + uri + " answered " + response.statusCode() + " " + response.body())
+				.isEmpty();
 		return response;
 	}
 
@@ -126,9 +112,8 @@ class ApiContractIT {
 		return objectMapper.readTree(response.body()).path("id").asString();
 	}
 
-	@Test
-	@DisplayName("TC-SCRUM-96-01 every endpoint escala-api serves is in contracts/openapi.yaml, with its method")
-	void everyEndpointIsInTheSpec() {
+	/** Every (method, path) escala-api serves through its controllers, as {@code "GET /api/v1/members"}. */
+	private Set<String> served() {
 		Set<String> served = new TreeSet<>();
 		for (RequestMappingInfo info : mappings.getHandlerMethods().keySet()) {
 			for (String path : info.getPatternValues()) {
@@ -138,9 +123,27 @@ class ApiContractIT {
 				}
 			}
 		}
+		return served;
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-96-01 every endpoint escala-api serves is in contracts/openapi.yaml, with its method")
+	void everyEndpointIsInTheSpec() {
+		Set<String> served = served();
 		assertThat(served).isNotEmpty();
 		assertThat(Contracts.operations()).containsAll(served).contains("GET /actuator/health",
 				"GET /actuator/health/liveness", "GET /actuator/health/readiness");
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-96-16 every error the spec documents for an endpoint escala-api serves has a body (ErrorResponse, SCRUM-88)")
+	void everyServedErrorHasABody() {
+		List<String> withoutBody = new ArrayList<>();
+		for (String operation : served()) {
+			String[] parts = operation.split(" ", 2);
+			withoutBody.addAll(Contracts.errorResponsesWithoutBody(parts[0], parts[1]));
+		}
+		assertThat(withoutBody).isEmpty();
 	}
 
 	@Test
@@ -183,6 +186,7 @@ class ApiContractIT {
 
 		assertThat(call("POST", "/api/v1/members", "/api/v1/members", MockTokens.admin(), "{}", false).statusCode())
 				.isEqualTo(400);
+		assertThat(call("GET", "/api/v1/members", "/api/v1/members", null, null).statusCode()).isEqualTo(401);
 		assertThat(call("GET", "/api/v1/members/{id}", "/api/v1/members/" + UUID.randomUUID(), MockTokens.admin(),
 				null).statusCode()).isEqualTo(404);
 		assertThat(call("POST", "/api/v1/members", "/api/v1/members", MockTokens.member(), member).statusCode())
@@ -204,6 +208,8 @@ class ApiContractIT {
 		assertThat(call("GET", all + "/{id}", all + "/" + UUID.randomUUID(), MockTokens.member(), null).statusCode())
 				.isEqualTo(404);
 		assertThat(call("DELETE", all + "/{id}", one, MockTokens.member(), null).statusCode()).isEqualTo(204);
+		assertThat(call("DELETE", all + "/{id}", one, MockTokens.member(), null).statusCode()).as("already removed")
+				.isEqualTo(404);
 		assertThat(call("GET", all, all, null, null).statusCode()).isEqualTo(401);
 	}
 
