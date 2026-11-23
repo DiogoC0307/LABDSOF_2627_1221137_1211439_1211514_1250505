@@ -24,7 +24,7 @@ spec:
               valueFrom: { secretKeyRef: { name: rabbitmq-elegibilidade-worker, key: password } }
           resources:
             requests: { cpu: 100m, memory: 256Mi }
-            limits: { memory: 640Mi }
+            limits: { memory: 1Gi }      # SCRUM-90: room for the Claude Code CLI with AI on (381Mi measured + 191 MiB peak)
           readinessProbe:
             httpGet: { path: /actuator/health/readiness, port: 8081 }
             initialDelaySeconds: 30

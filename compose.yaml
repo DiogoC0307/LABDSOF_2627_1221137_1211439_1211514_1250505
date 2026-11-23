@@ -131,6 +131,11 @@ services:
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_WORKER_USER:-elegibilidade-worker}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_WORKER_PASSWORD:-elegibilidade_worker_local}
+      # SCRUM-75 / ADR 0011: AI is off unless AI_ENABLED=true is set in your shell; with it off the worker answers
+      # FALLBACK and the app shows the form. The login token, if set, comes only from your shell (no value here,
+      # never in .env); ANTHROPIC_API_KEY is never passed.
+      AI_ENABLED: ${AI_ENABLED:-false}
+      CLAUDE_CODE_OAUTH_TOKEN:
     ports: ["${ELEGIBILIDADE_WORKER_PORT:-8081}:8081"]
     depends_on:
       pg-elegibilidade-worker: { condition: service_healthy }
@@ -212,9 +217,27 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./infra/observability/grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+      - ./infra/observability/grafana-dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ./infra/observability/dashboards:/etc/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
     ports: ["127.0.0.1:3000:3000"]
-    depends_on: [tempo]
+    depends_on: [tempo, prometheus]
+
+  # SCRUM-97: metrics of both services (/actuator/prometheus), every 30 s, kept 7 days and at most 2GB.
+  prometheus:
+    profiles: [observability]
+    image: prom/prometheus:v3.7.3
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=2GB
+    volumes:
+      - ./infra/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    ports: ["127.0.0.1:9090:9090"]
+    mem_limit: 384m
 
 volumes:
   pg-escala-api-data:
@@ -222,3 +245,4 @@ volumes:
   rabbitmq-data:
   tempo-data:
   grafana-data:
+  prometheus-data:
