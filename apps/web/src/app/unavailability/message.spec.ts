@@ -72,13 +72,14 @@ describe('Unavailability in my own words', () => {
     expect(post.request.body).toEqual({ text: 'não posso sábado de manhã' });
     post.flush({ id, status: 'PENDING', referenceDate: '2026-11-22' }, { status: 202, statusText: 'Accepted' });
     fixture.detectChanges();
-    expect(page(fixture).querySelector('.message [role="status"]')?.textContent).toContain('Reading');
+    expect(page(fixture).querySelector('.message output')?.textContent).toContain('Reading');
 
     http().expectOne(`${MESSAGES}/${id}`).flush(answer([saturdayMorning]));
     fixture.detectChanges();
     await fixture.whenStable();
 
     expect(page(fixture).querySelector('.proposal')?.textContent).toContain('Read automatically');
+    expect(page(fixture).querySelector('.proposal fieldset.weekdays > legend')?.textContent).toContain('Only on');
     expect(input(fixture, 'startDate-0').value).toBe('2026-11-28');
     expect(input(fixture, 'endDate-0').value).toBe('2026-11-28');
     expect(input(fixture, 'startTime-0').value).toBe('08:00');
@@ -130,7 +131,7 @@ describe('Unavailability in my own words', () => {
     http().expectOne({ method: 'DELETE', url: `${MESSAGES}/${id}` }).flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(page(fixture).querySelector('.proposal')).toBeNull();
-    expect(page(fixture).querySelector('.message [role="status"]')?.textContent).toContain('Use the form above');
+    expect(page(fixture).querySelector('.message output')?.textContent).toContain('Use the form above');
   });
 
   it('TC-SCRUM-75-20 too many messages (429) and a text that is too long (400) are explained', async () => {
