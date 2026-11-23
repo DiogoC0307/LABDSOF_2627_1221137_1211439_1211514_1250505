@@ -2,6 +2,9 @@ package pt.isep.escala.elegibilidadeworker.extracao.claude;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Supplier;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,12 +29,20 @@ public class AiExtractionConfiguration {
 	/** {@code escala.ai.*}: the model alias, the time limit of one call (10 s, ADR 0016) and the CLI command. */
 	@ConfigurationProperties("escala.ai")
 	public record AiProperties(boolean enabled, @DefaultValue("haiku") String model,
-			@DefaultValue("10s") Duration timeout, @DefaultValue("claude") String cliCommand) {
+			@DefaultValue("10s") Duration timeout, @DefaultValue("claude") List<String> cliCommand) {
+	}
+
+	/**
+	 * Where the extractor reads the token and the variables it passes on: the process environment, unless a test
+	 * provides a bean of this type.
+	 */
+	public interface ProcessEnvironment extends Supplier<Map<String, String>> {
 	}
 
 	@Bean
-	ClaudeCliExtractor claudeCliExtractor(AiProperties properties) {
-		return ClaudeCliExtractor.fromSystemEnvironment(new ClaudeCliExtractor.Settings(
-				List.of(properties.cliCommand()), properties.model(), properties.timeout(), DayParts.DEFAULT));
+	ClaudeCliExtractor claudeCliExtractor(AiProperties properties, ObjectProvider<ProcessEnvironment> environment) {
+		Map<String, String> env = environment.getIfAvailable(() -> System::getenv).get();
+		return new ClaudeCliExtractor(new ClaudeCliExtractor.Settings(properties.cliCommand(), properties.model(),
+				properties.timeout(), DayParts.DEFAULT), env);
 	}
 }
