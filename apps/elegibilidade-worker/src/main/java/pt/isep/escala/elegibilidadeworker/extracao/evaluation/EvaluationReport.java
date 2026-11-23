@@ -1,8 +1,14 @@
 package pt.isep.escala.elegibilidadeworker.extracao.evaluation;
 
 import java.time.format.DateTimeFormatter;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 import pt.isep.escala.elegibilidadeworker.extracao.ExtractionResult;
 import pt.isep.escala.elegibilidadeworker.extracao.UnavailabilityPeriod;
@@ -16,7 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * <p>The targets are reported, never enforced: a run below target is a result, not a failed build.
  */
-public record EvaluationReport(String parserVersion, String datasetCommit, String datasetSha256,
+public record EvaluationReport(String parserVersion, String latencyNote, String datasetCommit, String datasetSha256,
 		List<CaseResult> results, double p95LatencyMs) {
 
 	/** The categories of the evaluation dataset (README next to it). */
@@ -35,7 +41,14 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 	public static final String LATENCY_NOTE = "Time of one extract call, in ms (same process, no network). No model is "
 			+ "called, so this is a floor and not comparable with a hosted model.";
 
+	public static final String MODEL_LATENCY_NOTE = "Time of one extract call, in ms: it starts the Claude Code CLI as a "
+			+ "new process and waits for the hosted model over the network, as the product would (request to proposal).";
+
+	/** ADR 0016: the product gives up on the model after 10 s and shows the form. */
+	public static final double PRODUCT_TIMEOUT_MS = 10_000;
+
 	private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm");
+	private static final String P95_FIELD = "p95LatencyMs";
 
 	/** The outcome of one case. {@code error} is the type of an exception thrown by the extractor, if any. */
 	public record CaseResult(EvaluationCase testCase, ExtractionResult actual, boolean exact, boolean datesRight,
@@ -76,7 +89,46 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 
 	/** The same report with the dataset it was run on: its git commit and the SHA-256 of the file. */
 	public EvaluationReport withDataset(String commit, String sha256) {
-		return new EvaluationReport(parserVersion, commit, sha256, results, p95LatencyMs);
+		return new EvaluationReport(parserVersion, latencyNote, commit, sha256, results, p95LatencyMs);
+	}
+
+	/** Median latency (nearest rank), from the same calls as {@link #p95LatencyMs()}. */
+	public double p50LatencyMs() {
+		double[] latencies = results.stream().mapToDouble(CaseResult::latencyMs).sorted().toArray();
+		return EvaluationScorer.percentile(latencies, 0.5);
+	}
+
+	/** Share of calls that took longer than {@code millis}. NaN for an empty run. */
+	public double shareSlowerThan(double millis) {
+		return results.isEmpty() ? Double.NaN
+				: (double) results.stream().filter(r -> r.latencyMs() > millis).count() / results.size();
+	}
+
+	/** How many calls ended with each outcome (OK, NO_VALID_OUTPUT, TIMEOUT, ERROR), in that order. */
+	public Map<ExtractionResult.Outcome, Long> outcomes() {
+		Map<ExtractionResult.Outcome, Long> counts = new EnumMap<>(ExtractionResult.Outcome.class);
+		for (ExtractionResult.Outcome outcome : ExtractionResult.Outcome.values()) {
+			counts.put(outcome, results.stream().filter(r -> r.actual().outcome() == outcome).count());
+		}
+		return counts;
+	}
+
+	/** How many calls had each reason code (for example IS_ERROR, SCHEMA, OUT_OF_WINDOW), sorted by code. */
+	public Map<String, Long> reasons() {
+		return results.stream().map(r -> r.actual().reason()).filter(Objects::nonNull)
+				.collect(Collectors.groupingBy(reason -> reason, TreeMap::new, Collectors.counting()));
+	}
+
+	/** The estimated costs reported by the model, one per call that reported one. */
+	public double[] costsUsd() {
+		return results.stream().map(r -> r.actual().costUsd()).filter(Objects::nonNull).mapToDouble(Double::doubleValue)
+				.toArray();
+	}
+
+	/** The model names reported by the calls (for example the full Haiku model id), sorted. */
+	public Set<String> models() {
+		return results.stream().map(r -> r.actual().model()).filter(Objects::nonNull)
+				.collect(Collectors.toCollection(TreeSet::new));
 	}
 
 	private static Stats stats(List<CaseResult> selected) {
@@ -106,14 +158,32 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 		root.put("parserVersion", parserVersion);
 		putOrNull(root, "datasetCommit", datasetCommit);
 		putOrNull(root, "datasetSha256", datasetSha256);
-		root.put("latencyNote", LATENCY_NOTE);
-		root.put("p95LatencyMs", round(p95LatencyMs));
+		root.put("latencyNote", latencyNote);
+		root.put(P95_FIELD, round(p95LatencyMs));
+		ObjectNode calls = root.putObject("calls");
+		calls.put("p50LatencyMs", round(p50LatencyMs()));
+		calls.put(P95_FIELD, round(p95LatencyMs));
+		putRate(calls, "shareOver4s", shareSlowerThan(TARGET_P95_MS));
+		putRate(calls, "shareOver10s", shareSlowerThan(PRODUCT_TIMEOUT_MS));
+		ObjectNode outcomeNode = calls.putObject("outcomes");
+		outcomes().forEach((outcome, count) -> outcomeNode.put(outcome.name(), count));
+		ObjectNode reasonNode = calls.putObject("reasons");
+		reasons().forEach(reasonNode::put);
+		double[] costs = costsUsd();
+		ObjectNode cost = calls.putObject("costUsd");
+		cost.put("callsWithCost", costs.length);
+		if (costs.length > 0) {
+			cost.put("total", java.util.Arrays.stream(costs).sum());
+			cost.put("meanPerCall", java.util.Arrays.stream(costs).average().orElse(0));
+		}
+		ArrayNode modelNode = calls.putArray("models");
+		models().forEach(modelNode::add);
 		ObjectNode targets = root.putObject("targets");
 		targets.put("exactNormal", TARGET_EXACT_NORMAL);
 		targets.put("datesNormal", TARGET_DATES_NORMAL);
 		targets.put("countAll", TARGET_COUNT);
 		targets.put(ADVERSE, TARGET_ADVERSE);
-		targets.put("p95LatencyMs", TARGET_P95_MS);
+		targets.put(P95_FIELD, TARGET_P95_MS);
 		root.set("overall", statsNode(mapper, overall()));
 		ObjectNode categories = root.putObject("categories");
 		for (String category : CATEGORIES) {
@@ -128,6 +198,8 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 			node.put("referenceDate", r.testCase().referenceDate().toString());
 			node.set("expected", periodsNode(mapper, r.testCase().expectedPeriods()));
 			node.set("actual", periodsNode(mapper, r.actual().periods()));
+			node.put("outcome", r.actual().outcome().name());
+			putOrNull(node, "reason", r.actual().reason());
 			putOrNull(node, "error", r.error());
 		}
 		return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(root);
@@ -193,13 +265,19 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 		Stats normal = category(NORMAL);
 		Stats adverse = category(ADVERSE);
 		StringBuilder md = new StringBuilder();
-		md.append("# Baseline results: rule-based parser ").append(parserVersion).append("\n\n");
+		double[] costs = costsUsd();
+		md.append("# Evaluation results: ").append(parserVersion).append("\n\n");
 		md.append("- **Dataset:** ").append(overall.cases()).append(" cases; commit `")
 				.append(datasetCommit == null ? "not recorded" : datasetCommit).append("`; SHA-256 `")
 				.append(datasetSha256 == null ? "not recorded" : datasetSha256).append("`.\n");
-		md.append("- **Parser:** ").append(parserVersion).append(". No AI, no network.\n");
-		md.append("- **Latency:** ").append(LATENCY_NOTE).append("\n");
-		md.append("- **Cost per message:** not applicable (no model, no tokens).\n\n");
+		md.append("- **Extractor:** ").append(parserVersion)
+				.append(models().isEmpty() ? "" : "; model reported: " + String.join(", ", models())).append(".\n");
+		md.append("- **Latency:** ").append(latencyNote).append("\n");
+		md.append("- **Cost per message:** ").append(costs.length == 0 ? "not applicable (no model, no tokens)"
+				: String.format(Locale.ROOT, "%.5f USD on average over %d calls (%.4f USD in total), as estimated by "
+						+ "the CLI", java.util.Arrays.stream(costs).average().orElse(0), costs.length,
+						java.util.Arrays.stream(costs).sum()))
+				.append(".\n\n");
 
 		md.append("## Measures against the targets of 06 · Responsible AI Opportunity Assessment\n\n");
 		md.append("| Measure | Target | Result | Met |\n|---|---|---|---|\n");
@@ -229,6 +307,22 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 				.append(fraction(overall.countRight(), overall.cases())).append(" |\n\n");
 		md.append("Dates right is counted over the cases that expect at least one period.\n\n");
 
+		Map<ExtractionResult.Outcome, Long> outcomes = outcomes();
+		md.append("## Calls\n\n");
+		md.append("| Measure | Value |\n|---|---|\n");
+		md.append(String.format(Locale.ROOT, "| p50 latency | %.3f ms |%n", p50LatencyMs()));
+		md.append(String.format(Locale.ROOT, "| p95 latency | %.3f ms |%n", p95LatencyMs));
+		md.append(String.format(Locale.ROOT, "| Slower than 4 s (target of 06) | %s |%n",
+				share(shareSlowerThan(TARGET_P95_MS))));
+		md.append(String.format(Locale.ROOT, "| Slower than 10 s (the product's timeout, ADR 0016) | %s |%n",
+				share(shareSlowerThan(PRODUCT_TIMEOUT_MS))));
+		md.append("| Calls with no valid structured output | ").append(outcomes.get(ExtractionResult.Outcome.NO_VALID_OUTPUT))
+				.append(" |\n");
+		md.append("| Timeouts | ").append(outcomes.get(ExtractionResult.Outcome.TIMEOUT)).append(" |\n");
+		md.append("| Errors (process, no token) | ").append(outcomes.get(ExtractionResult.Outcome.ERROR)).append(" |\n");
+		md.append("| Reasons | ").append(reasons().isEmpty() ? "-" : reasons().entrySet().stream()
+				.map(e -> e.getKey() + " " + e.getValue()).collect(Collectors.joining(", "))).append(" |\n\n");
+
 		List<CaseResult> failed = failures();
 		md.append("## Cases not exactly right (").append(failed.size()).append(")\n\n");
 		if (!failed.isEmpty()) {
@@ -237,7 +331,7 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 				md.append("| `").append(r.testCase().id()).append("` | ").append(r.testCase().category()).append(" | ")
 						.append(cell(r.testCase().input())).append(" (").append(r.testCase().referenceDate()).append(") | ")
 						.append(cell(describe(r.testCase().expectedPeriods()))).append(" | ")
-						.append(cell(describe(r.actual().periods()) + (r.error() == null ? "" : " (error: " + r.error() + ")")))
+						.append(cell(describe(r.actual().periods()) + outcomeNote(r)))
 						.append(" |\n");
 			}
 		}
@@ -249,6 +343,22 @@ public record EvaluationReport(String parserVersion, String datasetCommit, Strin
 		md.append("| ").append(measure).append(" | ").append(target).append(" | ")
 				.append(String.format(Locale.ROOT, "%.1f%% (%d/%d)", rate * 100, part, whole)).append(" | ")
 				.append(rate >= threshold ? "yes" : "no").append(" |\n");
+	}
+
+	/** " (TIMEOUT)", " (NO_VALID_OUTPUT: IS_ERROR)", " (error: ...)"; nothing for a plain answer. */
+	private static String outcomeNote(CaseResult r) {
+		if (r.error() != null) {
+			return " (error: " + r.error() + ")";
+		}
+		ExtractionResult actual = r.actual();
+		if (actual.outcome() == ExtractionResult.Outcome.OK && actual.reason() == null) {
+			return "";
+		}
+		return " (" + actual.outcome() + (actual.reason() == null ? "" : ": " + actual.reason()) + ")";
+	}
+
+	private static String share(double rate) {
+		return Double.isNaN(rate) ? "n/a" : String.format(Locale.ROOT, "%.1f%%", rate * 100);
 	}
 
 	private static String fraction(int part, int whole) {
