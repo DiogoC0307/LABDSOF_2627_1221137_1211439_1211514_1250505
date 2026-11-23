@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: grafana-dashboard-provider, namespace: observability }
+data:
+  dashboards.yaml: |
+    # Grafana loads the dashboards kept in Git (SCRUM-97) from /etc/grafana/dashboards, the grafana-dashboards
+    # ConfigMap. They are read-only in Grafana: a change is made in Git and deployed.
+    apiVersion: 1
+    providers:
+      - name: escala
+        folder: Escala
+        type: file
+        allowUiUpdates: false
+        options:
+          path: /etc/grafana/dashboards

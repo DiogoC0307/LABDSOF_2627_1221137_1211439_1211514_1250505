@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: prometheus-data, namespace: observability }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  # retention is capped at 2GB (deployment.yaml); the rest is room for the write-ahead log and compaction
+  resources: { requests: { storage: 3Gi } }

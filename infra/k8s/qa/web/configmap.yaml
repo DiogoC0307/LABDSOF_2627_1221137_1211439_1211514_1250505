@@ -9,11 +9,17 @@ data:
 
       # browser calls /api/... -> escala-api, so no CORS is needed. The /api prefix is kept (the controllers are
       # mapped under /api/v1, as in Docker Compose); only the Actuator is served by the service at /actuator.
-      location /api/actuator/ {
-        proxy_pass http://escala-api:8080/actuator/;
+      # Only the health endpoints are forwarded (SCRUM-97): /actuator/prometheus and every other Actuator endpoint
+      # are for Prometheus inside the cluster, never for the ingress, so anything else under /api/actuator/ is a 404.
+      location /api/actuator/health {
+        proxy_pass http://escala-api:8080/actuator/health;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+      }
+
+      location /api/actuator/ {
+        return 404;
       }
 
       location /api/ {
