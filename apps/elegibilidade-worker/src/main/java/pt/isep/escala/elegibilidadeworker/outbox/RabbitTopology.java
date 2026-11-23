@@ -22,4 +22,15 @@ class RabbitTopology {
 	Declarables apiAvaliacaoConcluida() {
 		return EventQueues.queue("api.avaliacao-concluida", "avaliacao.concluida");
 	}
+
+	/** SCRUM-75: the worker consumes ExtracaoPedida and publishes ExtracaoConcluida (definitions.json has both). */
+	@Bean
+	Declarables workerExtracaoPedida() {
+		return EventQueues.queue("worker.extracao-pedida", "extracao.pedida");
+	}
+
+	@Bean
+	Declarables apiExtracaoConcluida() {
+		return EventQueues.queue("api.extracao-concluida", "extracao.concluida");
+	}
 }
