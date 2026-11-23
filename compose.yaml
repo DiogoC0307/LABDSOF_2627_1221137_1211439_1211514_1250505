@@ -129,6 +129,11 @@ services:
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_WORKER_USER:-elegibilidade-worker}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_WORKER_PASSWORD:-elegibilidade_worker_local}
+      # SCRUM-75 / ADR 0011: AI is off unless AI_ENABLED=true is set in your shell; with it off the worker answers
+      # FALLBACK and the app shows the form. The login token, if set, comes only from your shell (no value here,
+      # never in .env); ANTHROPIC_API_KEY is never passed.
+      AI_ENABLED: ${AI_ENABLED:-false}
+      CLAUDE_CODE_OAUTH_TOKEN:
     ports: ["${ELEGIBILIDADE_WORKER_PORT:-8081}:8081"]
     depends_on:
       pg-elegibilidade-worker: { condition: service_healthy }
