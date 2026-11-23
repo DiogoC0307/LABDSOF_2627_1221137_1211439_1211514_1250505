@@ -53,6 +53,11 @@ public final class FakeClaude {
 	private static void answer(String mode, String stdin, String token) throws InterruptedException {
 		String periodsOk = "{\"type\":\"result\",\"is_error\":false,\"result\":\"\",\"structured_output\":%s,"
 				+ "\"total_cost_usd\":0.0009}";
+		if (mode.equals("by-text")) {
+			// one fake for several cases in one Spring context: the message says which answer to give
+			mode = stdin.contains("DORME") ? "sleep" : stdin.contains("LONGE") ? "far" : stdin.contains("ERRO")
+					? "error-exit1" : "ok";
+		}
 		switch (mode) {
 			case "ok" -> print(OK);
 			case "ok-empty" -> print(periodsOk.formatted("{\"periods\":[]}"));
