@@ -163,7 +163,7 @@ Consistency is strong inside each database and eventual between services (visibl
   - Only `ADMIN` registers and edits (09: "Edit members and certifications"); `SUPERVISOR` and `ADMIN` read the list; a `MEMBER` reads only themself. A new member is always `MEMBER`: changing a role waits for audit records (T-06).
   - The contact is in the answer only for the admin and the member themself, and is never logged (09, data minimisation).
   - Functions are the slot roles (`CREW_CHIEF`, `DRIVER`, `CREW_MEMBER`). There is one certification per type and one licence per class: a renewal replaces the dates, with no history. A driver needs a licence; a certification cannot expire before it was issued.
-  - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); SCRUM-88 aligns the other errors with it. Tests: TC-SCRUM-77-01, 02 and 05.
+  - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); every `400` of the API has this format since SCRUM-88. Tests: TC-SCRUM-77-01, 02 and 05.
   - No qualification rule (RN01, RN02) runs in `escala-api`: the eligibility rules belong to the worker (ADR 0007, SCRUM-65 and SCRUM-79).
 - Unavailability by form (SCRUM-64): `GET` and `POST /api/v1/unavailabilities`, `GET` and `DELETE /api/v1/unavailabilities/{id}`.
   - Every role declares its own periods; the member comes from the token, never from the body (T-03). A period of another member answers `404`, not `403`, and nothing changes.
@@ -176,6 +176,7 @@ Consistency is strong inside each database and eventual between services (visibl
   - The free text is deleted, with its outbox row, in the same transaction as the confirmation (AC4), on discard, or by `UnavailabilityMessageRetention` 24 hours after the message (every 10 minutes, RNF09). The row stays without the text, so the method and the latency can be counted. The text is never logged and never returned by the API.
   - At most 10 messages per member in any hour (09 T-11): the 11th answers `429` with `Retry-After`. Another member's message answers `404`; confirming one without a proposal, or one already closed, `409`.
   - `ExtracaoConcluidaListener` applies an answer once per `eventId` and only to a `PENDING` message with the same `requestEventId`; an answer that does not follow v2 goes to the DLQ. Migration V6 (`unavailability_message`). Tests: TC-SCRUM-75-01 to 20; the worker side is TC-SCRUM-75-21 to 29 (#77).
+- Errors (SCRUM-88): every error answers Spring Boot's JSON body (`timestamp`, `status`, `error`, `path`), and every `400` adds `errors: [{field, code}]`, never the rejected values. Always JSON, whatever the `Accept` header: `validation/JsonErrorController` replaces the Whitelabel page (`server.error.whitelabel.enabled=false`), and a `401`, `403` or `404` goes through `/error` so it has the same body.
 - Header: `X-Trace-Id` (RF37)
 
 Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
@@ -193,7 +194,13 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 ## Observability and SLIs
 
 - Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text. `DEBUG` only for `pt.isep.escala`; request bodies, message bodies, SQL values and exception messages never reach the logs (SCRUM-94, see Deployment and Operations)
-- Health: `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` (RF36; through the web proxy `/api/actuator/...`). Today `/actuator/health` reports DOWN when RabbitMQ is down, but the readiness group does not yet include the database or the broker, and the Kubernetes probes use `/actuator/health`. Both are fixed in SCRUM-88 (Sprint 2).
+- Health (RF36; through the web proxy `/api/actuator/...`), on both services (SCRUM-88):
+  - `/actuator/health/liveness`: the process only (`livenessState`). The Kubernetes liveness probe, so a dependency that is down never restarts the pod.
+  - `/actuator/health/readiness`: the Kubernetes readiness probe; with a dependency in it down, it answers `503` within seconds (connection timeouts of 3 s for Hikari and RabbitMQ) and the pod leaves the Service.
+    - `elegibilidade-worker`: `readinessState`, the database (`db`), RabbitMQ (`rabbit`) and the listener containers (`listeners`, DOWN when one is not running).
+    - `escala-api`: `readinessState` and the database (`db`) only. The outbox lets the API keep serving with the broker down (events wait in `outbox_event`), so RabbitMQ and the listeners stay out of readiness and a broker failure does not take every API pod out of the Service.
+  - `/actuator/health`: all indicators (`db`, `rabbit`, `listeners` included); no probe uses it. On `escala-api` it is where a broker or listener failure shows (`503`).
+  - Docker Compose: the `escala-api` healthcheck uses `/actuator/health/readiness`, like the Kubernetes probe, so the API does not turn unhealthy when only the broker is down. The `elegibilidade-worker` healthcheck only opens port 8081.
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - The trace breaks at the outbox today: the relay publishes outside any active span, so Tempo shows separate traces; the application `traceId` in the payload still passes (SCRUM-93).
