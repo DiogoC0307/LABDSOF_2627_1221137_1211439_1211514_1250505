@@ -10,6 +10,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -31,6 +35,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
@@ -53,7 +58,7 @@ import tools.jackson.databind.ObjectMapper;
  * (SCRUM-75, escala-api side: RF13, RF31 to RF33, RNF09, 09 T-11). The worker is replaced by ExtracaoConcluida
  * messages sent by the test. The clock is fixed and moved by the tests.
  */
-@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.rabbitmq.dynamic=true")
 @AutoConfigureMockMvc
 @Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
@@ -91,6 +96,12 @@ class UnavailabilityMessageIT {
 
 	@Autowired
 	MockMvc mockMvc;
+
+	/** The real server, for the 404 body: MockMvc does not forward to /error, where Spring Boot writes it. */
+	@LocalServerPort
+	int port;
+
+	private final HttpClient http = HttpClient.newHttpClient();
 
 	@Autowired
 	ObjectMapper objectMapper;
@@ -202,15 +213,16 @@ class UnavailabilityMessageIT {
 	}
 
 	@Test
-	@DisplayName("TC-SCRUM-75-05 only the author reads, confirms or discards a message: another member gets 404, no token 401")
+	@DisplayName("TC-SCRUM-75-05 only the author reads, confirms or discards a message: another member gets 404 with the JSON error body, no token 401")
 	void onlyTheAuthor() throws Exception {
 		UUID id = sendText(MockTokens.member(), "Synthetic text 75-05");
 		answer(id, SATURDAY_MORNING, "MODEL");
 		String other = MockTokens.bearer(OTHER_MEMBER_ID, "MEMBER");
 
-		mockMvc.perform(get(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, other)).andExpect(status().isNotFound());
-		confirm(other, id, SATURDAY_MORNING).andExpect(status().isNotFound());
-		mockMvc.perform(delete(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, other)).andExpect(status().isNotFound());
+		expectNotFound(server("GET", PATH + "/" + id, other, null), PATH + "/" + id);
+		expectNotFound(server("POST", PATH + "/" + id + "/confirm", other, "{\"periods\":" + SATURDAY_MORNING + "}"),
+				PATH + "/" + id + "/confirm");
+		expectNotFound(server("DELETE", PATH + "/" + id, other, null), PATH + "/" + id);
 		mockMvc.perform(get(PATH + "/" + id)).andExpect(status().isUnauthorized());
 		mockMvc.perform(post(PATH).contentType(MediaType.APPLICATION_JSON).content("{\"text\":\"x\"}"))
 				.andExpect(status().isUnauthorized());
@@ -428,6 +440,32 @@ class UnavailabilityMessageIT {
 	private ResultActions postText(String token, String json) throws Exception {
 		return mockMvc.perform(post(PATH).header(HttpHeaders.AUTHORIZATION, token)
 				.contentType(MediaType.APPLICATION_JSON).content(json));
+	}
+
+	private HttpResponse<String> server(String method, String path, String token, String json) throws Exception {
+		HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+				.header(HttpHeaders.AUTHORIZATION, token)
+				.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
+		if (json == null) {
+			request.method(method, HttpRequest.BodyPublishers.noBody());
+		} else {
+			request.header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+					.method(method, HttpRequest.BodyPublishers.ofString(json));
+		}
+		return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+	}
+
+	/** 404 with the contract's ErrorResponse (timestamp, status, error, path), and nothing of the message. */
+	private void expectNotFound(HttpResponse<String> response, String path) {
+		assertThat(response.statusCode()).isEqualTo(404);
+		assertThat(response.headers().firstValue(HttpHeaders.CONTENT_TYPE))
+				.hasValueSatisfying(type -> assertThat(type).startsWith(MediaType.APPLICATION_JSON_VALUE));
+		JsonNode body = objectMapper.readTree(response.body());
+		assertThat(body.path("status").asInt()).isEqualTo(404);
+		assertThat(body.path("error").asString()).isEqualTo("Not Found");
+		assertThat(body.path("path").asString()).isEqualTo(path);
+		assertThat(body.has("timestamp")).isTrue();
+		assertThat(response.body()).doesNotContain("Synthetic text");
 	}
 
 	private ResultActions confirm(String token, UUID id, String periods) throws Exception {
