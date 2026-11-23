@@ -789,10 +789,10 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:39176c94ca9d0a4370626e998ead0977cd2476c3
+        image: ghcr.io/diogoc0307/elegibilidade-worker:9ac033aca944f567ccbf25fe03d2672e86a9b9a5
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /actuator/health/liveness
             port: 8081
           initialDelaySeconds: 60
         name: elegibilidade-worker
@@ -800,7 +800,7 @@ spec:
         - containerPort: 8081
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /actuator/health/readiness
             port: 8081
           initialDelaySeconds: 30
         resources:
@@ -850,10 +850,10 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:39176c94ca9d0a4370626e998ead0977cd2476c3
+        image: ghcr.io/diogoc0307/escala-api:9ac033aca944f567ccbf25fe03d2672e86a9b9a5
         livenessProbe:
           httpGet:
-            path: /actuator/health
+            path: /actuator/health/liveness
             port: 8080
           initialDelaySeconds: 60
         name: escala-api
@@ -861,7 +861,7 @@ spec:
         - containerPort: 8080
         readinessProbe:
           httpGet:
-            path: /actuator/health
+            path: /actuator/health/readiness
             port: 8080
           initialDelaySeconds: 30
         resources:
@@ -976,7 +976,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:39176c94ca9d0a4370626e998ead0977cd2476c3
+      - image: ghcr.io/diogoc0307/escala-web:9ac033aca944f567ccbf25fe03d2672e86a9b9a5
         name: web
         ports:
         - containerPort: 80
