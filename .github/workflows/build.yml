@@ -41,7 +41,7 @@ jobs:
           cache-dependency-path: apps/${{ matrix.service }}/pom.xml
 
       - name: Build
-        run: chmod +x ./mvnw && ./mvnw -B -ntp package
+        run: chmod +x ./mvnw && ./mvnw -B -ntp package -DskipTests
 
       - name: Test (with JaCoCo coverage)
         run: ./mvnw -B -ntp verify
