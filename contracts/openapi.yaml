@@ -762,7 +762,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (the JSON error body)
+          description: No message with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       tags: [unavailabilities]
       summary: Discard one of the caller's messages
@@ -778,7 +782,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (the JSON error body)
+          description: No message with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /api/v1/unavailability-messages/{id}/confirm:
     parameters:
       - name: id
@@ -827,7 +835,11 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
-          description: No message with that ID for the caller (the JSON error body)
+          description: No message with that ID for the caller (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "409":
           description: No proposal yet, or the message is already confirmed, discarded or expired
           content:
