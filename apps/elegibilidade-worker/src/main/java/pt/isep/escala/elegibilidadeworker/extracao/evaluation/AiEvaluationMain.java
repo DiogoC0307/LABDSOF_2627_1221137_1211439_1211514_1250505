@@ -47,8 +47,6 @@ public final class AiEvaluationMain {
 	private AiEvaluationMain() {
 	}
 
-	// java:S106: a command-line tool run by hand in the ai-eval container; the console is its output
-	@SuppressWarnings("java:S106")
 	public static void main(String[] args) {
 		// a command-line tool run by hand in the ai-eval container: the console is its output (Sonar java:S106)
 		System.exit(run(args, System.getenv(), System.out)); // NOSONAR
