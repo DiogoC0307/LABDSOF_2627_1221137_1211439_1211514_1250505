@@ -47,6 +47,10 @@ export class Schedule implements OnInit {
     if (this.creating()) {
       return;
     }
+    if (this.dutyDate === '') {
+      this.error.set('Fill in the date.');
+      return;
+    }
     this.error.set(null);
     this.creating.set(true);
     this.http
@@ -54,6 +58,9 @@ export class Schedule implements OnInit {
       .pipe(finalize(() => this.creating.set(false)))
       .subscribe({
         next: (created) => {
+          // The form is cleared, as "When I can't" does: a click that comes after the answer finds no date and
+          // sends nothing, so quick clicks create one piquete even when the API answers fast (SCRUM-158).
+          this.dutyDate = '';
           this.reload();
           this.pollUntilEligible(created.id);
         },
