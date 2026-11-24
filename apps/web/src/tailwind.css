@@ -1,0 +1,36 @@
+/*
+ * TailwindCSS v4 (ADR 0020, SCRUM-165): layout, spacing, typography and breakpoints.
+ * Plain CSS on purpose: Tailwind v4 does not run through Sass, so it is not part of styles.scss.
+ *
+ * Preflight (Tailwind's CSS reset) is not imported, so Material's and the app's existing styles
+ * are not reset. Only the theme and utilities layers are used. Styles outside a layer
+ * (Material components, styles.scss) win over the utilities, so Tailwind never restyles Material.
+ */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+/* Classes are looked for in the app's templates and components. */
+@source './';
+
+/*
+ * One palette: Tailwind's colours point to the Material tokens defined by mat.theme() in
+ * styles.scss, so `bg-primary` and a Material button show the same colour.
+ */
+@theme inline {
+  --color-primary: var(--mat-sys-primary);
+  --color-on-primary: var(--mat-sys-on-primary);
+  --color-primary-container: var(--mat-sys-primary-container);
+  --color-on-primary-container: var(--mat-sys-on-primary-container);
+  --color-secondary: var(--mat-sys-secondary);
+  --color-on-secondary: var(--mat-sys-on-secondary);
+  --color-tertiary: var(--mat-sys-tertiary);
+  --color-on-tertiary: var(--mat-sys-on-tertiary);
+  --color-error: var(--mat-sys-error);
+  --color-on-error: var(--mat-sys-on-error);
+  --color-surface: var(--mat-sys-surface);
+  --color-on-surface: var(--mat-sys-on-surface);
+  --color-on-surface-variant: var(--mat-sys-on-surface-variant);
+  --color-outline: var(--mat-sys-outline);
+  --color-outline-variant: var(--mat-sys-outline-variant);
+}
