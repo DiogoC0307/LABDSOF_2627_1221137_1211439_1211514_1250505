@@ -23,6 +23,7 @@ class SecurityConfig {
 	static final String PIQUETES = "/api/v1/piquetes";
 	static final String MEMBERS = "/api/v1/members";
 	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
+	static final String UNAVAILABILITY_MESSAGES = "/api/v1/unavailability-messages";
 
 	private static final String MEMBER = "MEMBER";
 	private static final String SUPERVISOR = "SUPERVISOR";
@@ -68,6 +69,12 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, UNAVAILABILITIES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						// SCRUM-75: every role sends its own free text; only one's own messages are found (checked in
+						// UnavailabilityMessageService); 10 per member per hour (09 T-11).
+						.requestMatchers(HttpMethod.POST, UNAVAILABILITY_MESSAGES, UNAVAILABILITY_MESSAGES + "/*/confirm")
+								.hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.GET, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.anyRequest().denyAll())
 				.build();
 	}
