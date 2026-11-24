@@ -58,6 +58,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
 						.requestMatchers(HttpMethod.GET, PIQUETES, PIQUETES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
+						// SCRUM-65: only the supervisor changes a shift, as only they create one.
+						.requestMatchers(HttpMethod.PUT, PIQUETES + "/*").hasRole(SUPERVISOR)
 						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
 						// only themself (checked in MemberController); the contact only for the admin and the member.
 						.requestMatchers(HttpMethod.GET, MEMBERS, "/api/v1/certification-types").hasAnyRole(SUPERVISOR, ADMIN)

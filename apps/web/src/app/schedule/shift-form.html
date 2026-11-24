@@ -1,0 +1,111 @@
+<dialog #dialog class="shift-dialog" aria-labelledby="shift-form-title" (close)="onClose()">
+  <form class="shift-form" (ngSubmit)="save()">
+    <header class="shift-form-head">
+      <h1 id="shift-form-title">{{ heading() }}</h1>
+      <p class="shift-form-day">{{ dayInWords() }}</p>
+    </header>
+
+    <div class="field">
+      <label for="shift-day">Day</label>
+      <input
+        id="shift-day"
+        name="dutyDate"
+        type="date"
+        [min]="today()"
+        [(ngModel)]="dutyDate"
+        [attr.aria-invalid]="errors().dutyDate ? true : null"
+        [attr.aria-describedby]="errors().dutyDate ? 'shift-day-error' : null"
+        required
+      />
+      @if (errors().dutyDate) {
+        <p id="shift-day-error" class="field-error">{{ errors().dutyDate }}</p>
+      }
+    </div>
+
+    <fieldset class="period">
+      <legend>Period</legend>
+      <label>
+        <input type="radio" name="period" value="DAY" [checked]="period === 'DAY'" (change)="choosePeriod('DAY')" />
+        Day
+      </label>
+      <label>
+        <input
+          type="radio"
+          name="period"
+          value="NIGHT"
+          [checked]="period === 'NIGHT'"
+          (change)="choosePeriod('NIGHT')"
+        />
+        Night
+      </label>
+      @if (errors().period) {
+        <p class="field-error">{{ errors().period }}</p>
+      }
+    </fieldset>
+
+    <div class="times">
+      <div class="field">
+        <label for="shift-start">Start</label>
+        <input
+          id="shift-start"
+          name="start"
+          type="time"
+          [(ngModel)]="start"
+          [attr.aria-invalid]="errors().startsAt ? true : null"
+          [attr.aria-describedby]="errors().startsAt ? 'shift-start-error' : null"
+          required
+        />
+        @if (errors().startsAt) {
+          <p id="shift-start-error" class="field-error">{{ errors().startsAt }}</p>
+        }
+      </div>
+
+      <div class="field">
+        <label for="shift-end">End</label>
+        <input
+          id="shift-end"
+          name="end"
+          type="time"
+          [(ngModel)]="end"
+          [attr.aria-invalid]="errors().endsAt ? true : null"
+          [attr.aria-describedby]="errors().endsAt ? 'shift-end-error' : 'shift-end-hint'"
+          required
+        />
+        @if (errors().endsAt) {
+          <p id="shift-end-error" class="field-error">{{ errors().endsAt }}</p>
+        } @else if (endsNextDay()) {
+          <p id="shift-end-hint" class="field-hint">Ends the next day.</p>
+        }
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="shift-crew">Minimum firefighters</label>
+      <input
+        id="shift-crew"
+        name="minimumCrew"
+        type="number"
+        inputmode="numeric"
+        min="1"
+        max="50"
+        step="1"
+        [(ngModel)]="minimumCrew"
+        [attr.aria-invalid]="errors().minimumCrew ? true : null"
+        [attr.aria-describedby]="errors().minimumCrew ? 'shift-crew-error' : null"
+        required
+      />
+      @if (errors().minimumCrew) {
+        <p id="shift-crew-error" class="field-error">{{ errors().minimumCrew }}</p>
+      }
+    </div>
+
+    @if (failure()) {
+      <p class="error" role="alert">{{ failure() }}</p>
+    }
+
+    <div class="shift-form-actions">
+      <button type="button" class="secondary" (click)="close()">Cancel</button>
+      <button type="submit" [disabled]="saving()">{{ editing() ? 'Save changes' : 'Add shift' }}</button>
+    </div>
+  </form>
+</dialog>

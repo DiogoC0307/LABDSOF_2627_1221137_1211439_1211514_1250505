@@ -1,0 +1,433 @@
+// The week is wider than the phone-sized page column: it fills the screen less the 1rem gutters (up to 120rem),
+// centred, and the grid takes the rest of the screen's height. On a phone the seven columns scroll sideways inside it.
+.week {
+  position: relative;
+  left: 50%;
+  width: min(calc(100vw - 2rem), 120rem);
+  transform: translateX(-50%);
+  margin-bottom: 1rem;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+// ‹ November 2026 - Week 48 ›: one box; the arrows fill its height on each side, split from the title by a line.
+.week-header {
+  display: flex;
+  align-items: stretch;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto 1rem;
+  background: #fff;
+  border: 1px solid #d5dde5;
+  border-radius: 0.5rem;
+}
+
+.week-arrow {
+  flex-shrink: 0;
+  width: 3.5rem;
+  min-height: 3.5rem;
+  padding: 0 0 0.2rem;
+  font-size: 2.25rem;
+  line-height: 1;
+  background: transparent;
+  color: #0b5cab;
+  border: 0;
+  cursor: pointer;
+
+  &:first-child {
+    border-right: 1px solid #d5dde5;
+    border-radius: 0.5rem 0 0 0.5rem;
+  }
+
+  &:last-child {
+    border-left: 1px solid #d5dde5;
+    border-radius: 0 0.5rem 0.5rem 0;
+  }
+
+  &:hover {
+    background: #eef4fb;
+  }
+}
+
+.week-picker {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.week-heading {
+  display: flex;
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.week-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 100%;
+  padding: 0.6rem 1.25rem;
+  font-size: inherit;
+  font-weight: 700;
+  background: transparent;
+  color: #1a1a1a;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+
+  // The caret says the title opens something; it flips while the calendar is open.
+  &::after {
+    content: '';
+    flex-shrink: 0;
+    width: 0.45rem;
+    height: 0.45rem;
+    margin-top: -0.2rem;
+    border-right: 2px solid #0b5cab;
+    border-bottom: 2px solid #0b5cab;
+    transform: rotate(45deg);
+  }
+
+  &[aria-expanded='true']::after {
+    margin-top: 0.2rem;
+    transform: rotate(-135deg);
+  }
+
+  &:hover {
+    background: #eef4fb;
+  }
+}
+
+button:focus-visible {
+  outline: 3px solid #0b5cab;
+  outline-offset: 2px;
+}
+
+// The calendar opens under the title, over the grid.
+.calendar {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 50%;
+  z-index: 10;
+  width: 18.5rem;
+  max-width: calc(100vw - 2rem);
+  box-sizing: border-box;
+  padding: 0.75rem;
+  transform: translateX(-50%);
+  background: #fff;
+  border: 1px solid #d5dde5;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 12%);
+}
+
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.calendar-arrow {
+  width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0 0 0.15rem;
+  font-size: 1.75rem;
+  line-height: 1;
+  background: #fff;
+  color: #0b5cab;
+  border: 1px solid #d5dde5;
+  border-radius: 0.5rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #eef4fb;
+  }
+}
+
+.calendar-month {
+  margin: 0;
+  font-weight: 600;
+}
+
+// The week number, then Monday to Sunday.
+.calendar-row {
+  display: grid;
+  grid-template-columns: 1.75rem repeat(7, 1fr);
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+
+.calendar-weekdays {
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.calendar-number {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+// A whole row is one button: choosing a day chooses its week.
+.calendar-week {
+  min-height: 2.25rem;
+  padding: 0;
+  font-size: 0.875rem;
+  background: transparent;
+  color: #1a1a1a;
+  border: 0;
+  border-radius: 0.375rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #eef4fb;
+  }
+}
+
+.calendar-week--current {
+  font-weight: 700;
+}
+
+.calendar-week--selected,
+.calendar-week--selected:hover {
+  background: #0b5cab;
+  color: #fff;
+
+  .calendar-number,
+  .calendar-day--outside {
+    color: rgb(255 255 255 / 75%);
+  }
+}
+
+.calendar-day--outside {
+  color: #999;
+}
+
+.calendar-day--today {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.calendar-this-week {
+  display: block;
+  width: 100%;
+  min-height: 2.5rem;
+  margin-top: 0.5rem;
+  background: #fff;
+  color: #0b5cab;
+  border: 1px solid #0b5cab;
+  border-radius: 0.375rem;
+  cursor: pointer;
+}
+
+.week-note {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  color: #555;
+  text-align: center;
+}
+
+// The days fill the rest of the screen under the menu and the title (never less than 22rem) and scroll inside:
+// down through the 24 hours, and sideways on a phone. The day names stay on top and the hours on the left.
+// It is not a table: the only lines are the ones between the days, and each shift is a card from its start to its end.
+.week-grid {
+  --hour: 3rem;
+  --hours-width: 3.5rem;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--hours-width) repeat(7, minmax(7rem, 1fr));
+  grid-template-rows: auto auto;
+  align-content: start;
+  height: max(22rem, calc(100dvh - 11.5rem));
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #fff;
+  border: 1px solid #d5dde5;
+  border-radius: 0.5rem;
+}
+
+// Each column spans the two rows (head and hours) of the grid, so every head is as tall as the tallest one.
+.hours,
+.day {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+}
+
+// The hours are split from Monday by the same line as between the days.
+.hours {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: #fff;
+  border-right: 1px solid #e3e8ee;
+}
+
+.hours-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.hours-body,
+.day-body {
+  height: calc(24 * var(--hour));
+}
+
+// One label every 2 hours, at the top of its 2 hours, level with a card that starts then.
+.hour {
+  display: block;
+  box-sizing: border-box;
+  height: calc(2 * var(--hour));
+  padding-right: 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  color: #666;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+// The line between the days.
+.day + .day {
+  border-left: 1px solid #e3e8ee;
+}
+
+// The day's name, then the "+" below it, then shifts with no times yet. It stays on top while the hours scroll.
+.day-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  background: #fff;
+}
+
+.day-name {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+// Days before today are read-only: their name is muted and they have no "+".
+.day--past .day-name {
+  color: #999;
+  font-weight: 500;
+}
+
+.day--today .day-name {
+  color: #0b5cab;
+}
+
+// The shifts are placed by their start and end; nothing else is drawn here.
+.day-body {
+  position: relative;
+}
+
+.shift {
+  position: relative;
+  box-sizing: border-box;
+  padding: 0.25rem 0.375rem;
+  overflow: hidden;
+  background: #eef4fb;
+  border: 1px solid #c9daee;
+  border-left: 3px solid #0b5cab;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+
+  p {
+    margin: 0;
+  }
+}
+
+.shift--timed {
+  position: absolute;
+  min-height: 1.25rem;
+  // A little gap between shifts side by side and from the column's edges.
+  border-right-width: 1px;
+  background-clip: padding-box;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+// The part after midnight of a shift that began the day before.
+.shift--continued {
+  border-top-style: dashed;
+}
+
+.shift--untimed {
+  align-self: stretch;
+  border-left-color: #8a96a3;
+  background: #f4f6f8;
+  border-color: #dde3e9;
+}
+
+.day--past .shift {
+  background: #f4f6f8;
+  border-color: #dde3e9;
+  border-left-color: #8a96a3;
+}
+
+.shift-time {
+  font-weight: 600;
+}
+
+.shift-slots {
+  color: #444;
+}
+
+// "Edit" in the card's top right corner; the card's text leaves room for it.
+.shift:has(.edit-shift) .shift-time {
+  padding-right: 2.25rem;
+}
+
+.edit-shift {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  min-height: 1.75rem;
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fff;
+  color: #0b5cab;
+  border: 1px solid #c9daee;
+  border-radius: 0.25rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #eef4fb;
+  }
+}
+
+.add-shift {
+  flex-shrink: 0;
+  width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1;
+  background: #fff;
+  color: #0b5cab;
+  border: 1px dashed #0b5cab;
+  border-radius: 50%;
+  cursor: pointer;
+
+  &:hover {
+    background: #eef4fb;
+  }
+}

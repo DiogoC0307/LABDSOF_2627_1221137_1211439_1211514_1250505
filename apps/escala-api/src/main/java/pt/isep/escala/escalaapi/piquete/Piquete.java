@@ -3,9 +3,12 @@ package pt.isep.escala.escalaapi.piquete;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,6 +23,17 @@ class Piquete {
 
 	@Column(nullable = false)
 	private LocalDate dutyDate;
+
+	/** The shift's period, start, end and minimum crew (V6): all set together, or none on a piquete from before. */
+	@Enumerated(EnumType.STRING)
+	@Column(length = 5)
+	private ShiftPeriod period;
+
+	private Instant startsAt;
+
+	private Instant endsAt;
+
+	private Integer minimumCrew;
 
 	@OneToMany(mappedBy = "piquete", cascade = CascadeType.ALL, orphanRemoval = true)
 	private List<Slot> slots = new ArrayList<>();
@@ -40,8 +54,33 @@ class Piquete {
 		return dutyDate;
 	}
 
+	ShiftPeriod getPeriod() {
+		return period;
+	}
+
+	Instant getStartsAt() {
+		return startsAt;
+	}
+
+	Instant getEndsAt() {
+		return endsAt;
+	}
+
+	Integer getMinimumCrew() {
+		return minimumCrew;
+	}
+
 	List<Slot> getSlots() {
 		return slots;
+	}
+
+	/** Sets (or changes) the shift: its day, period, start, end and minimum crew. The service checks them first. */
+	void schedule(LocalDate dutyDate, ShiftPeriod period, Instant startsAt, Instant endsAt, int minimumCrew) {
+		this.dutyDate = dutyDate;
+		this.period = period;
+		this.startsAt = startsAt;
+		this.endsAt = endsAt;
+		this.minimumCrew = minimumCrew;
 	}
 
 	void addSlot(Slot slot) {

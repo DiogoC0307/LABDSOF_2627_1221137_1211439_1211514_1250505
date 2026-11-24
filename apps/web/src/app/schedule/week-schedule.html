@@ -1,0 +1,162 @@
+<section class="week" aria-labelledby="week-title">
+  <header class="week-header">
+    <button type="button" class="week-arrow" aria-label="Previous week" (click)="previousWeek()">‹</button>
+
+    <div class="week-picker" #picker>
+      <h2 class="week-heading">
+        <button
+          #pickerToggle
+          type="button"
+          class="week-toggle"
+          aria-controls="week-calendar"
+          [attr.aria-expanded]="pickerOpen()"
+          (click)="togglePicker()"
+        >
+          <span id="week-title">{{ title() }}</span>
+          <span class="visually-hidden">, {{ titleDays() }}, choose a week</span>
+        </button>
+      </h2>
+
+      @if (pickerOpen()) {
+        <div id="week-calendar" class="calendar" role="group" aria-label="Choose a week">
+          <div class="calendar-head">
+            <button type="button" class="calendar-arrow" aria-label="Previous month" (click)="previousMonth()">‹</button>
+            <p class="calendar-month" aria-live="polite">{{ pickerTitle() }}</p>
+            <button type="button" class="calendar-arrow" aria-label="Next month" (click)="nextMonth()">›</button>
+          </div>
+
+          <div class="calendar-row calendar-weekdays" aria-hidden="true">
+            <span class="calendar-number">Wk</span>
+            <span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span><span>Sa</span><span>Su</span>
+          </div>
+
+          @for (week of pickerWeeks(); track week.monday) {
+            <button
+              type="button"
+              class="calendar-row calendar-week"
+              [class.calendar-week--selected]="week.selected"
+              [class.calendar-week--current]="week.current"
+              [attr.aria-pressed]="week.selected"
+              [attr.aria-label]="week.label"
+              (click)="chooseWeek(week.monday)"
+            >
+              <span class="calendar-number" aria-hidden="true">{{ week.number }}</span>
+              @for (day of week.days; track day.date) {
+                <span
+                  class="calendar-day"
+                  [class.calendar-day--outside]="day.outside"
+                  [class.calendar-day--today]="day.today"
+                  aria-hidden="true"
+                  >{{ day.day }}</span
+                >
+              }
+            </button>
+          }
+
+          <button type="button" class="calendar-this-week" (click)="chooseWeek(currentMonday)">This week</button>
+        </div>
+      }
+    </div>
+
+    <button type="button" class="week-arrow" aria-label="Next week" (click)="nextWeek()">›</button>
+  </header>
+
+  @if (pastWeek() && auth.isSupervisor()) {
+    <p class="week-note">This week has passed, so it can't be changed here.</p>
+  }
+
+  @if (offline()) {
+    <p class="notice">Showing the last loaded roster. You are offline.</p>
+  }
+
+  @if (error()) {
+    <p class="error" role="alert">{{ error() }}</p>
+  }
+
+  <div #grid class="week-grid" role="list" aria-label="Days of the week">
+    <!-- The hours down the left side; it stays in view when the days scroll sideways on a phone. -->
+    <div class="hours" aria-hidden="true">
+      <div class="hours-head"></div>
+      <div class="hours-body">
+        @for (hour of hours; track hour) {
+          <span class="hour">{{ hour }}</span>
+        }
+      </div>
+    </div>
+
+    @for (day of days(); track day.date) {
+      <div
+        class="day"
+        [class.day--past]="day.past"
+        [class.day--today]="day.today"
+        role="listitem"
+        [attr.aria-label]="day.long"
+        [attr.aria-current]="day.today ? 'date' : null"
+      >
+        <div class="day-head">
+          <p class="day-name" aria-hidden="true">{{ day.short }}</p>
+
+          <!-- Below the day's name, not beside it. -->
+          @if (day.canAdd) {
+            <button
+              type="button"
+              class="add-shift"
+              [attr.aria-label]="'Add a shift on ' + day.long"
+              (click)="addShift(day.date)"
+            >
+              +
+            </button>
+          }
+
+          @for (piquete of day.untimed; track piquete.id) {
+            <article class="shift shift--untimed">
+              <p class="shift-time">Time not set</p>
+              <p class="shift-slots">{{ crewLabel(piquete) }}</p>
+              @if (day.canEdit) {
+                <button
+                  type="button"
+                  class="edit-shift"
+                  [attr.aria-label]="'Edit the shift with no time on ' + day.long"
+                  (click)="editShift(piquete)"
+                >
+                  Edit
+                </button>
+              }
+            </article>
+          }
+        </div>
+
+        <div class="day-body">
+          @for (shift of day.shifts; track shift.item.id) {
+            <article
+              class="shift shift--timed"
+              [class.shift--continued]="shift.continued"
+              [style.top.%]="shift.topPercent"
+              [style.height.%]="shift.heightPercent"
+              [style.left.%]="shift.leftPercent"
+              [style.width.%]="shift.widthPercent"
+              [attr.aria-label]="'Shift ' + shift.label.toLowerCase() + ', ' + crewLabel(shift.item).toLowerCase()"
+            >
+              <p class="shift-time">{{ shift.label }}</p>
+              <p class="shift-slots">{{ crewLabel(shift.item) }}</p>
+              @if (canAddShifts() && shift.item.dutyDate >= today) {
+                <button
+                  type="button"
+                  class="edit-shift"
+                  [attr.aria-label]="'Edit the shift ' + shift.label.toLowerCase() + ' on ' + day.long"
+                  (click)="editShift(shift.item)"
+                >
+                  Edit
+                </button>
+              }
+            </article>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  @if (form(); as target) {
+    <app-shift-form [target]="target" [today]="today" (saved)="onShiftSaved()" (closed)="onFormClosed()" />
+  }
+</section>

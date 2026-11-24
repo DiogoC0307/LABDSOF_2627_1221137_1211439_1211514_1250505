@@ -1,7 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from './app';
-import { SESSION_KEY, http, pending, signInAs, testProviders, users } from './testing/test-support';
+import {
+  SESSION_KEY,
+  flushWeekRequests,
+  weekRequest,
+  http,
+  pending,
+  signInAs,
+  testProviders,
+  users,
+} from './testing/test-support';
 
 /** The shell: sign-in, the menu by role, the router with its role guards, sign-out and the install prompt. */
 describe('App', () => {
@@ -15,6 +24,7 @@ describe('App', () => {
   });
 
   afterEach(() => {
+    flushWeekRequests();
     http().verify();
     localStorage.clear();
   });
@@ -27,7 +37,7 @@ describe('App', () => {
     return fixture;
   }
 
-  it('TC-SCRUM-63-01 "supervisor" signs in and the schedule editor is shown', async () => {
+  it('TC-SCRUM-63-01 "supervisor" signs in and can add shifts to the week', async () => {
     localStorage.removeItem(SESSION_KEY);
     const fixture = await start();
     http().expectOne('/api/v1/auth/mock-users').flush(users);
@@ -47,25 +57,26 @@ describe('App', () => {
     await fixture.whenStable();
     fixture.detectChanges();
 
-    const list = http().expectOne('/api/v1/piquetes');
+    const list = weekRequest();
     expect(list.request.headers.get('Authorization')).toBe('Bearer mock.supervisor-token');
     list.flush([]);
     fixture.detectChanges();
-    expect(page.querySelector('form button')?.textContent).toContain('Create piquete');
+    expect(page.querySelector('.week-grid')).not.toBeNull();
+    expect(page.querySelectorAll('.add-shift').length).toBeGreaterThan(0);
     expect(page.querySelector('.session')?.textContent).toContain('Synthetic Supervisor');
     expect(page.querySelector('.session')?.textContent).toContain('SUPERVISOR');
   });
 
   it('sends the token with every API call', async () => {
     await start();
-    const list = http().expectOne('/api/v1/piquetes');
+    const list = weekRequest();
     expect(list.request.headers.get('Authorization')).toBe('Bearer mock.SUPERVISOR');
     list.flush([]);
   });
 
   it('goes back to the sign-in screen when the API answers 401', async () => {
     const fixture = await start();
-    http().expectOne('/api/v1/piquetes').flush('', { status: 401, statusText: 'Unauthorized' });
+    weekRequest().flush('', { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
     http().expectOne('/api/v1/auth/mock-users').flush(users);
     fixture.detectChanges();
@@ -75,7 +86,7 @@ describe('App', () => {
 
   it('sign out clears the session and the last loaded roster', async () => {
     const fixture = await start();
-    http().expectOne('/api/v1/piquetes').flush([pending]);
+    weekRequest().flush([pending]);
     fixture.detectChanges();
     expect(localStorage.getItem('escala.lastPiquetes')).not.toBeNull();
 
@@ -92,7 +103,7 @@ describe('App', () => {
     localStorage.clear();
     signInAs(role);
     const fixture = await start();
-    http().expectOne('/api/v1/piquetes').flush([]);
+    weekRequest().flush([]);
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('.menu a[href="/members"]')).not.toBeNull();
   });
@@ -101,7 +112,7 @@ describe('App', () => {
     localStorage.clear();
     signInAs('MEMBER');
     const fixture = await start('/members');
-    http().expectOne('/api/v1/piquetes').flush([]);
+    weekRequest().flush([]);
     http().expectNone('/api/v1/members');
     fixture.detectChanges();
     expect(TestBed.inject(Router).url).toBe('/');
@@ -110,7 +121,7 @@ describe('App', () => {
 
   it('TC-SCRUM-46-02 offers install when the browser fires beforeinstallprompt', async () => {
     const fixture = await start();
-    http().expectOne('/api/v1/piquetes').flush([]);
+    weekRequest().flush([]);
 
     const prompt = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
       prompt: async () => undefined,
