@@ -47,8 +47,10 @@ import tools.jackson.databind.ObjectMapper;
  * matches its schema; an error must have a body, which the spec describes (ErrorResponse, SCRUM-88). The request bodies
  * sent are checked against the spec too, except the invalid ones sent on purpose.
  * A real server (random port), not MockMvc, so the error bodies are the ones Spring Boot really writes.
+ * AI is on, so that free text is accepted (SCRUM-89); with AI off it answers 409, see UnavailabilityMessageAiOffIT.
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.rabbitmq.dynamic=true")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+		properties = { "spring.rabbitmq.dynamic=true", "escala.ai.enabled=true" })
 @Testcontainers
 class ApiContractIT {
 
@@ -256,6 +258,10 @@ class ApiContractIT {
 		assertThat(call("DELETE", oneTemplate, one, MockTokens.supervisor(), null).statusCode()).isEqualTo(404);
 		assertThat(call("POST", all, all, MockTokens.member(), "{\"text\":\"\"}", false).statusCode()).isEqualTo(400);
 		assertThat(call("POST", all, all, null, "{\"text\":\"Synthetic 96-19 c\"}").statusCode()).isEqualTo(401);
+		String settings = all + "/settings";
+		assertThat(call("GET", settings, settings, MockTokens.member(), null).statusCode()).as("settings, SCRUM-89")
+				.isEqualTo(200);
+		assertThat(call("GET", settings, settings, null, null).statusCode()).isEqualTo(401);
 
 		// at most 10 messages per member in an hour (the clock is fixed); the loop stops at the first that is refused
 		int status = 202;
