@@ -20,6 +20,8 @@
 		     5.37.0 is the latest release on Maven Central and has none of them. Remove this override when the Spring Boot version we use manages 5.37.0 or later. -->
 		<rabbit-amqp-client.version>5.37.0</rabbit-amqp-client.version>
 		<jacoco.version>0.8.15</jacoco.version>
+		<!-- Contract tests (SCRUM-96): JSON Schema 2020-12 for contracts/events/ and OpenAPI 3.0 for contracts/openapi.yaml, on Jackson 3 -->
+		<json-schema-validator.version>3.0.9</json-schema-validator.version>
 		<sonar.projectKey>escala-elegibilidade-worker</sonar.projectKey>
 		<sonar.projectName>escala-elegibilidade-worker</sonar.projectName>
 		<sonar.organization>diogoc0307</sonar.organization>
@@ -89,6 +91,12 @@
 		<dependency>
 			<groupId>org.awaitility</groupId>
 			<artifactId>awaitility</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.networknt</groupId>
+			<artifactId>json-schema-validator</artifactId>
+			<version>${json-schema-validator.version}</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
