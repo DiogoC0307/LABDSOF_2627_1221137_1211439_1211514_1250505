@@ -1,0 +1,76 @@
+<section class="message" aria-label="In my own words">
+  <h2>In my own words</h2>
+  <form (ngSubmit)="send()" aria-label="Free text">
+    <label>
+      When can't you serve?
+      <textarea name="text" maxlength="500" rows="2" placeholder="não posso sábado de manhã" [(ngModel)]="text"></textarea>
+    </label>
+    <button type="submit" class="send" [disabled]="sending()">Send</button>
+  </form>
+
+  @if (sendError()) {
+    <p class="error" role="alert">{{ sendError() }}</p>
+  }
+  @switch (state()) {
+    @case ('reading') {
+      <output>Reading…</output>
+    }
+    @case ('nothing') {
+      <output>Nothing could be read automatically. Use the form above.</output>
+    }
+    @case ('slow') {
+      <output>Still reading. Use the form above if you cannot wait.</output>
+    }
+  }
+
+  @if (state() === 'proposed') {
+    <div class="proposal">
+      <p class="auto">Read automatically. Check it, change it if needed, and confirm.</p>
+      @for (period of periods(); track $index; let i = $index) {
+        <fieldset class="period">
+          <div class="row">
+            <label>
+              From
+              <input type="date" [attr.name]="'startDate-' + i" [(ngModel)]="period.startDate" />
+            </label>
+            <label>
+              Until
+              <input type="date" [attr.name]="'endDate-' + i" [(ngModel)]="period.endDate" />
+            </label>
+          </div>
+          <div class="row">
+            <label>
+              from (optional)
+              <input type="time" [attr.name]="'startTime-' + i" [(ngModel)]="period.startTime" />
+            </label>
+            <label>
+              to (optional, whole day if empty)
+              <input type="time" [attr.name]="'endTime-' + i" [(ngModel)]="period.endTime" />
+            </label>
+          </div>
+          <fieldset class="weekdays">
+            <legend>Only on (every day if none)</legend>
+            @for (day of weekdays; track day) {
+              <label>
+                <input type="checkbox" [attr.name]="'weekday-' + i + '-' + day" [checked]="hasDay(period, day)"
+                  (change)="toggleDay(period, day)" />
+                {{ day }}
+              </label>
+            }
+          </fieldset>
+        </fieldset>
+      }
+
+      @if (errors().length > 0) {
+        <ul class="error" role="alert">
+          @for (error of errors(); track error.field + error.code) {
+            <li [attr.data-field]="error.field">{{ message(error) }}</li>
+          }
+        </ul>
+      }
+
+      <button type="button" class="confirm" [disabled]="confirming()" (click)="confirm()">Confirm</button>
+      <button type="button" class="secondary discard" (click)="discard()">Discard</button>
+    </div>
+  }
+</section>

@@ -26,8 +26,8 @@ spec:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { memory: 640Mi }
           readinessProbe:
-            httpGet: { path: /actuator/health, port: 8080 }
+            httpGet: { path: /actuator/health/readiness, port: 8080 }
             initialDelaySeconds: 30
           livenessProbe:
-            httpGet: { path: /actuator/health, port: 8080 }
+            httpGet: { path: /actuator/health/liveness, port: 8080 }
             initialDelaySeconds: 60
