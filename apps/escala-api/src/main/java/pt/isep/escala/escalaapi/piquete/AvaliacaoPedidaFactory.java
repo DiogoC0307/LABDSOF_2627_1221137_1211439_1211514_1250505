@@ -13,6 +13,9 @@ import pt.isep.escala.escalaapi.trace.TraceId;
 @Component
 class AvaliacaoPedidaFactory {
 
+	/** The only purpose escala-api sends today: a new slot is checked before it is assigned. */
+	static final String PURPOSE = "ASSIGNMENT";
+
 	static final UUID SKELETON_MEMBER_ID = UUID.fromString("00000000-0000-4000-8000-000000000001");
 
 	private final ObjectMapper objectMapper;
@@ -30,7 +33,7 @@ class AvaliacaoPedidaFactory {
 		root.put("schemaVersion", 1);
 		root.put("occurredAt", Instant.now().toString());
 		root.put("traceId", TraceId.current());
-		root.put("purpose", "ASSIGNMENT");
+		root.put("purpose", PURPOSE);
 		root.put("assignmentId", slot.getAssignmentId().toString());
 		ObjectNode slotNode = root.putObject("slot");
 		slotNode.put("slotId", slot.getId().toString());
