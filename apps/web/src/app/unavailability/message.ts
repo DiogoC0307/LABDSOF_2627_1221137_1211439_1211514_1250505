@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, inject, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, output, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { finalize } from 'rxjs';
+import { catchError, finalize, of, switchMap } from 'rxjs';
 
 /** A period in the ExtracaoConcluida v2 format: dates inclusive, optional weekdays and Lisbon times (06). */
 interface ProposedPeriod {
@@ -34,13 +34,17 @@ interface InvalidField {
   code: string;
 }
 
-type State = 'idle' | 'reading' | 'proposed' | 'nothing' | 'slow';
+type State = 'idle' | 'reading' | 'proposed' | 'nothing' | 'late';
 
 export const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
 const MESSAGES = '/api/v1/unavailability-messages';
 const POLL_MS = 1000;
-const POLLS = 20;
+/**
+ * How long the member waits for the reading, counted here from the moment they send (SCRUM-89 AC3): 10 s, as on page
+ * 06 (Responsible AI, the latency target and fallback). After it the form is the way and the message is discarded.
+ */
+const READ_DEADLINE_MS = 10_000;
 
 const ERRORS: Record<string, string> = {
   required: 'Fill in this field.',
@@ -56,7 +60,9 @@ const ERRORS: Record<string, string> = {
 /**
  * "When I can't", in my own words (SCRUM-75): the member writes, sees what was read in editable fields labelled
  * "Read automatically", and nothing counts until they confirm. The pattern is shown and sent as it is; escala-api
- * expands it only when it is saved. The text is never stored here after it is sent.
+ * expands it only when it is saved. The text stays in the box, in this component's memory only (never in browser
+ * storage), until a proposal arrives, so that the member can copy it into the form when nothing usable comes back
+ * (SCRUM-89). With AI off (GET settings), the section is not shown at all and only the form is left.
  */
 @Component({
   selector: 'app-unavailability-message',
@@ -64,13 +70,15 @@ const ERRORS: Record<string, string> = {
   templateUrl: './message.html',
   changeDetection: ChangeDetectionStrategy.Eager,
 })
-export class UnavailabilityMessage implements OnDestroy {
+export class UnavailabilityMessage implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
 
   /** Emitted after the member confirms, so the list of periods is loaded again. */
   readonly confirmed = output<void>();
 
   protected readonly weekdays = WEEKDAYS;
+  /** False until escala-api says AI is on: offline, or with AI off, only the form is shown (SCRUM-89 AC2). */
+  protected readonly aiEnabled = signal(false);
   protected readonly state = signal<State>('idle');
   protected readonly periods = signal<EditablePeriod[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
@@ -83,9 +91,17 @@ export class UnavailabilityMessage implements OnDestroy {
 
   private messageId: string | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private deadline: ReturnType<typeof setTimeout> | null = null;
+
+  ngOnInit(): void {
+    this.http.get<{ aiEnabled: boolean }>(`${MESSAGES}/settings`).subscribe({
+      next: (settings) => this.aiEnabled.set(settings.aiEnabled === true),
+      error: () => this.aiEnabled.set(false),
+    });
+  }
 
   ngOnDestroy(): void {
-    this.stopPolling();
+    this.stopTimers();
   }
 
   protected send(): void {
@@ -99,17 +115,44 @@ export class UnavailabilityMessage implements OnDestroy {
     this.sendError.set(null);
     this.errors.set([]);
     this.sending.set(true);
-    this.http
-      .post<MessageView>(MESSAGES, { text: this.text })
-      .pipe(finalize(() => this.sending.set(false)))
+    const sentAt = Date.now();
+    const text = this.text;
+    // A text sent while another is being read replaces it: the older one stops here, and its copy on the server is
+    // deleted before the new one is sent, so it does not wait 24 h as PENDING (page 09). If that DELETE fails, the new
+    // text is sent anyway and the 24 h cleanup removes the old one.
+    const previous = this.messageId;
+    if (previous !== null) {
+      this.stopTimers();
+      this.messageId = null;
+    }
+    const before = previous === null
+      ? of(null)
+      : this.http.delete(`${MESSAGES}/${previous}`).pipe(catchError(() => of(null)));
+    before
+      .pipe(
+        switchMap(() => this.http.post<MessageView>(MESSAGES, { text })),
+        finalize(() => this.sending.set(false)),
+      )
       .subscribe({
         next: (message) => {
-          this.text = '';
+          this.stopTimers();
           this.messageId = message.id;
           this.state.set('reading');
-          this.poll(message.id, 0);
+          this.deadline = setTimeout(() => this.tooLate(), Math.max(0, sentAt + READ_DEADLINE_MS - Date.now()));
+          this.poll(message.id);
         },
-        error: (error: unknown) => this.sendError.set(this.sendProblem(error)),
+        error: (error: unknown) => {
+          if (previous !== null) {
+            // The older message is gone already: nothing is being read any more.
+            this.state.set('idle');
+            this.periods.set([]);
+          }
+          if (this.isAiOff(error)) {
+            this.aiEnabled.set(false);
+            return;
+          }
+          this.sendError.set(this.sendProblem(error));
+        },
       });
   }
 
@@ -160,29 +203,52 @@ export class UnavailabilityMessage implements OnDestroy {
     });
   }
 
-  private poll(id: string, attempt: number): void {
+  /** Asks once a second until there is an answer or the deadline passes; an answer for an older message is ignored. */
+  private poll(id: string): void {
     this.http.get<MessageView>(`${MESSAGES}/${id}`).subscribe({
       next: (message) => {
-        if (message.status === 'PENDING') {
-          if (attempt + 1 >= POLLS) {
-            this.state.set('slow');
-            return;
-          }
-          this.timer = setTimeout(() => this.poll(id, attempt + 1), POLL_MS);
+        if (id !== this.messageId) {
           return;
         }
+        if (message.status === 'PENDING') {
+          this.timer = setTimeout(() => this.poll(id), POLL_MS);
+          return;
+        }
+        this.stopTimers();
         if (message.status === 'PROPOSED' && message.periods.length > 0) {
+          this.text = '';
           this.periods.set(message.periods.map(toEditable));
           this.state.set('proposed');
           return;
         }
-        // Nothing usable was read: the text is deleted now, and the form below is the way (SCRUM-89 has the rest).
+        // No dates in the text (SCRUM-89 AC1): its copy on the server is deleted now; the box keeps it for the form.
         this.state.set('nothing');
-        this.http.delete(`${MESSAGES}/${id}`).subscribe({ error: () => undefined });
-        this.messageId = null;
+        this.forget(id);
       },
-      error: () => this.state.set('slow'),
+      error: () => {
+        if (id === this.messageId) {
+          this.timer = setTimeout(() => this.poll(id), POLL_MS);
+        }
+      },
     });
+  }
+
+  /** No answer within READ_DEADLINE_MS of sending (SCRUM-89 AC3): stop asking, then discard, so a late result is unused. */
+  private tooLate(): void {
+    this.deadline = null;
+    const id = this.messageId;
+    if (id === null) {
+      return;
+    }
+    this.stopTimers();
+    this.state.set('late');
+    this.forget(id);
+  }
+
+  /** Deletes the message and its free text on the server; from now on its answers are ignored here. */
+  private forget(id: string): void {
+    this.messageId = null;
+    this.http.delete(`${MESSAGES}/${id}`).subscribe({ error: () => undefined });
   }
 
   private localErrors(): InvalidField[] {
@@ -201,18 +267,29 @@ export class UnavailabilityMessage implements OnDestroy {
   }
 
   private reset(): void {
-    this.stopPolling();
+    this.stopTimers();
     this.messageId = null;
+    this.text = '';
     this.periods.set([]);
     this.errors.set([]);
     this.state.set('idle');
   }
 
-  private stopPolling(): void {
+  private stopTimers(): void {
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    if (this.deadline !== null) {
+      clearTimeout(this.deadline);
+      this.deadline = null;
+    }
+  }
+
+  /** 409 ai_off: AI was turned off after the page was opened (SCRUM-89 AC2). */
+  private isAiOff(error: unknown): boolean {
+    return error instanceof HttpErrorResponse && error.status === 409
+      && this.apiErrors(error).some((field) => field.code === 'ai_off');
   }
 
   private sendProblem(error: unknown): string {
