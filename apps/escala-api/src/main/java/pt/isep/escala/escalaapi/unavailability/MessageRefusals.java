@@ -3,6 +3,7 @@ package pt.isep.escala.escalaapi.unavailability;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -13,7 +14,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * The 409 and 429 of the free-text messages (SCRUM-75), with Spring Boot's JSON error fields (timestamp, status,
- * error, path), the same body as every other error, and Retry-After on the 429.
+ * error, path), the same body as every other error, and Retry-After on the 429. The 409 for AI off also carries
+ * errors [{text, ai_off}], as a 400 does, so the PWA can tell it apart (SCRUM-89).
  */
 @RestControllerAdvice(assignableTypes = UnavailabilityMessageController.class)
 class MessageRefusals {
@@ -37,6 +39,14 @@ class MessageRefusals {
 		}
 	}
 
+	/** AI is off (AI_ENABLED, SCRUM-89): the free text cannot be read, so it is not taken; the form is the way. */
+	static class AiOff extends RuntimeException {
+
+		AiOff() {
+			super("ai off", null, false, false);
+		}
+	}
+
 	@ExceptionHandler(TooManyMessages.class)
 	ResponseEntity<Map<String, Object>> tooMany(TooManyMessages e, HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -49,6 +59,13 @@ class MessageRefusals {
 	ResponseEntity<Map<String, Object>> conflict(HttpServletRequest request) {
 		return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
 				.body(body(HttpStatus.CONFLICT, request));
+	}
+
+	@ExceptionHandler(AiOff.class)
+	ResponseEntity<Map<String, Object>> aiOff(HttpServletRequest request) {
+		Map<String, Object> body = body(HttpStatus.CONFLICT, request);
+		body.put("errors", List.of(Map.of("field", "text", "code", "ai_off")));
+		return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON).body(body);
 	}
 
 	private static Map<String, Object> body(HttpStatus status, HttpServletRequest request) {

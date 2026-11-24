@@ -97,7 +97,7 @@ describe('Schedule', () => {
     expect((fixture.nativeElement as HTMLElement).textContent).toContain('ELIGIBLE');
   });
 
-  it('shows an error when create fails', () => {
+  it('shows an error when create fails, and keeps the date so it can be tried again', async () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
@@ -108,9 +108,12 @@ describe('Schedule', () => {
       statusText: 'Server Error',
     });
     fixture.detectChanges();
+    await fixture.whenStable();
     expect((fixture.nativeElement as HTMLElement).querySelector('[role="alert"]')?.textContent).toContain(
       'Could not create the piquete.',
     );
+    expect((fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('input[name="dutyDate"]')?.value)
+      .toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('TC-SCRUM-158-03 two clicks on Create piquete before the answer create one piquete; the button is disabled until the answer, then enabled again', () => {
@@ -130,6 +133,35 @@ describe('Schedule', () => {
     fixture.detectChanges();
 
     expect(create.disabled).toBe(false);
+  });
+
+  it('TC-SCRUM-158-04 three clicks about 80 ms apart on Create piquete, with the API answering at once, create one piquete; the date is cleared and asked for again', async () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(Schedule);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    fixture.detectChanges();
+    const page = fixture.nativeElement as HTMLElement;
+    const create = page.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+
+    create.click();
+    // a fast API: the answer and the list come back before the next click
+    http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
+    http().expectOne({ method: 'GET', url: '/api/v1/piquetes' }).flush([pending]);
+    fixture.detectChanges();
+    expect(create.disabled).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(80);
+    create.click();
+    await vi.advanceTimersByTimeAsync(80);
+    create.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(http().match({ method: 'POST', url: '/api/v1/piquetes' })).toHaveLength(0);
+    expect(page.querySelector<HTMLInputElement>('input[name="dutyDate"]')?.value).toBe('');
+    expect(page.querySelector('[role="alert"]')?.textContent).toContain('Fill in the date.');
+    expect(page.querySelectorAll('ul.list li strong')).toHaveLength(1);
   });
 
   it('keeps polling while the slot is still PENDING', async () => {

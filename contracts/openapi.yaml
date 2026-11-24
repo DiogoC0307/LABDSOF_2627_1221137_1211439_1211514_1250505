@@ -707,7 +707,9 @@ paths:
         through the outbox, with the reference date (today in Lisbon) and never the member. Nothing counts as
         unavailability until the member confirms the proposal. The free text is deleted on confirmation, on
         discard, or 24 hours after the message (RNF09, 09); it is never logged nor returned. At most 10 messages
-        per member in any hour (09 T-11): the 11th answers 429.
+        per member in any hour (09 T-11): the 11th answers 429. With AI off (AI_ENABLED, ADR 0011) the text is
+        not taken and the answer is 409 ai_off; the PWA asks GET /api/v1/unavailability-messages/settings first
+        and then shows only the form (SCRUM-89).
       operationId: sendUnavailabilityMessage
       parameters:
         - $ref: "#/components/parameters/TraceId"
@@ -735,6 +737,14 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: >
+            AI is off (SCRUM-89): nothing is stored. Spring Boot's error fields and errors
+            [{field: text, code: ai_off}].
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
         "429":
           description: More than 10 messages within an hour
           headers:
@@ -746,6 +756,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/unavailability-messages/settings:
+    get:
+      tags: [unavailabilities]
+      summary: Whether the free text is read automatically (SCRUM-89)
+      description: >
+        Any role. aiEnabled follows AI_ENABLED, the same flag as elegibilidade-worker's (ADR 0011): when it is
+        false the PWA shows only the form and POST /api/v1/unavailability-messages answers 409 ai_off. A literal
+        path: "settings" is never read as a message ID.
+      operationId: getUnavailabilityMessageSettings
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The setting
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnavailabilityMessageSettings"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /api/v1/unavailability-messages/{id}:
     parameters:
       - name: id
@@ -1270,7 +1303,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many]
+                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1304,6 +1337,13 @@ components:
           type: string
           enum: [FORM, FREE_TEXT]
           description: FREE_TEXT when confirmed from a message (SCRUM-75)
+    UnavailabilityMessageSettings:
+      type: object
+      required: [aiEnabled]
+      properties:
+        aiEnabled:
+          type: boolean
+          description: False when AI_ENABLED is off; the PWA then shows only the form.
     UnavailabilityMessageRequest:
       type: object
       required: [text]

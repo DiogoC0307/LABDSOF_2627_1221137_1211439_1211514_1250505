@@ -20,8 +20,8 @@ class EventSchemasCoverageTest {
 	static final Map<String, String> ESCALA_API = Map.of(
 			"avaliacao-pedida.schema.json", "produced: TC-SCRUM-96-07",
 			"avaliacao-concluida.schema.json", "consumed: TC-SCRUM-96-08",
-			"extracao-pedida.schema.json", "not in main yet: produced with SCRUM-75 (#81)",
-			"extracao-concluida.schema.json", "not in main yet: consumed with SCRUM-75 (#81)",
+			"extracao-pedida.schema.json", "produced: TC-SCRUM-96-17",
+			"extracao-concluida.schema.json", "consumed: TC-SCRUM-96-18",
 			"risco-atualizado.schema.json", "not built yet");
 
 	@Test
