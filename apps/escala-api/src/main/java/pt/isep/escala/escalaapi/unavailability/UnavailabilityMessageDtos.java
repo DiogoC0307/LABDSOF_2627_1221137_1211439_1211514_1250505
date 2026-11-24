@@ -5,6 +5,10 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
+/** Whether the free text is read automatically: false when AI_ENABLED is off (SCRUM-89, ADR 0011). */
+record MessageSettings(boolean aiEnabled) {
+}
+
 /** What the member writes (SCRUM-75): free text, at most 500 characters. */
 record MessageRequest(String text) {
 }

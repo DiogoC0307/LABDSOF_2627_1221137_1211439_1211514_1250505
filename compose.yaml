@@ -101,6 +101,8 @@ services:
       SPRING_RABBITMQ_PORT: "5672"
       SPRING_RABBITMQ_USERNAME: ${RABBITMQ_ESCALA_API_USER:-escala-api}
       SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_ESCALA_API_PASSWORD:-escala_api_local}
+      # SCRUM-89: the same flag as elegibilidade-worker below, so the PWA shows only the form when AI is off.
+      AI_ENABLED: ${AI_ENABLED:-false}
     ports: ["${ESCALA_API_PORT:-8080}:8080"]
     depends_on:
       pg-escala-api: { condition: service_healthy }

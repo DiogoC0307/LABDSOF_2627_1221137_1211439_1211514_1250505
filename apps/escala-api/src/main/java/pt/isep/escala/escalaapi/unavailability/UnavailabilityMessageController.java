@@ -19,7 +19,8 @@ import pt.isep.escala.escalaapi.auth.SignedInMember;
 /**
  * "When I can't", in my own words (SCRUM-75): send the text (202, read by the worker), read the proposal, confirm it
  * as edited, or discard it. Each member sees only their own messages: another member's answers 404, with the JSON
- * error body like every other error (SCRUM-88).
+ * error body like every other error (SCRUM-88). GET settings tells the PWA whether AI is on, so that with it off only
+ * the form is shown (SCRUM-89).
  */
 @RestController
 @RequestMapping("/api/v1/unavailability-messages")
@@ -36,6 +37,12 @@ class UnavailabilityMessageController {
 			@AuthenticationPrincipal SignedInMember member) {
 		MessageResponse sent = service.send(member.memberId(), request);
 		return ResponseEntity.accepted().location(URI.create("/api/v1/unavailability-messages/" + sent.id())).body(sent);
+	}
+
+	/** Any signed-in member; a literal path, so Spring prefers it to /{id} ("settings" is never read as an ID). */
+	@GetMapping("/settings")
+	MessageSettings settings() {
+		return new MessageSettings(service.aiEnabled());
 	}
 
 	@GetMapping("/{id}")
