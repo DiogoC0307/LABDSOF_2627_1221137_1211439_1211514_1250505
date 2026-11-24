@@ -1,4 +1,10 @@
 <main class="page">
+  @if (update.available()) {
+    <output class="notice">
+      A new version of Escala is available.
+      <button type="button" class="reload" (click)="update.reload()">Reload</button>
+    </output>
+  }
   @if (auth.session(); as session) {
     <nav class="menu" aria-label="Menu">
       <a routerLink="/">Schedule</a>

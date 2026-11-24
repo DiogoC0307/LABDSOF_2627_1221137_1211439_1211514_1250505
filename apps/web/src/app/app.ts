@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { AuthService } from './auth/auth.service';
 import { SignIn } from './sign-in/sign-in';
+import { AppUpdate } from './update/app-update';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -9,7 +10,8 @@ interface BeforeInstallPromptEvent extends Event {
 
 /**
  * The shell: the sign-in screen without a session; with one, the menu by role and the router outlet (SCRUM-63,
- * SCRUM-77). The menu and the route guards are convenience only: the API checks the role of every request.
+ * SCRUM-77). The menu and the route guards are convenience only: the API checks the role of every request. When a new
+ * version is deployed, it offers to reload, signed in or not (SCRUM-166).
  */
 @Component({
   selector: 'app-root',
@@ -19,6 +21,7 @@ interface BeforeInstallPromptEvent extends Event {
 })
 export class App implements OnInit, OnDestroy {
   protected readonly auth = inject(AuthService);
+  protected readonly update = inject(AppUpdate);
   private readonly router = inject(Router);
   private deferredInstall: BeforeInstallPromptEvent | null = null;
   private readonly onBeforeInstall = (event: Event) => this.captureInstallPrompt(event);
@@ -31,6 +34,7 @@ export class App implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     window.addEventListener('beforeinstallprompt', this.onBeforeInstall);
+    this.update.start();
   }
 
   ngOnDestroy(): void {
