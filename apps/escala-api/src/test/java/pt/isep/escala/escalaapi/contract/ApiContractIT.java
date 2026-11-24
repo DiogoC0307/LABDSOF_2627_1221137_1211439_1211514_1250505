@@ -1,11 +1,14 @@
 package pt.isep.escala.escalaapi.contract;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -17,6 +20,9 @@ import java.util.TreeSet;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.Message;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +31,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.testcontainers.junit.jupiter.Container;
@@ -35,7 +42,7 @@ import pt.isep.escala.escalaapi.auth.MockTokens;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * TC-SCRUM-96-01 to 06 and 16: the real HTTP responses of escala-api, error bodies included, against
+ * TC-SCRUM-96-01 to 06, 16 and 19: the real HTTP responses of escala-api, error bodies included, against
  * {@code contracts/openapi.yaml}. Every call checks that the status is documented for the operation and that the body
  * matches its schema; an error must have a body, which the spec describes (ErrorResponse, SCRUM-88). The request bodies
  * sent are checked against the spec too, except the invalid ones sent on purpose.
@@ -77,6 +84,12 @@ class ApiContractIT {
 	@Autowired
 	@Qualifier("requestMappingHandlerMapping")
 	RequestMappingHandlerMapping mappings;
+
+	@Autowired
+	RabbitTemplate rabbitTemplate;
+
+	@Autowired
+	JdbcTemplate jdbc;
 
 	/** A call checked against the spec: {@code template} is the path as the spec writes it. */
 	private HttpResponse<String> call(String method, String template, String uri, String token, String body,
@@ -211,6 +224,65 @@ class ApiContractIT {
 		assertThat(call("DELETE", all + "/{id}", one, MockTokens.member(), null).statusCode()).as("already removed")
 				.isEqualTo(404);
 		assertThat(call("GET", all, all, null, null).statusCode()).isEqualTo(401);
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-96-19 the free-text unavailability messages answer as the spec says: 202, 200, 204, 400, 401, 404, 409 and 429")
+	void unavailabilityMessages() throws Exception {
+		String all = "/api/v1/unavailability-messages";
+		String oneTemplate = all + "/{id}";
+		String confirmTemplate = oneTemplate + "/confirm";
+		HttpResponse<String> sent = call("POST", all, all, MockTokens.member(), "{\"text\":\"Synthetic text 96-19\"}");
+		assertThat(sent.statusCode()).isEqualTo(202);
+		String id = id(sent);
+		String one = all + "/" + id;
+		assertThat(call("GET", oneTemplate, one, MockTokens.member(), null).statusCode()).as("PENDING").isEqualTo(200);
+		assertThat(call("POST", confirmTemplate, one + "/confirm", MockTokens.member(), periods()).statusCode())
+				.as("no proposal yet").isEqualTo(409);
+
+		propose(UUID.fromString(id));
+		await().atMost(Duration.ofSeconds(15)).until(() -> objectMapper.readTree(
+				call("GET", oneTemplate, one, MockTokens.member(), null).body()).path("status").asString(),
+				"PROPOSED"::equals);
+		assertThat(call("POST", confirmTemplate, one + "/confirm", MockTokens.member(),
+				"{\"periods\":[{\"startDate\":\"2026-11-28\"}]}", false).statusCode()).isEqualTo(400);
+		assertThat(call("POST", confirmTemplate, one + "/confirm", MockTokens.member(), periods()).statusCode())
+				.isEqualTo(200);
+
+		String discarded = all + "/" + id(call("POST", all, all, MockTokens.member(), "{\"text\":\"Synthetic 96-19 b\"}"));
+		assertThat(call("DELETE", oneTemplate, discarded, MockTokens.member(), null).statusCode()).isEqualTo(204);
+		assertThat(call("GET", oneTemplate, one, MockTokens.supervisor(), null).statusCode()).as("another member's")
+				.isEqualTo(404);
+		assertThat(call("DELETE", oneTemplate, one, MockTokens.supervisor(), null).statusCode()).isEqualTo(404);
+		assertThat(call("POST", all, all, MockTokens.member(), "{\"text\":\"\"}", false).statusCode()).isEqualTo(400);
+		assertThat(call("POST", all, all, null, "{\"text\":\"Synthetic 96-19 c\"}").statusCode()).isEqualTo(401);
+
+		// at most 10 messages per member in an hour (the clock is fixed); the loop stops at the first that is refused
+		int status = 202;
+		for (int i = 0; i < 11 && status == 202; i++) {
+			status = call("POST", all, all, MockTokens.member(), "{\"text\":\"Synthetic 96-19 rate\"}").statusCode();
+		}
+		assertThat(status).as("the 11th message within the hour").isEqualTo(429);
+	}
+
+	/** One Saturday morning after the fixed clock, as the member confirms it. */
+	private static String periods() {
+		return "{\"periods\":[{\"startDate\":\"2026-11-28\",\"endDate\":\"2026-11-28\",\"startTime\":\"08:00\",\"endTime\":\"13:00\"}]}";
+	}
+
+	/** The worker's answer, ExtracaoConcluida v2, for the message: the message becomes PROPOSED. */
+	private void propose(UUID messageId) {
+		UUID requestEventId = jdbc.queryForObject("SELECT request_event_id FROM unavailability_message WHERE id = ?",
+				UUID.class, messageId);
+		String answer = """
+				{"eventId":"%s","type":"ExtracaoConcluida","schemaVersion":2,"occurredAt":"%s","traceId":"contract-96-19",
+				 "requestEventId":"%s","unavailabilityRequestId":"%s","method":"MODEL","model":"synthetic-model",
+				 "periods":[{"startDate":"2026-11-28","endDate":"2026-11-28","startTime":"08:00","endTime":"13:00"}]}
+				""".formatted(UUID.randomUUID(), NOW, requestEventId, messageId);
+		MessageProperties properties = new MessageProperties();
+		properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
+		rabbitTemplate.send("escala.events", "extracao.concluida",
+				new Message(answer.getBytes(StandardCharsets.UTF_8), properties));
 	}
 
 	@Test
