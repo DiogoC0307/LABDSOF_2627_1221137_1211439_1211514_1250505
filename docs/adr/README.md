@@ -76,3 +76,4 @@ One row per ADR, in number order. The Date is the day the decision was taken; ea
 | [0017](0017-build-the-client-as-an-angular-pwa.md) | Build the client as an Angular PWA | Accepted | 2026-10-31 | — |
 | [0018](0018-run-docker-compose-for-evaluation-and-kubernetes-with-argo-cd-for-team-environments.md) | Run Docker Compose for evaluation and Kubernetes with Argo CD for the team environments | Accepted | 2026-10-31 | — |
 | [0019](0019-version-the-database-schema-with-flyway-migrations.md) | Version the database schema with Flyway migrations | Proposed | 2026-11-09 | — |
+| [0020](0020-use-angular-material-cdk-and-tailwindcss.md) | Use Angular Material + CDK and TailwindCSS in the web client | Proposed | 2026-11-24 | — |
