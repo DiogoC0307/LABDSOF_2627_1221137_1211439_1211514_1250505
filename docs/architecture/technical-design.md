@@ -141,7 +141,7 @@ If Escala itself is down, the corps uses the phone. Runbook: [Deployment and Ope
 
 Source: [`domain_model.puml`](domain_model.puml). Cross-service IDs are references on events, never foreign keys. Instants in UTC; PWA shows `Europe/Lisbon` ([ADR 0012](../adr/0012-store-instants-in-utc.md)).
 
-- `escala-db` (blue): Member (with its functions, migration V4), Certification (types TAS and TAT), DrivingLicence, ServiceHoursEntry, Vehicle, Piquete, Slot, Assignment, DailyRisk (display only), Unavailability, FreeTextMessage (deleted after confirmation), SwapRequest, PresenceConfirmation, CoverRequest, Application, Notification, AuditRecord, outbox.
+- `escala-db` (blue): Member (with its functions, migration V4), Certification (types TAS and TAT), DrivingLicence, ServiceHoursEntry, Vehicle, Piquete, Slot, Assignment, DailyRisk (display only), Unavailability, FreeTextMessage (table `unavailability_message`, migration V6; the text is deleted on confirmation, on discard or after 24 hours), SwapRequest, PresenceConfirmation, CoverRequest, Application, Notification, AuditRecord, outbox.
 - `elegibilidade-db` (orange): EligibilityEvaluation (`purpose` SWAP/COVER/ASSIGNMENT), ViolatedRule, UnavailabilityExtraction, RiskObservation, WeatherWarning, outbox.
 
 ![Escala — Domain model](domain_model.png)
@@ -163,16 +163,23 @@ Consistency is strong inside each database and eventual between services (visibl
   - Only `ADMIN` registers and edits (09: "Edit members and certifications"); `SUPERVISOR` and `ADMIN` read the list; a `MEMBER` reads only themself. A new member is always `MEMBER`: changing a role waits for audit records (T-06).
   - The contact is in the answer only for the admin and the member themself, and is never logged (09, data minimisation).
   - Functions are the slot roles (`CREW_CHIEF`, `DRIVER`, `CREW_MEMBER`). There is one certification per type and one licence per class: a renewal replaces the dates, with no history. A driver needs a licence; a certification cannot expire before it was issued.
-  - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); SCRUM-88 aligns the other errors with it. Tests: TC-SCRUM-77-01, 02 and 05.
+  - An invalid request answers `400` with `errors: [{field, code}]` and never the values (`ValidationErrorResponse` in the contract); every `400` of the API has this format since SCRUM-88. Tests: TC-SCRUM-77-01, 02 and 05.
   - No qualification rule (RN01, RN02) runs in `escala-api`: the eligibility rules belong to the worker (ADR 0007, SCRUM-65 and SCRUM-79).
 - Unavailability by form (SCRUM-64): `GET` and `POST /api/v1/unavailabilities`, `GET` and `DELETE /api/v1/unavailabilities/{id}`.
   - Every role declares its own periods; the member comes from the token, never from the body (T-03). A period of another member answers `404`, not `403`, and nothing changes.
   - Dates and times only, never a reason (09). `startsAt` and `endsAt` are ISO 8601 with an offset, stored in UTC (ADR 0012); the end is exclusive. In the PWA, a day without a time runs from 00:00 to 00:00 of the next day in Europe/Lisbon, and periods are shown in Lisbon time.
   - `201` with `Location` in under 500 ms (RNF02): one insert, no event. A period that has already ended (`in_the_past`) or starts more than 6 months ahead (`too_far_ahead`, as on 06) is refused; overlapping periods are kept; a change is `DELETE` and `POST`, there is no `PUT`.
   - A daily job (`UnavailabilityRetention`, 03:30 UTC) deletes the periods that ended more than 30 days ago (09, "Retention and deletion"). Tests: TC-SCRUM-64-01 to 04.
+- Unavailability in the member's own words (SCRUM-75, RF13, RF31 to RF33; escala-api and PWA side): `POST /api/v1/unavailability-messages`, `GET` and `DELETE /api/v1/unavailability-messages/{id}`, `POST /api/v1/unavailability-messages/{id}/confirm`.
+  - Every role sends its own text (at most 500 characters). `202` at once: the text and the reference date (today in Lisbon) go to the worker as `ExtracaoPedida` through the outbox, never the member. The message is `PENDING` until `ExtracaoConcluida` v2 arrives, then `PROPOSED` with the periods read (maybe none: the PWA then suggests the form and discards the message).
+  - Nothing counts until the member confirms (AC1). The PWA shows the periods in editable fields labelled "Read automatically", as patterns (dates, optional weekdays, optional Lisbon times); escala-api expands them only on confirmation into continuous periods in UTC, in the SCRUM-64 table with `source = FREE_TEXT` and no new columns (decision D). Whole days in a row become one period; overlapping periods are joined. A period that has ended, or that starts or ends more than 6 months ahead, rejects the whole confirmation; a period running now keeps only what has not ended.
+  - The free text is deleted, with its outbox row, in the same transaction as the confirmation (AC4), on discard, or by `UnavailabilityMessageRetention` 24 hours after the message (every 10 minutes, RNF09). The row stays without the text, so the method and the latency can be counted. The text is never logged and never returned by the API.
+  - At most 10 messages per member in any hour (09 T-11): the 11th answers `429` with `Retry-After`. Another member's message answers `404` with the JSON error body (SCRUM-88, below); confirming one without a proposal, or one already closed, `409`.
+  - `ExtracaoConcluidaListener` applies an answer once per `eventId` and only to a `PENDING` message with the same `requestEventId`; an answer that does not follow v2 goes to the DLQ. Migration V6 (`unavailability_message`). Tests: TC-SCRUM-75-01 to 20; the worker side is TC-SCRUM-75-21 to 29 (#77).
+- Errors (SCRUM-88): every error answers Spring Boot's JSON body (`timestamp`, `status`, `error`, `path`), and every `400` adds `errors: [{field, code}]`, never the rejected values. Always JSON, whatever the `Accept` header: `validation/JsonErrorController` replaces the Whitelabel page (`server.error.whitelabel.enabled=false`), and a `401`, `403` or `404` goes through `/error` so it has the same body.
 - Header: `X-Trace-Id` (RF37)
 
-Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /api/v1/unavailability-messages` (free text, 202, SCRUM-75) · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
+Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · worker `SEMPRE_ELEGIVEL` · `ELIGIBLE` · today's piquete PWA (SCRUM-45/46/47). Product API (planned): `GET /me/roster` · `POST /piquetes/{id}/publish` · `POST /swaps` · `POST /swaps/{id}/accept` · `POST /slots/{id}/presence` · `POST /cover-requests/{id}/accept` · `POST /assignments/{id}/confirm` (RF24) · `GET /risk/today`. Health: `/actuator/health` with `liveness` and `readiness` groups (RF36).
 
 ## Deployment view
 
@@ -187,7 +194,13 @@ Compose sets `SPRING_RABBITMQ_DYNAMIC=false`. Topology comes from `infra/rabbitm
 ## Observability and SLIs
 
 - Logs: timestamp + level + `trace_id` in the pattern; JSON logs are SCRUM-48; never contacts or free text. `DEBUG` only for `pt.isep.escala`; request bodies, message bodies, SQL values and exception messages never reach the logs (SCRUM-94, see Deployment and Operations)
-- Health: `/actuator/health`, `/actuator/health/liveness` and `/actuator/health/readiness` (RF36; through the web proxy `/api/actuator/...`). Today `/actuator/health` reports DOWN when RabbitMQ is down, but the readiness group does not yet include the database or the broker, and the Kubernetes probes use `/actuator/health`. Both are fixed in SCRUM-88 (Sprint 2).
+- Health (RF36; through the web proxy `/api/actuator/...`), on both services (SCRUM-88):
+  - `/actuator/health/liveness`: the process only (`livenessState`). The Kubernetes liveness probe, so a dependency that is down never restarts the pod.
+  - `/actuator/health/readiness`: the Kubernetes readiness probe; with a dependency in it down, it answers `503` within seconds (connection timeouts of 3 s for Hikari and RabbitMQ) and the pod leaves the Service.
+    - `elegibilidade-worker`: `readinessState`, the database (`db`), RabbitMQ (`rabbit`) and the listener containers (`listeners`, DOWN when one is not running).
+    - `escala-api`: `readinessState` and the database (`db`) only. The outbox lets the API keep serving with the broker down (events wait in `outbox_event`), so RabbitMQ and the listeners stay out of readiness and a broker failure does not take every API pod out of the Service.
+  - `/actuator/health`: all indicators (`db`, `rabbit`, `listeners` included); no probe uses it. On `escala-api` it is where a broker or listener failure shows (`503`).
+  - Docker Compose: the `escala-api` healthcheck uses `/actuator/health/readiness`, like the Kubernetes probe, so the API does not turn unhealthy when only the broker is down. The `elegibilidade-worker` healthcheck only opens port 8081.
 
 - Traces: OpenTelemetry Java agent in both images; Tempo; Grafana. Kubernetes also runs Loki and Alloy.
 - The trace breaks at the outbox today: the relay publishes outside any active span, so Tempo shows separate traces; the application `traceId` in the payload still passes (SCRUM-93).

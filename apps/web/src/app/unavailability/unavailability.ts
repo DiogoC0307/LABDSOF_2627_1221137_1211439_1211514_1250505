@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { formatLisbon, lisbonToUtc, nextDay } from './lisbon-time';
+import { UnavailabilityMessage } from './message';
 
 interface Period {
   id: string;
@@ -29,7 +30,7 @@ const MESSAGES: Record<string, string> = {
  */
 @Component({
   selector: 'app-unavailability',
-  imports: [FormsModule],
+  imports: [FormsModule, UnavailabilityMessage],
   templateUrl: './unavailability.html',
   changeDetection: ChangeDetectionStrategy.Eager,
 })
@@ -86,7 +87,7 @@ export class Unavailability implements OnInit {
     });
   }
 
-  private reload(): void {
+  protected reload(): void {
     this.http.get<Period[]>('/api/v1/unavailabilities').subscribe({
       next: (list) => {
         this.loadError.set(null);
