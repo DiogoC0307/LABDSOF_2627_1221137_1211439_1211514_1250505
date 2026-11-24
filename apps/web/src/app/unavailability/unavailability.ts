@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
+import { finalize } from 'rxjs';
 import { formatLisbon, lisbonToUtc, nextDay } from './lisbon-time';
 import { UnavailabilityMessage } from './message';
 
@@ -40,6 +41,8 @@ export class Unavailability implements OnInit {
   protected readonly periods = signal<Period[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
   protected readonly loadError = signal<string | null>(null);
+  /** True while the period is being saved: the button is disabled, so a second click sends nothing (SCRUM-158). */
+  protected readonly saving = signal(false);
 
   protected startDate = '';
   protected startTime = '';
@@ -57,6 +60,9 @@ export class Unavailability implements OnInit {
   }
 
   protected save(): void {
+    if (this.saving()) {
+      return;
+    }
     if (this.startDate === '' || this.endDate === '') {
       this.errors.set([{ field: 'startsAt', code: 'required' }]);
       return;
@@ -68,16 +74,20 @@ export class Unavailability implements OnInit {
       return;
     }
     this.errors.set([]);
-    this.http.post<Period>('/api/v1/unavailabilities', { startsAt, endsAt }).subscribe({
-      next: () => {
-        this.startDate = '';
-        this.startTime = '';
-        this.endDate = '';
-        this.endTime = '';
-        this.reload();
-      },
-      error: (error: unknown) => this.errors.set(this.apiErrors(error)),
-    });
+    this.saving.set(true);
+    this.http
+      .post<Period>('/api/v1/unavailabilities', { startsAt, endsAt })
+      .pipe(finalize(() => this.saving.set(false)))
+      .subscribe({
+        next: () => {
+          this.startDate = '';
+          this.startTime = '';
+          this.endDate = '';
+          this.endTime = '';
+          this.reload();
+        },
+        error: (error: unknown) => this.errors.set(this.apiErrors(error)),
+      });
   }
 
   protected remove(period: Period): void {

@@ -120,6 +120,24 @@ describe('Unavailability', () => {
     expect(page(fixture).querySelector('[role="alert"] [data-field="endsAt"]')?.textContent).toContain('already ended');
   });
 
+  it('TC-SCRUM-158-04 two clicks on Save before the answer send one period; the button is disabled until the answer, then enabled again', async () => {
+    const fixture = await start();
+    http().expectOne('/api/v1/unavailabilities').flush([]);
+    await fill(fixture, { startDate: '2026-12-05', endDate: '2026-12-07' });
+    const save = page(fixture).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+
+    save.click();
+    save.click();
+    fixture.detectChanges();
+
+    const post = http().expectOne({ method: 'POST', url: '/api/v1/unavailabilities' });
+    expect(save.disabled).toBe(true);
+    post.flush({ status: 400, errors: [{ field: 'endsAt', code: 'in_the_past' }] }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+
+    expect(save.disabled).toBe(false);
+  });
+
   it('a member removes a period, and the list is loaded again', async () => {
     const fixture = await start();
     http().expectOne('/api/v1/unavailabilities').flush([period]);
