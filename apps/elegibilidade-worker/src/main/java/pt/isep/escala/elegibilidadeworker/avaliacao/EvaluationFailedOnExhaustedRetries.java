@@ -8,6 +8,7 @@ import org.springframework.amqp.core.Message;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import pt.isep.escala.elegibilidadeworker.messaging.EventFields;
+import pt.isep.escala.elegibilidadeworker.metrics.EvaluationMetrics;
 import pt.isep.escala.elegibilidadeworker.messaging.RetriesExhaustedHandler;
 import pt.isep.escala.elegibilidadeworker.outbox.OutboxEvent;
 import pt.isep.escala.elegibilidadeworker.outbox.OutboxEventRepository;
@@ -27,8 +28,10 @@ class EvaluationFailedOnExhaustedRetries implements RetriesExhaustedHandler {
 
 	private final ObjectMapper objectMapper;
 	private final OutboxEventRepository outbox;
+	private final EvaluationMetrics metrics;
 
-	EvaluationFailedOnExhaustedRetries(ObjectMapper objectMapper, OutboxEventRepository outbox) {
+	EvaluationFailedOnExhaustedRetries(ObjectMapper objectMapper, OutboxEventRepository outbox, EvaluationMetrics metrics) {
+		this.metrics = metrics;
 		this.objectMapper = objectMapper;
 		this.outbox = outbox;
 	}
@@ -51,6 +54,7 @@ class EvaluationFailedOnExhaustedRetries implements RetriesExhaustedHandler {
 				AvaliacaoPedidaListener.ROUTING_AVALIACAO_CONCLUIDA,
 				AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, "FAILED"),
 				Instant.now()));
+		metrics.completed("FAILED", EvaluationMetrics.RETRIES_EXHAUSTED);
 		log.warn("evaluation failed after the retries assignmentId={} resultEventId={}", assignmentId, resultEventId);
 	}
 }

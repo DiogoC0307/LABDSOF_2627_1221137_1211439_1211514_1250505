@@ -51,6 +51,9 @@ class SecurityConfig {
 						.dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**").permitAll()
+						// Prometheus scrapes without a token; the web proxy does not forward it, so only the cluster and the
+						// Compose network reach it, and it holds no IDs nor free text (SCRUM-97, threat model T-07)
+						.requestMatchers(HttpMethod.GET, "/actuator/prometheus").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/v1/auth/mock-users").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
 						.requestMatchers(HttpMethod.GET, PIQUETES, PIQUETES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)

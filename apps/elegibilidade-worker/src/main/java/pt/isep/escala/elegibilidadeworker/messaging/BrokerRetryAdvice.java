@@ -2,6 +2,7 @@ package pt.isep.escala.elegibilidadeworker.messaging;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.aopalliance.intercept.MethodInterceptor;
@@ -32,8 +33,17 @@ public class BrokerRetryAdvice implements MethodInterceptor {
 	private final RetryPublisher retryPublisher;
 	private final List<String> stages;
 	private final Map<String, RetriesExhaustedHandler> exhaustedHandlers;
+	private final Consumer<String> onDeadLetter;
 
 	public BrokerRetryAdvice(RetryPublisher retryPublisher, List<String> stages, List<RetriesExhaustedHandler> exhaustedHandlers) {
+		this(retryPublisher, stages, exhaustedHandlers, queue -> {
+		});
+	}
+
+	/** {@code onDeadLetter} gets the consumer queue of every message rejected to the DLQ (null if unknown). */
+	public BrokerRetryAdvice(RetryPublisher retryPublisher, List<String> stages, List<RetriesExhaustedHandler> exhaustedHandlers,
+			Consumer<String> onDeadLetter) {
+		this.onDeadLetter = onDeadLetter;
 		this.retryPublisher = retryPublisher;
 		this.stages = List.copyOf(stages);
 		this.exhaustedHandlers = exhaustedHandlers.stream()
@@ -47,6 +57,7 @@ public class BrokerRetryAdvice implements MethodInterceptor {
 		} catch (Throwable failure) {
 			Message message = messageOf(invocation);
 			if (message == null || isMalformed(failure)) {
+				this.onDeadLetter.accept(message == null ? null : message.getMessageProperties().getConsumerQueue());
 				throw rejected(failure, message);
 			}
 			String queue = message.getMessageProperties().getConsumerQueue();
@@ -58,6 +69,7 @@ public class BrokerRetryAdvice implements MethodInterceptor {
 				return null;
 			}
 			retriesExhausted(queue, message);
+			this.onDeadLetter.accept(queue);
 			throw rejected(failure, message);
 		}
 	}
