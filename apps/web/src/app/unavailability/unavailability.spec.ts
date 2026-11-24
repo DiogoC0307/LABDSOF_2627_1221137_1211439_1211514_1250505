@@ -24,6 +24,9 @@ describe('Lisbon time', () => {
   });
 });
 
+/** Asked by the free-text part of the page (SCRUM-89); answered here so that every request is accounted for. */
+const SETTINGS = '/api/v1/unavailability-messages/settings';
+
 /** "When I can't": a member declares and removes their own unavailability (SCRUM-64). */
 describe('Unavailability', () => {
   beforeEach(async () => {
@@ -45,6 +48,7 @@ describe('Unavailability', () => {
     fixture.detectChanges();
     await TestBed.inject(Router).navigateByUrl('/unavailability');
     fixture.detectChanges();
+    http().expectOne(SETTINGS).flush({ aiEnabled: true });
     return fixture;
   }
 
@@ -162,6 +166,7 @@ describe('Unavailability', () => {
       await TestBed.inject(Router).navigateByUrl('/unavailability');
       fixture.detectChanges();
       http().expectOne('/api/v1/unavailabilities').flush([]);
+      http().expectOne(SETTINGS).flush({ aiEnabled: true });
       expect(page(fixture).querySelector('.menu a[href="/unavailability"]')).not.toBeNull();
     }
   });
