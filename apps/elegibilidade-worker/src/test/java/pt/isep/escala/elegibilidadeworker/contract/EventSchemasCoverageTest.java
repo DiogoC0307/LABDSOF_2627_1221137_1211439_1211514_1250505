@@ -18,7 +18,7 @@ class EventSchemasCoverageTest {
 			"avaliacao-concluida.schema.json", "produced: TC-SCRUM-96-10",
 			"extracao-pedida.schema.json", "consumed: TC-SCRUM-96-15",
 			"extracao-concluida.schema.json", "produced: TC-SCRUM-96-14",
-			"risco-atualizado.schema.json", "not built yet");
+			"risco-atualizado.schema.json", "produced: TC-SCRUM-76-01");
 
 	@Test
 	@DisplayName("TC-SCRUM-96-12 every schema in contracts/events/ is listed for the worker")

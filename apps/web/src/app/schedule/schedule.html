@@ -3,6 +3,18 @@
 </header>
 <p class="lead">Date, slot and evaluation on a phone-sized screen. A new slot starts PENDING and becomes ELIGIBLE after evaluation.</p>
 
+@if (riskLine(); as line) {
+  <p class="risk">
+    {{ line }}
+    (<a href="https://www.ipma.pt/" rel="noopener noreferrer">www.ipma.pt</a>)
+  </p>
+  @if (risk()?.assumedHigher) {
+    <p class="notice" role="status">
+      This fire risk may be out of date ({{ riskAge() }}). Fire risk from IPMA last updated {{ riskAge() }}. Level may be higher than shown. The schedule is unchanged.
+    </p>
+  }
+}
+
 @if (offline()) {
   <p class="notice">Showing the last loaded roster. You are offline.</p>
 }

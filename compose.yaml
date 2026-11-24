@@ -138,6 +138,10 @@ services:
       # never in .env); ANTHROPIC_API_KEY is never passed.
       AI_ENABLED: ${AI_ENABLED:-false}
       CLAUDE_CODE_OAUTH_TOKEN:
+      # SCRUM-76. Default is the real service. Evaluation: IPMA_BASE_URL=http://ipma-sim:8090
+      # docker compose --profile evaluation up --build
+      IPMA_BASE_URL: ${IPMA_BASE_URL:-https://api.ipma.pt}
+      ESCALA_RISK_STALENESS: ${ESCALA_RISK_STALENESS:-3h}
     ports: ["${ELEGIBILIDADE_WORKER_PORT:-8081}:8081"]
     depends_on:
       pg-elegibilidade-worker: { condition: service_healthy }
@@ -148,6 +152,19 @@ services:
       timeout: 5s
       retries: 12
       start_period: 40s
+
+  # SCRUM-76 / §6.5. Same paths as api.ipma.pt. Started only with the evaluation profile:
+  #   IPMA_BASE_URL=http://ipma-sim:8090 docker compose --profile evaluation up --build
+  # IPMA_SIM_MODE=ok|unavailable|delayed|incomplete|invalid. IPMA_SIM_RCM overrides DICO 1312.
+  ipma-sim:
+    profiles: [evaluation]
+    build: ./tools/ipma-sim
+    logging: *default-logging
+    environment:
+      IPMA_SIM_MODE: ${IPMA_SIM_MODE:-ok}
+      IPMA_SIM_RCM: ${IPMA_SIM_RCM:-}
+      IPMA_SIM_DICO: ${IPMA_SIM_DICO:-1312}
+    ports: ["127.0.0.1:${IPMA_SIM_PORT:-8090}:8090"]
 
   # SCRUM-38: Claude Haiku through the Claude Code CLI on the evaluation dataset, scored like the baseline, from inside
   # the worker image. Never started by `up`; only with the profile, e.g.

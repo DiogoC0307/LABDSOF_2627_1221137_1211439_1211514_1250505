@@ -304,6 +304,16 @@ class ApiContractIT {
 	}
 
 	@Test
+	@DisplayName("TC-SCRUM-76-01 GET /api/v1/risk/today is the supervisor's read model: 200, 401 and 403")
+	void todayRisk() throws Exception {
+		String path = "/api/v1/risk/today";
+		assertThat(call("GET", path, path, MockTokens.supervisor(), null).statusCode()).isEqualTo(200);
+		assertThat(call("GET", path, path, null, null).statusCode()).isEqualTo(401);
+		assertThat(call("GET", path, path, MockTokens.member(), null).statusCode()).isEqualTo(403);
+		assertThat(call("GET", path, path, MockTokens.admin(), null).statusCode()).isEqualTo(403);
+	}
+
+	@Test
 	@DisplayName("TC-SCRUM-96-06 the three Actuator health endpoints answer as the spec says")
 	void health() throws Exception {
 		for (String path : new String[] { "/actuator/health", "/actuator/health/liveness",

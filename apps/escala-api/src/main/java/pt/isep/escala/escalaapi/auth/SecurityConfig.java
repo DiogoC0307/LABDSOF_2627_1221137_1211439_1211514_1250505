@@ -24,6 +24,7 @@ class SecurityConfig {
 	static final String MEMBERS = "/api/v1/members";
 	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
 	static final String UNAVAILABILITY_MESSAGES = "/api/v1/unavailability-messages";
+	static final String RISK_TODAY = "/api/v1/risk/today";
 
 	private static final String MEMBER = "MEMBER";
 	private static final String SUPERVISOR = "SUPERVISOR";
@@ -75,6 +76,8 @@ class SecurityConfig {
 								.hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.GET, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						// SCRUM-76: today's fire risk is information for the supervisor. It does not change the schedule.
+						.requestMatchers(HttpMethod.GET, RISK_TODAY).hasRole(SUPERVISOR)
 						.anyRequest().denyAll())
 				.build();
 	}

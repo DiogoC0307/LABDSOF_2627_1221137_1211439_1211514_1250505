@@ -10,7 +10,8 @@ info:
     Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
     under /api/v1/auth, the members and certification types under /api/v1/members and
     /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
-    (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
+    (SCRUM-64), GET /api/v1/risk/today for the supervisor (SCRUM-76), and the three Actuator health
+    endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -974,16 +975,31 @@ paths:
           description: Slot already filled or check ineligible
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /risk/today:
+  /api/v1/risk/today:
     get:
       tags: [risk]
-      summary: Observed RCM for today, age, and assumed-higher display warning
+      summary: Observed RCM for today, its age, and the assumed-higher warning
+      description: >
+        The corps municipality (DICO 1312). Display only: it does not change the schedule (ADR 0010, ADR 0013).
+        SUPERVISOR only. rcm is null until a value has been cached. assumedHigher is true when the value is at
+        least 3 hours old (configurable per corps) or the latest poll was unusable.
       operationId: getTodayRisk
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
       responses:
         "200":
-          description: Risk read model
+          description: Risk read model, including when nothing has been cached yet
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TodayRisk"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 components:
   securitySchemes:
     bearerAuth:
@@ -1407,6 +1423,39 @@ components:
         endDate: "2026-11-28"
         startTime: "08:00"
         endTime: "13:00"
+    TodayRisk:
+      type: object
+      required: [dico, source, assumedHigher]
+      properties:
+        dico:
+          type: string
+          pattern: "^[0-9]{4}$"
+          example: "1312"
+        rcm:
+          type: integer
+          nullable: true
+          minimum: 1
+          maximum: 5
+          description: Null until a usable value has been cached
+        label:
+          type: string
+          nullable: true
+          description: low, moderate, high, very high or maximum; null when rcm is null
+        fetchedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the shown value was taken, UTC (ADR 0012)
+        dataAgeHours:
+          type: number
+          nullable: true
+          minimum: 0
+        source:
+          type: string
+          enum: [IPMA, SIMULATOR]
+        assumedHigher:
+          type: boolean
+          description: The real level may be higher than shown. The schedule is unchanged.
     ErrorResponse:
       type: object
       description: >

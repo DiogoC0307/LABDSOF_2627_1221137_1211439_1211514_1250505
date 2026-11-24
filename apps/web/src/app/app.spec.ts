@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from './app';
-import { SESSION_KEY, http, pending, signInAs, testProviders, users } from './testing/test-support';
+import { SESSION_KEY, flushRosterRisk, http, pending, signInAs, testProviders, users } from './testing/test-support';
 
 /** The shell: sign-in, the menu by role, the router with its role guards, sign-out and the install prompt. */
 describe('App', () => {
@@ -50,6 +50,7 @@ describe('App', () => {
     const list = http().expectOne('/api/v1/piquetes');
     expect(list.request.headers.get('Authorization')).toBe('Bearer mock.supervisor-token');
     list.flush([]);
+    flushRosterRisk();
     fixture.detectChanges();
     expect(page.querySelector('form button')?.textContent).toContain('Create piquete');
     expect(page.querySelector('.session')?.textContent).toContain('Synthetic Supervisor');
@@ -61,6 +62,7 @@ describe('App', () => {
     const list = http().expectOne('/api/v1/piquetes');
     expect(list.request.headers.get('Authorization')).toBe('Bearer mock.SUPERVISOR');
     list.flush([]);
+    flushRosterRisk();
   });
 
   it('goes back to the sign-in screen when the API answers 401', async () => {
@@ -76,6 +78,7 @@ describe('App', () => {
   it('sign out clears the session and the last loaded roster', async () => {
     const fixture = await start();
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
     fixture.detectChanges();
     expect(localStorage.getItem('escala.lastPiquetes')).not.toBeNull();
 
@@ -93,6 +96,7 @@ describe('App', () => {
     signInAs(role);
     const fixture = await start();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('.menu a[href="/members"]')).not.toBeNull();
   });
@@ -111,6 +115,7 @@ describe('App', () => {
   it('TC-SCRUM-46-02 offers install when the browser fires beforeinstallprompt', async () => {
     const fixture = await start();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
 
     const prompt = Object.assign(new Event('beforeinstallprompt', { cancelable: true }), {
       prompt: async () => undefined,
