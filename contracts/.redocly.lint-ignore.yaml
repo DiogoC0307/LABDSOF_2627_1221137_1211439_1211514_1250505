@@ -1,0 +1,11 @@
+# Problems the Redocly lint of contracts/openapi.yaml accepts on purpose (SCRUM-96); see redocly.yaml.
+# operation-4xx-response: these four operations take no parameters, no body and no token (security: []), so a
+# client cannot get a 4XX from them. The health endpoints report the state of escala-api; the list of mock users is
+# public (ADR 0006).
+# See https://redocly.com/docs/cli/ for the format.
+openapi.yaml:
+  operation-4xx-response:
+    - '#/paths/~1actuator~1health/get/responses'
+    - '#/paths/~1actuator~1health~1liveness/get/responses'
+    - '#/paths/~1actuator~1health~1readiness/get/responses'
+    - '#/paths/~1api~1v1~1auth~1mock-users/get/responses'
