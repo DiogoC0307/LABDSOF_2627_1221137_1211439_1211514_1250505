@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pt.isep.escala.escalaapi.metrics.EvaluationMetrics;
 import pt.isep.escala.escalaapi.outbox.OutboxEvent;
 import pt.isep.escala.escalaapi.outbox.OutboxEventRepository;
 import pt.isep.escala.escalaapi.trace.TraceId;
@@ -24,9 +25,12 @@ class PiqueteService {
 	private final PiqueteRepository piquetes;
 	private final OutboxEventRepository outbox;
 	private final AvaliacaoPedidaFactory pedidos;
+	private final EvaluationMetrics metrics;
 
 	PiqueteService(
-			PiqueteRepository piquetes, OutboxEventRepository outbox, AvaliacaoPedidaFactory pedidos) {
+			PiqueteRepository piquetes, OutboxEventRepository outbox, AvaliacaoPedidaFactory pedidos,
+			EvaluationMetrics metrics) {
+		this.metrics = metrics;
 		this.piquetes = piquetes;
 		this.outbox = outbox;
 		this.pedidos = pedidos;
@@ -45,6 +49,7 @@ class PiqueteService {
 		UUID eventId = UUID.randomUUID();
 		String payload = pedidos.payload(slot, request.dutyDate(), eventId);
 		outbox.save(new OutboxEvent(eventId, ROUTING_AVALIACAO_PEDIDA, payload, Instant.now()));
+		metrics.requested(AvaliacaoPedidaFactory.PURPOSE);
 		log.info("AvaliacaoPedida queued eventId={} assignmentId={} traceId={}", eventId, assignmentId, TraceId.current());
 		return toResponse(piquete);
 	}

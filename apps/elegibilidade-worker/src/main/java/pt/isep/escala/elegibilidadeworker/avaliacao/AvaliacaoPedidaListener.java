@@ -2,6 +2,7 @@ package pt.isep.escala.elegibilidadeworker.avaliacao;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import pt.isep.escala.elegibilidadeworker.messaging.EventFields;
+import pt.isep.escala.elegibilidadeworker.metrics.EvaluationMetrics;
 import pt.isep.escala.elegibilidadeworker.outbox.OutboxEvent;
 import pt.isep.escala.elegibilidadeworker.outbox.OutboxEventRepository;
 import pt.isep.escala.elegibilidadeworker.outbox.ProcessedEvent;
@@ -25,16 +27,22 @@ class AvaliacaoPedidaListener {
 
 	private static final Logger log = LoggerFactory.getLogger(AvaliacaoPedidaListener.class);
 
+	/** The only result while the engine is SEMPRE_ELEGIVEL. */
+	private static final String ELIGIBLE = "ELIGIBLE";
+
 	private final ObjectMapper objectMapper;
 	private final ProcessedEventRepository processed;
 	private final EvaluationRepository evaluations;
 	private final OutboxEventRepository outbox;
+	private final EvaluationMetrics metrics;
 
 	AvaliacaoPedidaListener(
 			ObjectMapper objectMapper,
 			ProcessedEventRepository processed,
 			EvaluationRepository evaluations,
-			OutboxEventRepository outbox) {
+			OutboxEventRepository outbox,
+			EvaluationMetrics metrics) {
+		this.metrics = metrics;
 		this.objectMapper = objectMapper;
 		this.processed = processed;
 		this.evaluations = evaluations;
@@ -44,6 +52,7 @@ class AvaliacaoPedidaListener {
 	@RabbitListener(queues = QUEUE)
 	@Transactional
 	void onPedido(Message message) {
+		long started = System.nanoTime();
 		JsonNode body = EventFields.body(objectMapper, message);
 		String traceId = body.path("traceId").asText();
 		MDC.put("trace_id", traceId);
@@ -58,7 +67,7 @@ class AvaliacaoPedidaListener {
 					UUID.randomUUID(),
 					requestEventId,
 					assignmentId,
-					"ELIGIBLE",
+					ELIGIBLE,
 					Evaluation.ENGINE_SEMPRE_ELEGIVEL,
 					traceId,
 					Instant.now()));
@@ -66,9 +75,11 @@ class AvaliacaoPedidaListener {
 			outbox.save(new OutboxEvent(
 					resultEventId,
 					ROUTING_AVALIACAO_CONCLUIDA,
-					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, "ELIGIBLE"),
+					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, ELIGIBLE),
 					Instant.now()));
 			processed.save(new ProcessedEvent(requestEventId, Instant.now()));
+			metrics.completed(ELIGIBLE, EvaluationMetrics.LISTENER);
+			metrics.processed(Duration.ofNanos(System.nanoTime() - started));
 			log.info(
 					"SEMPRE_ELEGIVEL written requestEventId={} assignmentId={} resultEventId={} traceId={}",
 					requestEventId,
