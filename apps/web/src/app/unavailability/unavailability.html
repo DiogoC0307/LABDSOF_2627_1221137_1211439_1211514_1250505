@@ -33,7 +33,7 @@
     </ul>
   }
 
-  <button type="submit">Save</button>
+  <button type="submit" [disabled]="saving()">Save</button>
 </form>
 
 <app-unavailability-message (confirmed)="reload()" />

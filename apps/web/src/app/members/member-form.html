@@ -102,5 +102,5 @@
     </ul>
   }
 
-  <button type="submit" [disabled]="!ready()">Save member</button>
+  <button type="submit" [disabled]="!ready() || saving()">Save member</button>
 </form>
