@@ -113,6 +113,25 @@ describe('Schedule', () => {
     );
   });
 
+  it('TC-SCRUM-158-03 two clicks on Create piquete before the answer create one piquete; the button is disabled until the answer, then enabled again', () => {
+    const fixture = TestBed.createComponent(Schedule);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([]);
+    fixture.detectChanges();
+    const create = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
+
+    create.click();
+    create.click();
+    fixture.detectChanges();
+
+    const post = http().expectOne({ method: 'POST', url: '/api/v1/piquetes' });
+    expect(create.disabled).toBe(true);
+    post.flush('fail', { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(create.disabled).toBe(false);
+  });
+
   it('keeps polling while the slot is still PENDING', async () => {
     vi.useFakeTimers();
     const fixture = TestBed.createComponent(Schedule);

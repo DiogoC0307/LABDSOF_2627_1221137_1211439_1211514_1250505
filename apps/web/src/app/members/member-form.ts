@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@ang
 import { HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { finalize } from 'rxjs';
 import {
   CertificationType,
   InvalidField,
@@ -62,6 +63,8 @@ export class MemberForm implements OnInit {
   protected readonly types = signal<CertificationType[]>([]);
   protected readonly errors = signal<InvalidField[]>([]);
   protected readonly loadError = signal<string | null>(null);
+  /** True while the save is in flight: the button is disabled, so a second click sends nothing (SCRUM-158). */
+  protected readonly saving = signal(false);
   /**
    * False while the member being edited loads, and for good if loading fails: Save is disabled, so an empty form is
    * never saved over the member. Setting it after the fields are filled is also what renders them: the app is
@@ -123,7 +126,7 @@ export class MemberForm implements OnInit {
   }
 
   protected save(): void {
-    if (!this.ready()) {
+    if (!this.ready() || this.saving()) {
       return;
     }
     const errors = this.check();
@@ -146,7 +149,8 @@ export class MemberForm implements OnInit {
     const request = this.memberId
       ? this.members.update(this.memberId, details, qualifications)
       : this.members.register(details, qualifications);
-    request.subscribe({
+    this.saving.set(true);
+    request.pipe(finalize(() => this.saving.set(false))).subscribe({
       next: () => void this.router.navigateByUrl('/members'),
       error: (error: unknown) => this.errors.set(this.apiErrors(error)),
     });

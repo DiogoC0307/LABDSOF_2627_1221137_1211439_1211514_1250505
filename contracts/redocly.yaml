@@ -1,0 +1,12 @@
+# Lint of contracts/openapi.yaml with the Redocly CLI (SCRUM-96). The CLI version is pinned where it runs, in the
+# contracts job of .github/workflows/build.yml. To run it locally, from the root of the repository:
+#   npx @redocly/cli@2.77.0 lint --config contracts/redocly.yaml contracts/openapi.yaml
+# recommended-strict turns every warning of the recommended rules into an error, so a warning fails the build too.
+# The operations that have no client error on purpose are listed in .redocly.lint-ignore.yaml, next to this file.
+extends:
+  - recommended-strict
+rules:
+  # The localhost servers are the Docker Compose entry points described in the README, on purpose.
+  no-server-example.com: off
+  # No licence has been chosen for the repository yet.
+  info-license: off
