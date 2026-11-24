@@ -11,8 +11,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import pt.isep.escala.escalaapi.member.Member;
 import pt.isep.escala.escalaapi.member.MemberRepository;
+import pt.isep.escala.escalaapi.validation.InvalidRequestException;
+import pt.isep.escala.escalaapi.validation.InvalidRequestException.InvalidField;
 
 /**
  * The mocked sign-in (ADR 0006, SCRUM-63): the sign-in screen lists the seeded users and the user picks one. No
@@ -43,7 +46,7 @@ class MockSignInController {
 	@PostMapping("/mock-sign-in")
 	ResponseEntity<MockSignInResponse> signIn(@RequestBody MockSignInRequest request) {
 		if (request.memberId() == null) {
-			return ResponseEntity.badRequest().build();
+			throw new InvalidRequestException(List.of(new InvalidField("memberId", "required")));
 		}
 		return members.findByIdAndActiveTrue(request.memberId())
 				.map(member -> {
@@ -52,6 +55,6 @@ class MockSignInController {
 					return ResponseEntity.ok(new MockSignInResponse(
 							token, member.getId(), member.getAccessRole(), member.getFullName()));
 				})
-				.orElseGet(() -> ResponseEntity.status(HttpStatus.UNAUTHORIZED).build());
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED));
 	}
 }

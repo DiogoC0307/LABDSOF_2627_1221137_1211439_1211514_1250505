@@ -38,9 +38,9 @@ class MemberController {
 	@GetMapping("/members/{id}")
 	ResponseEntity<MemberResponse> get(@PathVariable UUID id, @AuthenticationPrincipal SignedInMember viewer) {
 		if (viewer.role() == AccessRole.MEMBER && !viewer.memberId().equals(id)) {
-			return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+			throw new ResponseStatusException(HttpStatus.FORBIDDEN);
 		}
-		return ResponseEntity.of(service.get(id, viewer));
+		return ResponseEntity.ok(service.get(id, viewer).orElseThrow(MemberController::notFound));
 	}
 
 	@PostMapping("/members")
