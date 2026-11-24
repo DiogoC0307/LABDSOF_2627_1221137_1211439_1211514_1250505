@@ -288,7 +288,7 @@ describe('Unavailability in my own words', () => {
     }
   });
 
-  it('TC-SCRUM-89-03 a second text sent while the first is read gets its own 10 s, counted from its own sending', async () => {
+  it('TC-SCRUM-89-03 a second text sent while the first is read deletes the first before it is sent, and gets its own 10 s, counted from its own sending', async () => {
     const fixture = await start();
     const second = '75000000-0000-4000-8000-000000000002';
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
@@ -301,8 +301,13 @@ describe('Unavailability in my own words', () => {
       http().match(`${MESSAGES}/${id}`).forEach((poll) => poll.flush(PENDING_VIEW));
 
       await send(fixture, 'não posso domingo');
-      http().expectOne({ method: 'POST', url: MESSAGES }).flush({ id: second, status: 'PENDING', referenceDate: '2026-11-22' },
-        { status: 202, statusText: 'Accepted' });
+      // The first text is deleted on the server first, so it does not stay PENDING for 24 h (page 09).
+      const deleteFirst = http().expectOne({ method: 'DELETE', url: `${MESSAGES}/${id}` });
+      http().expectNone({ method: 'POST', url: MESSAGES });
+      deleteFirst.flush(null, { status: 204, statusText: 'No Content' });
+      const post = http().expectOne({ method: 'POST', url: MESSAGES });
+      expect(post.request.body).toEqual({ text: 'não posso domingo' });
+      post.flush({ id: second, status: 'PENDING', referenceDate: '2026-11-22' }, { status: 202, statusText: 'Accepted' });
       for (let elapsed = 0; elapsed < 9000; elapsed += 1000) {
         http().expectOne(`${MESSAGES}/${second}`).flush({ ...PENDING_VIEW, id: second });
         await vi.advanceTimersByTimeAsync(1000);
@@ -319,6 +324,30 @@ describe('Unavailability in my own words', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('TC-SCRUM-89-03 if deleting the first text fails, the second is sent anyway', async () => {
+    const fixture = await start();
+    const second = '75000000-0000-4000-8000-000000000002';
+    await send(fixture, 'não posso sábado de manhã');
+    http().expectOne({ method: 'POST', url: MESSAGES }).flush({ id, status: 'PENDING', referenceDate: '2026-11-22' },
+      { status: 202, statusText: 'Accepted' });
+    const poll = http().expectOne({ method: 'GET', url: `${MESSAGES}/${id}` });
+
+    await send(fixture, 'não posso domingo');
+    http().expectOne({ method: 'DELETE', url: `${MESSAGES}/${id}` })
+      .flush(null, { status: 503, statusText: 'Service Unavailable' });
+    const post = http().expectOne({ method: 'POST', url: MESSAGES });
+    expect(post.request.body).toEqual({ text: 'não posso domingo' });
+    post.flush({ id: second, status: 'PENDING', referenceDate: '2026-11-22' }, { status: 202, statusText: 'Accepted' });
+
+    // An answer for the first text, still in flight, is not used.
+    poll.flush(answer([saturdayMorning]));
+    http().expectOne({ method: 'GET', url: `${MESSAGES}/${second}` }).flush({ ...PENDING_VIEW, id: second });
+    fixture.detectChanges();
+    expect(page(fixture).querySelector('.proposal')).toBeNull();
+    expect(page(fixture).querySelector('.message output')?.textContent).toContain('Reading');
+    fixture.destroy();
   });
 
   it('TC-SCRUM-89-03 a poll still in flight at 10 s is ignored when it comes back with a proposal', async () => {

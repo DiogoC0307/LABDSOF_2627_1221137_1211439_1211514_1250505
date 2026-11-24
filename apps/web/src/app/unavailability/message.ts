@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, output, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
-import { finalize } from 'rxjs';
+import { catchError, finalize, of, switchMap } from 'rxjs';
 
 /** A period in the ExtracaoConcluida v2 format: dates inclusive, optional weekdays and Lisbon times (06). */
 interface ProposedPeriod {
@@ -116,12 +116,25 @@ export class UnavailabilityMessage implements OnInit, OnDestroy {
     this.errors.set([]);
     this.sending.set(true);
     const sentAt = Date.now();
-    this.http
-      .post<MessageView>(MESSAGES, { text: this.text })
-      .pipe(finalize(() => this.sending.set(false)))
+    const text = this.text;
+    // A text sent while another is being read replaces it: the older one stops here, and its copy on the server is
+    // deleted before the new one is sent, so it does not wait 24 h as PENDING (page 09). If that DELETE fails, the new
+    // text is sent anyway and the 24 h cleanup removes the old one.
+    const previous = this.messageId;
+    if (previous !== null) {
+      this.stopTimers();
+      this.messageId = null;
+    }
+    const before = previous === null
+      ? of(null)
+      : this.http.delete(`${MESSAGES}/${previous}`).pipe(catchError(() => of(null)));
+    before
+      .pipe(
+        switchMap(() => this.http.post<MessageView>(MESSAGES, { text })),
+        finalize(() => this.sending.set(false)),
+      )
       .subscribe({
         next: (message) => {
-          // A text sent while another is being read replaces it: the older one's poll and deadline stop here.
           this.stopTimers();
           this.messageId = message.id;
           this.state.set('reading');
@@ -129,6 +142,11 @@ export class UnavailabilityMessage implements OnInit, OnDestroy {
           this.poll(message.id);
         },
         error: (error: unknown) => {
+          if (previous !== null) {
+            // The older message is gone already: nothing is being read any more.
+            this.state.set('idle');
+            this.periods.set([]);
+          }
           if (this.isAiOff(error)) {
             this.aiEnabled.set(false);
             return;
