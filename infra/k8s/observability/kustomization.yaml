@@ -25,3 +25,12 @@ resources:
   - grafana/deployment.yaml
   - grafana/service.yaml
   - grafana/ingress.yaml
+# The Escala dashboards (SCRUM-97), mounted by grafana/deployment.yaml. kustomize reads only files under this folder,
+# so grafana/dashboards/ holds a copy of infra/observability/dashboards/; a test (TC-SCRUM-97-10) keeps them equal.
+configMapGenerator:
+  - name: grafana-dashboards
+    namespace: observability
+    files:
+      - grafana/dashboards/escala-operations.json
+    options:
+      disableNameSuffixHash: true

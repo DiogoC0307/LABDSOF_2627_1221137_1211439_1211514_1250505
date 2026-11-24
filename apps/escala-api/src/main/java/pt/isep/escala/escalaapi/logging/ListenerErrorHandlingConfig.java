@@ -9,6 +9,7 @@ import org.springframework.boot.amqp.autoconfigure.SimpleRabbitListenerContainer
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import pt.isep.escala.escalaapi.messaging.BrokerRetryAdvice;
+import pt.isep.escala.escalaapi.metrics.MessagingMetrics;
 import pt.isep.escala.escalaapi.messaging.EventListenerErrorHandler;
 import pt.isep.escala.escalaapi.messaging.RetriesExhaustedHandler;
 import pt.isep.escala.escalaapi.messaging.RetryPublisher;
@@ -20,13 +21,13 @@ class ListenerErrorHandlingConfig {
 	@Bean
 	SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
 			SimpleRabbitListenerContainerFactoryConfigurer configurer, ConnectionFactory connectionFactory,
-			RetryPublisher retryPublisher, List<RetriesExhaustedHandler> exhaustedHandlers,
+			RetryPublisher retryPublisher, List<RetriesExhaustedHandler> exhaustedHandlers, MessagingMetrics metrics,
 			@Value("${escala.messaging.retry-stages}") String retryStages) {
 		SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
 		configurer.configure(factory, connectionFactory);
 		factory.setErrorHandler(new EventListenerErrorHandler());
 		factory.setAdviceChain(new BrokerRetryAdvice(retryPublisher,
-				Arrays.stream(retryStages.split(",")).map(String::trim).toList(), exhaustedHandlers));
+				Arrays.stream(retryStages.split(",")).map(String::trim).toList(), exhaustedHandlers, metrics::deadLettered));
 		// A refused login (for example while the broker is still creating its users) must not stop the listener for good.
 		factory.setContainerCustomizer(container -> container.setPossibleAuthenticationFailureFatal(false));
 		return factory;
