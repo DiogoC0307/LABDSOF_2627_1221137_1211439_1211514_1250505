@@ -21,6 +21,7 @@ import pt.isep.escala.escalaapi.member.MemberRepository;
 class SecurityConfig {
 
 	static final String PIQUETES = "/api/v1/piquetes";
+	static final String SLOTS = "/api/v1/slots";
 	static final String MEMBERS = "/api/v1/members";
 	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
 	static final String UNAVAILABILITY_MESSAGES = "/api/v1/unavailability-messages";
@@ -58,6 +59,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
 						.requestMatchers(HttpMethod.GET, PIQUETES, PIQUETES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
+						// SCRUM-70: member confirms presence ("I'm coming" / "I can't come") before the shift.
+						.requestMatchers(HttpMethod.POST, SLOTS + "/*/presence").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
 						// only themself (checked in MemberController); the contact only for the admin and the member.
 						.requestMatchers(HttpMethod.GET, MEMBERS, "/api/v1/certification-types").hasAnyRole(SUPERVISOR, ADMIN)
@@ -72,7 +75,7 @@ class SecurityConfig {
 						// SCRUM-75: every role sends its own free text; only one's own messages are found (checked in
 						// UnavailabilityMessageService); 10 per member per hour (09 T-11).
 						.requestMatchers(HttpMethod.POST, UNAVAILABILITY_MESSAGES, UNAVAILABILITY_MESSAGES + "/*/confirm")
-								.hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
+						.hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.GET, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITY_MESSAGES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.anyRequest().denyAll())

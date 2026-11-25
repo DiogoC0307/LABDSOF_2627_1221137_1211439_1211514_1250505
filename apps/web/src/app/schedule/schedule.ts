@@ -1,13 +1,23 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
 
+export type PresenceDecision = 'COMING' | 'CANNOT_COME';
+
 interface Slot {
   id: string;
   role: string;
   status: string;
+  presenceStatus?: 'UNCONFIRMED' | 'COMING' | 'CANNOT_COME';
 }
 
 interface Piquete {
@@ -16,7 +26,14 @@ interface Piquete {
   slots: Slot[];
 }
 
-/** Today's piquete and the list; the schedule editor only for the supervisor (SCRUM-46, SCRUM-63). */
+interface PresenceResponse {
+  slotId: string;
+  presenceStatus: 'UNCONFIRMED' | 'COMING' | 'CANNOT_COME';
+  slotStatus: string;
+  slotFreed: boolean;
+}
+
+/** Today's piquete, shift confirmation and the list; the schedule editor only for the supervisor (SCRUM-46, SCRUM-63, SCRUM-70). */
 @Component({
   selector: 'app-schedule',
   imports: [FormsModule],
@@ -32,6 +49,7 @@ export class Schedule implements OnInit {
   protected readonly offline = signal(false);
   /** True while the piquete is being created: the button is disabled, so a second click sends nothing (SCRUM-158). */
   protected readonly creating = signal(false);
+  protected readonly updatingSlotId = signal<string | null>(null);
   protected dutyDate = new Date().toISOString().slice(0, 10);
 
   protected readonly today = computed(() => new Date().toISOString().slice(0, 10));
@@ -65,6 +83,32 @@ export class Schedule implements OnInit {
           this.pollUntilEligible(created.id);
         },
         error: () => this.error.set('Could not create the piquete.'),
+      });
+  }
+
+  protected confirmPresence(slot: Slot, decision: PresenceDecision): void {
+    if (this.updatingSlotId() === slot.id) {
+      return;
+    }
+    this.error.set(null);
+    this.updatingSlotId.set(slot.id);
+    this.http
+      .post<PresenceResponse>(`/api/v1/slots/${slot.id}/presence`, { decision })
+      .pipe(finalize(() => this.updatingSlotId.set(null)))
+      .subscribe({
+        next: (res) => {
+          this.piquetes.update((list) =>
+            list.map((piquete) => ({
+              ...piquete,
+              slots: piquete.slots.map((item) =>
+                item.id === slot.id
+                  ? { ...item, presenceStatus: res.presenceStatus, status: res.slotStatus }
+                  : item,
+              ),
+            })),
+          );
+        },
+        error: () => this.error.set('Could not update shift confirmation.'),
       });
   }
 

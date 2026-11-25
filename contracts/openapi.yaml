@@ -248,7 +248,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/PiqueteResponse"
         "400":
-          $ref: "#/components/responses/ValidationError"
+          description: Invalid presence request (Spring Boot error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationErrorResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -938,10 +942,10 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /slots/{id}/presence:
+  /api/v1/slots/{id}/presence:
     post:
       tags: [presence]
-      summary: Confirm coming or cannot, 24 h before the shift
+      summary: Confirm coming or cannot, 24 h before the shift (configurable advance, SCRUM-70)
       operationId: confirmPresence
       parameters:
         - name: id
@@ -950,11 +954,43 @@ paths:
           schema:
             type: string
             format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision:
+                  type: string
+                  enum: [COMING, CANNOT_COME]
       responses:
         "202":
-          description: Recorded; cannot opens a cover request
+          description: Recorded; CANNOT_COME frees the slot
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [slotId, presenceStatus, slotStatus, slotFreed]
+                properties:
+                  slotId:
+                    type: string
+                    format: uuid
+                  presenceStatus:
+                    type: string
+                    enum: [UNCONFIRMED, COMING, CANNOT_COME]
+                  slotStatus:
+                    type: string
+                    enum: [OPEN, PENDING, ELIGIBLE, PROPOSED, FILLED, EVALUATION_FAILED]
+                  slotFreed:
+                    type: boolean
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /cover-requests/{id}/accept:
     post:
       tags: [cover]

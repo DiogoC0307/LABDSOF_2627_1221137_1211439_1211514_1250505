@@ -1,6 +1,8 @@
 package pt.isep.escala.escalaapi.piquete;
 
 import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +23,7 @@ class PiqueteService {
 	static final String ROUTING_AVALIACAO_PEDIDA = "avaliacao.pedida";
 
 	private static final Logger log = LoggerFactory.getLogger(PiqueteService.class);
+	private static final ZoneId LISBON = ZoneId.of("Europe/Lisbon");
 
 	private final PiqueteRepository piquetes;
 	private final OutboxEventRepository outbox;
@@ -41,8 +44,10 @@ class PiqueteService {
 		if (request == null || request.dutyDate() == null) {
 			throw new InvalidRequestException(List.of(new InvalidField("dutyDate", "required")));
 		}
+		LocalTime startTime = request.startTime() != null ? request.startTime() : LocalTime.MIDNIGHT;
+		Instant shiftStartsAt = request.dutyDate().atTime(startTime).atZone(LISBON).toInstant();
 		UUID assignmentId = UUID.randomUUID();
-		Slot slot = new Slot(UUID.randomUUID(), SlotRole.CREW_MEMBER, SlotStatus.PENDING, assignmentId);
+		Slot slot = new Slot(UUID.randomUUID(), SlotRole.CREW_MEMBER, SlotStatus.PENDING, assignmentId, shiftStartsAt);
 		Piquete piquete = new Piquete(UUID.randomUUID(), request.dutyDate());
 		piquete.addSlot(slot);
 		piquetes.save(piquete);

@@ -19,6 +19,30 @@
         <span class="label">Evaluation</span>
         <span class="status">{{ slot.status }}</span>
       </p>
+      @if (slot.presenceStatus) {
+        <p class="slot">
+          <span class="label">Presence</span>
+          <span class="presence">{{ slot.presenceStatus }}</span>
+        </p>
+      }
+      <div class="presence-actions" role="group" aria-label="Shift confirmation">
+        <button
+          type="button"
+          class="confirm-coming"
+          [disabled]="updatingSlotId() === slot.id"
+          (click)="confirmPresence(slot, 'COMING')"
+        >
+          I'm coming
+        </button>
+        <button
+          type="button"
+          class="confirm-cannot-come"
+          [disabled]="updatingSlotId() === slot.id"
+          (click)="confirmPresence(slot, 'CANNOT_COME')"
+        >
+          I can't come
+        </button>
+      </div>
     } @empty {
       <p class="empty">No slot on today's piquete.</p>
     }
