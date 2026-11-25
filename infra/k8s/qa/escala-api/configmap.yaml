@@ -10,6 +10,7 @@ data:
   # Exchanges and queues come from infra/rabbitmq/definitions.json; this service login may not declare them
   SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-escala-api:5432/escala"
+  AI_ENABLED: "true"
   JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
   OTEL_SERVICE_NAME: "escala-api"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.observability.svc.cluster.local:4318"
