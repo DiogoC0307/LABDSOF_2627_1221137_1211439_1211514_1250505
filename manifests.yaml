@@ -7,6 +7,7 @@ metadata:
 ---
 apiVersion: v1
 data:
+  AI_ENABLED: "true"
   JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
   LOGGING_LEVEL_PT_ISEP_ESCALA: DEBUG
   LOGGING_LEVEL_ROOT: INFO
@@ -28,6 +29,7 @@ metadata:
 ---
 apiVersion: v1
 data:
+  AI_ENABLED: "true"
   JAVA_TOOL_OPTIONS: -javaagent:/otel/opentelemetry-javaagent.jar
   LOGGING_LEVEL_PT_ISEP_ESCALA: DEBUG
   LOGGING_LEVEL_ROOT: INFO
@@ -789,7 +791,7 @@ spec:
         envFrom:
         - configMapRef:
             name: elegibilidade-worker-config
-        image: ghcr.io/diogoc0307/elegibilidade-worker:0f6baec34e3d22efd2eee28fc9ea8c3fe4681967
+        image: ghcr.io/diogoc0307/elegibilidade-worker:696743444007771e4dad27b0352e6cb0e8d502f2
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
@@ -850,7 +852,7 @@ spec:
         envFrom:
         - configMapRef:
             name: escala-api-config
-        image: ghcr.io/diogoc0307/escala-api:0f6baec34e3d22efd2eee28fc9ea8c3fe4681967
+        image: ghcr.io/diogoc0307/escala-api:696743444007771e4dad27b0352e6cb0e8d502f2
         livenessProbe:
           httpGet:
             path: /actuator/health/liveness
@@ -976,7 +978,7 @@ spec:
         app: web
     spec:
       containers:
-      - image: ghcr.io/diogoc0307/escala-web:0f6baec34e3d22efd2eee28fc9ea8c3fe4681967
+      - image: ghcr.io/diogoc0307/escala-web:696743444007771e4dad27b0352e6cb0e8d502f2
         name: web
         ports:
         - containerPort: 80
