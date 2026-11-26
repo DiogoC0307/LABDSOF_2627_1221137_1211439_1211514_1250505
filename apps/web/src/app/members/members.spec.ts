@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from '../app';
-import { http, setValue, signInAs, testProviders } from '../testing/test-support';
+import { flushRosterRisk, http, setValue, signInAs, testProviders } from '../testing/test-support';
 
 const types = [
   { code: 'TAS', name: 'Tripulante de Ambulância de Socorro' },
@@ -382,6 +382,7 @@ describe('Members', () => {
     await start('/members/new');
     http().expectNone('/api/v1/certification-types');
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     expect(TestBed.inject(Router).url).toBe('/');
   });
 });

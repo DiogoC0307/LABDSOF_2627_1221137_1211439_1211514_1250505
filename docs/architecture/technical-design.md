@@ -32,7 +32,7 @@ Why these technologies, not others. Each row is an accepted ADR; 0016 was accept
 | Claude Haiku via CLI, `AI_ENABLED` | Extraction of unavailability only; the `evaluation` profile turns it off | AI that decides swaps or cover | 0007, 0011, 0016 |
 | Docker Compose for evaluation | One command on a staff laptop (§12); Kubernetes with Argo CD stays the team's demo and release host | Kubernetes as the evaluation contract | 0018 |
 
-**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` that adds `ipma-sim` and sets `AI_ENABLED=false` is planned [TODO: not in `compose.yaml` yet; the SCRUM-43 fixtures are in `tools/ipma-sim/fixtures/`, the container is still to build]. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
+**Where it runs.** Evaluation / walking skeleton: Docker Compose (`docker compose up --build`). That stack is the web PWA, two Java services, two PostgreSQL databases and RabbitMQ. Profile `observability` adds Tempo and Grafana. A profile `evaluation` adds `ipma-sim` (`tools/ipma-sim`, SCRUM-76) and is started with `IPMA_BASE_URL=http://ipma-sim:8090 docker compose --profile evaluation up --build`. Set `AI_ENABLED=false` for that profile. Team demo host: Kubernetes overlays under `infra/k8s` (dev / qa / prod, Argo CD, duckdns). Compose is the evaluation contract.
 
 ## System context
 
@@ -55,7 +55,7 @@ No component reads another component's database ([ADR 0003](../adr/0003-one-post
 | `escala-api` | Published schedule, members, unavailability, swaps, presence, cover, audit; DailyRisk display read model | `escala-db` | `web`; RabbitMQ | Sync REST (from `web`); async events (RabbitMQ) |
 | `elegibilidade-worker` | Function checks (RF21), extraction (RF31, ADR 0016), cached RCM (RF25, RF29) | `elegibilidade-db` | RabbitMQ; IPMA; Claude Code CLI | Async events (RabbitMQ); sync HTTP (IPMA); local process (Claude Code CLI) |
 | `web` | Member and supervisor screens; roster offline (RNF06) | None | `escala-api` | Sync REST |
-| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile; fixtures in SCRUM-43, container still to build) | None | `elegibilidade-worker` | Sync HTTP |
+| `ipma-sim` | IPMA paths and §6.5 failures (`evaluation` profile, SCRUM-76) | None | `elegibilidade-worker` | Sync HTTP |
 
 Split by question: published roster versus slow or external work. If the worker is down, `escala-api` still accepts unavailability, swap requests and cover accepts; applying a swap or filling a cover waits for a valid check (RF24).
 
@@ -125,7 +125,7 @@ Endpoints: RCM `rcm-d{0,1,2}.json`; warnings `warnings_www.json`. Poll hourly by
 | Incomplete | DICO missing | Keep last value for our municipality |
 | Invalid | Bad JSON or RCM not 1–5 | Reject; keep last valid |
 
-Fixtures (SCRUM-43): `tools/ipma-sim/fixtures/` holds the fetched `rcm-d0.json` and `warnings_www.json`, plus municipality-missing, invalid JSON and empty bodies. Simulator: `tools/ipma-sim`, `IPMA_SIM_MODE=ok` / `unavailable` / `delayed` / `incomplete` / `invalid`, for tests and the Compose profile `evaluation` (§12) [TODO: the container is not built yet].
+The simulator (`tools/ipma-sim`, Compose profile `evaluation`) serves the §6.5 modes `ok`, `unavailable`, `delayed`, `incomplete` and `invalid`. Fixtures (SCRUM-43): `tools/ipma-sim/fixtures/` holds the fetched `rcm-d0.json` and `warnings_www.json`, plus municipality-missing, invalid JSON and empty bodies.
 
 ## Degraded modes
 
@@ -188,7 +188,7 @@ Walking skeleton: `POST /api/v1/piquetes` (201 + `Location`, slot `PENDING`) · 
 
 ## Deployment view
 
-Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation profile with `ipma-sim`: the SCRUM-43 fixtures are in `tools/ipma-sim/fixtures/`; the container is still to build. Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672).
+Source: [`c4-deployment.puml`](c4-deployment.puml). Local and evaluation: `docker compose up --build` (PWA `http://localhost:8000` proxies `/api/` to the API; API `http://localhost:8080/actuator/health`; worker `:8081`). Observability: Tempo and Grafana (`--profile observability`, Grafana `http://localhost:3000`). Evaluation profile with `ipma-sim`: `IPMA_BASE_URL=http://ipma-sim:8090 docker compose --profile evaluation up --build` (SCRUM-76). Java images include the OpenTelemetry agent (`JAVA_TOOL_OPTIONS`); Compose sets `OTEL_JAVAAGENT_ENABLED=false` unless tracing is on. On some Windows hosts port 5672 is excluded by Hyper-V; map RabbitMQ to `RABBITMQ_PORT` in `.env` (container AMQP stays 5672).
 
 ![Escala — Deployment view](c4-deployment.png)
 

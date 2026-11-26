@@ -46,6 +46,13 @@ export function nextDay(date: string): string {
   return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
+/** An instant shown in Lisbon time, as "HH:mm". */
+export function formatLisbonClock(iso: string): string {
+  const p = lisbonParts(Date.parse(iso));
+  const two = (value: number) => String(value).padStart(2, '0');
+  return `${two(p['hour'])}:${two(p['minute'])}`;
+}
+
 /** An instant shown in Lisbon time, as "YYYY-MM-DD HH:mm". */
 export function formatLisbon(iso: string): string {
   const p = lisbonParts(Date.parse(iso));

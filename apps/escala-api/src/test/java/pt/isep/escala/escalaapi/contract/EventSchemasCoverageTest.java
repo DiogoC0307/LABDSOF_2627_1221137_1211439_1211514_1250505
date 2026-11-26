@@ -22,7 +22,7 @@ class EventSchemasCoverageTest {
 			"avaliacao-concluida.schema.json", "consumed: TC-SCRUM-96-08",
 			"extracao-pedida.schema.json", "produced: TC-SCRUM-96-17",
 			"extracao-concluida.schema.json", "consumed: TC-SCRUM-96-18",
-			"risco-atualizado.schema.json", "not built yet");
+			"risco-atualizado.schema.json", "consumed: TC-SCRUM-76-01");
 
 	@Test
 	@DisplayName("TC-SCRUM-96-09 every schema in contracts/events/ is listed for escala-api, and every envelope type has a schema")

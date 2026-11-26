@@ -11,4 +11,4 @@ Boundary fixtures, not downloaded. The live API on 2026-11-21 returned a usable 
 - invalid.json is not JSON. TC-SCRUM-43-04.
 - empty.json has an empty body. TC-SCRUM-43-05.
 
-The HTTP simulator container, the unavailable and delayed modes, and the Compose evaluation profile are not part of this spike.
+The HTTP simulator container is tools/ipma-sim (server.js, SCRUM-76). Modes: IPMA_SIM_MODE=ok, unavailable, delayed, incomplete, invalid. IPMA_SIM_RCM rewrites DICO 1312. The Compose profile is `evaluation`.

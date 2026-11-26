@@ -33,6 +33,24 @@ export function http(): HttpTestingController {
   return TestBed.inject(HttpTestingController);
 }
 
+/** No cached RCM yet. Flushed after a supervisor's roster load (SCRUM-76). */
+export const emptyRisk = {
+  dico: '1312',
+  rcm: null,
+  fetchedAt: null,
+  dataAgeHours: null,
+  source: 'IPMA',
+  assumedHigher: false,
+};
+
+/** The schedule asks for today's risk only after the roster loads, and only for a supervisor. */
+export function flushRosterRisk(): void {
+  const raw = localStorage.getItem(SESSION_KEY);
+  if (raw?.includes('"role":"SUPERVISOR"')) {
+    http().expectOne('/api/v1/risk/today').flush(emptyRisk);
+  }
+}
+
 export function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }

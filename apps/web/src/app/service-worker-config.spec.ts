@@ -38,6 +38,7 @@ describe('Service worker navigation URLs', () => {
       '/api/actuator/health/readiness',
       '/api/actuator/health/liveness',
       '/api/v1/piquetes',
+      '/api/v1/risk/today',
       '/api/v1/members/00000000-0000-4000-8000-000000000001',
     ]) {
       expect(servesTheApp(urls, path), path).toBe(false);

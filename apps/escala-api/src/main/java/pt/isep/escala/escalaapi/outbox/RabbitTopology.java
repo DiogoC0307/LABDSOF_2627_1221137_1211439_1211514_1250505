@@ -33,4 +33,10 @@ class RabbitTopology {
 	Declarables apiExtracaoConcluida() {
 		return EventQueues.queue("api.extracao-concluida", "extracao.concluida");
 	}
+
+	/** SCRUM-76: RiscoAtualizado, already declared in infra/rabbitmq/definitions.json. */
+	@Bean
+	Declarables apiRiscoAtualizado() {
+		return EventQueues.queue("api.risco-atualizado", "risco.atualizado");
+	}
 }

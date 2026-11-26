@@ -2,6 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { Schedule } from './schedule';
 import {
   eligible,
+  emptyRisk,
+  flushRosterRisk,
   http,
   pending,
   signInAs,
@@ -30,6 +32,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     fixture.detectChanges();
     expect((fixture.nativeElement as HTMLElement).querySelector('h1')?.textContent).toContain("Today's piquete");
   });
@@ -38,6 +41,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
+    flushRosterRisk();
     fixture.detectChanges();
     const card = (fixture.nativeElement as HTMLElement).querySelector('[aria-label="Today\'s piquete"]');
     expect(card?.textContent).toContain(todayIso());
@@ -50,6 +54,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
     fixture.detectChanges();
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('2026-11-05');
@@ -83,6 +88,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
 
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     const post = http().expectOne('/api/v1/piquetes');
@@ -91,6 +97,7 @@ describe('Schedule', () => {
     post.flush(pending);
 
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
     await vi.advanceTimersByTimeAsync(1000);
     http().expectOne('/api/v1/piquetes').flush([eligible]);
     fixture.detectChanges();
@@ -101,6 +108,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
 
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush('fail', {
@@ -120,6 +128,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     fixture.detectChanges();
     const create = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button[type="submit"]')!;
 
@@ -140,6 +149,7 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
     const create = page.querySelector<HTMLButtonElement>('form button[type="submit"]')!;
@@ -148,6 +158,7 @@ describe('Schedule', () => {
     // a fast API: the answer and the list come back before the next click
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne({ method: 'GET', url: '/api/v1/piquetes' }).flush([pending]);
+    flushRosterRisk();
     fixture.detectChanges();
     expect(create.disabled).toBe(false);
 
@@ -169,9 +180,11 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
 
     await vi.advanceTimersByTimeAsync(1000);
     http().expectOne('/api/v1/piquetes').flush([pending]);
@@ -186,9 +199,11 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
 
     await vi.advanceTimersByTimeAsync(1000);
     http().expectOne('/api/v1/piquetes').flush('fail', { status: 500, statusText: 'Server Error' });
@@ -203,9 +218,11 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([]);
+    flushRosterRisk();
     (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>('form button')?.click();
     http().expectOne({ method: 'POST', url: '/api/v1/piquetes' }).flush(pending);
     http().expectOne('/api/v1/piquetes').flush([pending]);
+    flushRosterRisk();
 
     for (let i = 0; i < 16; i++) {
       await vi.advanceTimersByTimeAsync(1000);
@@ -221,10 +238,47 @@ describe('Schedule', () => {
     const fixture = TestBed.createComponent(Schedule);
     fixture.detectChanges();
     http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
+    flushRosterRisk();
     fixture.detectChanges();
     const page = fixture.nativeElement as HTMLElement;
     expect(page.querySelector('form')).toBeNull();
     expect(page.textContent).not.toContain('Create piquete');
     expect(page.querySelector('[aria-label="Today\'s piquete"]')?.textContent).toContain('ELIGIBLE');
+  });
+
+  it('TC-SCRUM-76-01 shows today\'s fire risk, when it was updated, and IPMA as the source', () => {
+    const fixture = TestBed.createComponent(Schedule);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
+    http().expectOne('/api/v1/risk/today').flush({
+      ...emptyRisk,
+      rcm: 4,
+      fetchedAt: '2026-11-21T10:00:00Z',
+      dataAgeHours: 0,
+    });
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Fire risk: 4 (very high) - updated 10:00 - Source: IPMA');
+    expect(text).toContain('www.ipma.pt');
+    expect(text).not.toContain('out of date');
+  });
+
+  it('TC-SCRUM-76-02 shows the last value with its age and a warning that it may be out of date', () => {
+    const fixture = TestBed.createComponent(Schedule);
+    fixture.detectChanges();
+    http().expectOne('/api/v1/piquetes').flush([todaysPiquete('ELIGIBLE')]);
+    http().expectOne('/api/v1/risk/today').flush({
+      ...emptyRisk,
+      rcm: 4,
+      fetchedAt: '2026-11-21T07:00:00Z',
+      dataAgeHours: 3,
+      assumedHigher: true,
+    });
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('Fire risk: 4 (very high) - updated 07:00 - Source: IPMA');
+    expect(text).toContain('3 h');
+    expect(text).toContain('out of date');
+    expect(text).toContain('The schedule is unchanged.');
   });
 });
