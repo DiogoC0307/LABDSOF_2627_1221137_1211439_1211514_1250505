@@ -167,7 +167,7 @@ describe('Unavailability', () => {
       fixture.detectChanges();
       http().expectOne('/api/v1/unavailabilities').flush([]);
       http().expectOne(SETTINGS).flush({ aiEnabled: true });
-      expect(page(fixture).querySelector('.menu a[href="/unavailability"]')).not.toBeNull();
+      expect(page(fixture).querySelector('nav[aria-label="Main"] a[href="/unavailability"]')).not.toBeNull();
     }
   });
 });
