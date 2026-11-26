@@ -10,6 +10,7 @@ data:
   # Exchanges and queues come from infra/rabbitmq/definitions.json; this service login may not declare them
   SPRING_RABBITMQ_DYNAMIC: "false"
   SPRING_DATASOURCE_URL: "jdbc:postgresql://pg-elegibilidade-worker:5432/elegibilidade"
+  AI_ENABLED: "true"
   JAVA_TOOL_OPTIONS: "-javaagent:/otel/opentelemetry-javaagent.jar"
   OTEL_SERVICE_NAME: "elegibilidade-worker"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://tempo.observability.svc.cluster.local:4318"
