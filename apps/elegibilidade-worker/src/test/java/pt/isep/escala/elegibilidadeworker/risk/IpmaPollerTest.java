@@ -3,6 +3,7 @@ package pt.isep.escala.elegibilidadeworker.risk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,11 +49,24 @@ class IpmaPollerTest {
 	@DisplayName("while the poll is disabled it does not call IPMA")
 	void disabled() {
 		when(properties.isEnabled()).thenReturn(false);
+		IpmaPoller self = mock(IpmaPoller.class);
 
-		poller().scheduled();
+		poller(self).scheduled();
 
+		verify(self, never()).poll();
 		verify(client, never()).fetch(any(), any(), any(), anyInt(), any(), any());
 		verify(outbox, never()).save(any());
+	}
+
+	@Test
+	@DisplayName("when the poll is enabled the scheduled call goes through the injected proxy")
+	void enabledCallsTheProxy() {
+		when(properties.isEnabled()).thenReturn(true);
+		IpmaPoller self = mock(IpmaPoller.class);
+
+		poller(self).scheduled();
+
+		verify(self).poll();
 	}
 
 	@Test
@@ -63,7 +77,7 @@ class IpmaPollerTest {
 				.thenReturn(new RiskCache.Reading(RiskOutcome.UNAVAILABLE, null, null, null));
 		when(observations.findById("1312")).thenReturn(Optional.empty());
 
-		poller().poll();
+		poller(mock(IpmaPoller.class)).poll();
 
 		verify(observations).save(any(RiskObservation.class));
 		verify(outbox, never()).save(any());
@@ -72,7 +86,6 @@ class IpmaPollerTest {
 	@Test
 	@DisplayName("a usable reading replaces the stored observation and publishes RiscoAtualizado")
 	void published() throws Exception {
-		when(properties.isEnabled()).thenReturn(true);
 		stubProperties();
 		LocalDate day = LocalDate.parse("2026-11-21");
 		when(client.fetch(any(), any(), any(), anyInt(), any(), any()))
@@ -81,7 +94,7 @@ class IpmaPollerTest {
 				NOW.minus(Duration.ofHours(1)), "SIMULATOR");
 		when(observations.findById("1312")).thenReturn(Optional.of(new RiskObservation(cached)));
 
-		poller().scheduled();
+		poller(mock(IpmaPoller.class)).poll();
 
 		verify(observations).save(any(RiskObservation.class));
 		ArgumentCaptor<OutboxEvent> event = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -99,7 +112,7 @@ class IpmaPollerTest {
 		when(properties.source()).thenReturn("SIMULATOR");
 	}
 
-	private IpmaPoller poller() {
-		return new IpmaPoller(properties, client, observations, outbox, JsonMapper.builder().build(), CLOCK);
+	private IpmaPoller poller(IpmaPoller self) {
+		return new IpmaPoller(properties, client, observations, outbox, JsonMapper.builder().build(), CLOCK, self);
 	}
 }

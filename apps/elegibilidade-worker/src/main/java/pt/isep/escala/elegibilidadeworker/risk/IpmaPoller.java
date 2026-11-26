@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,8 @@ class IpmaPoller {
 	private final OutboxEventRepository outbox;
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
+	/** The Spring proxy. {@link #poll()} is transactional only when this proxy calls it. */
+	private final IpmaPoller self;
 
 	IpmaPoller(
 			RiskProperties properties,
@@ -33,22 +36,23 @@ class IpmaPoller {
 			RiskObservationRepository observations,
 			OutboxEventRepository outbox,
 			ObjectMapper objectMapper,
-			Clock clock) {
+			Clock clock,
+			@Lazy IpmaPoller self) {
 		this.properties = properties;
 		this.client = client;
 		this.observations = observations;
 		this.outbox = outbox;
 		this.objectMapper = objectMapper;
 		this.clock = clock;
+		this.self = self;
 	}
 
 	@Scheduled(fixedRateString = "${escala.risk.poll-interval:1h}")
-	@Transactional
 	void scheduled() {
 		if (!properties.isEnabled()) {
 			return;
 		}
-		poll();
+		self.poll();
 	}
 
 	@Transactional
