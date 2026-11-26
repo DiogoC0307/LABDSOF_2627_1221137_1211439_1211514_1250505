@@ -229,16 +229,19 @@ paths:
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [piquetes]
-      summary: Create a piquete (a shift) with one slot
+      summary: Create a piquete (a shift) with a slot for each person its crew needs
       description: >
-        A shift the supervisor defines (SCRUM-65, D1): dutyDate, period, startsAt, endsAt and minimumCrew. When any
-        of the last four is sent, all are required and checked (400 with a code per field): the day is today or
-        later in Lisbon (in_the_past), the shift starts on that day in Lisbon (not_on_duty_date), ends after it
-        starts (ends_before_start) and lasts at most 24 hours (too_long), and minimumCrew is 1 to 50 (too_small,
-        too_large). A body with only dutyDate still creates a piquete with no times (walking skeleton, SCRUM-45).
-        The new slot has role CREW_MEMBER and status PENDING; escala-api queues AvaliacaoPedida and the
-        slot becomes ELIGIBLE after the worker answers (a few seconds). SUPERVISOR only (build the schedule,
-        access-control matrix on 09): MEMBER and ADMIN get 403 and nothing is created.
+        A shift the supervisor defines (SCRUM-65, D1): dutyDate, period, startsAt, endsAt and crew, how many
+        people of each role it needs. When any of the last four is sent, all are required and checked (400 with
+        a code per field): the day is today or later in Lisbon (in_the_past), the shift starts on that day in
+        Lisbon (not_on_duty_date), ends after it starts (ends_before_start) and lasts at most 24 hours
+        (too_long); crew lists each role at most once (duplicate) with a count of 0 or more (invalid), and its
+        counts add up to 1 to 50 (too_small, too_large). The piquete gets one slot per person, in the order
+        CREW_CHIEF, DRIVER, CREW_MEMBER, and minimumCrew is their number. A body with only dutyDate still creates
+        a piquete with no times and one CREW_MEMBER slot (walking skeleton, SCRUM-45). Every new slot has status
+        PENDING; escala-api queues one AvaliacaoPedida per slot and each becomes ELIGIBLE after the worker answers
+        (a few seconds). SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
+        403 and nothing is created.
       operationId: createPiquete
       parameters:
         - $ref: "#/components/parameters/TraceId"
@@ -316,11 +319,15 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
       tags: [piquetes]
-      summary: Change a shift's day, period, times and minimum crew (SCRUM-65)
+      summary: Change a shift's day, period, times and crew (SCRUM-65)
       description: >
         Every field is required and checked as on create (400 with a code per field). A piquete whose day has
-        passed in Lisbon cannot change (409), nor can a shift be moved to such a day (400, in_the_past). The slots
-        are kept as they are. SUPERVISOR only: MEMBER and ADMIN get 403 and nothing changes.
+        passed in Lisbon cannot change (409), nor can a shift be moved to such a day (400, in_the_past). A role
+        that needs more people gets new PENDING slots, each with its AvaliacaoPedida; a role that needs fewer
+        loses the slots furthest from being filled (OPEN, then EVALUATION_FAILED, PENDING, ELIGIBLE). A slot
+        someone was proposed for or holds (PROPOSED, FILLED) is never removed: a count below their number for its
+        role is refused (400, crew below_filled) and nothing changes. The other slots are kept as they are.
+        SUPERVISOR only: MEMBER and ADMIN get 403 and nothing changes.
       operationId: updatePiquete
       parameters:
         - name: id
@@ -1164,7 +1171,7 @@ components:
       type: object
       required: [dutyDate]
       description: >
-        With period, startsAt, endsAt or minimumCrew, all five fields are required (as in UpdatePiqueteRequest).
+        With period, startsAt, endsAt or crew, all five fields are required (as in UpdatePiqueteRequest).
         With only dutyDate, a piquete with no times (walking skeleton).
       properties:
         dutyDate:
@@ -1183,14 +1190,11 @@ components:
           format: date-time
           description: Exclusive; after startsAt and at most 24 hours later. A night shift ends the next day.
           example: "2026-12-01T20:00:00Z"
-        minimumCrew:
-          type: integer
-          minimum: 1
-          maximum: 50
-          example: 4
+        crew:
+          $ref: "#/components/schemas/Crew"
     UpdatePiqueteRequest:
       type: object
-      required: [dutyDate, period, startsAt, endsAt, minimumCrew]
+      required: [dutyDate, period, startsAt, endsAt, crew]
       properties:
         dutyDate:
           type: string
@@ -1206,11 +1210,33 @@ components:
           type: string
           format: date-time
           example: "2026-12-02T08:00:00Z"
-        minimumCrew:
+        crew:
+          $ref: "#/components/schemas/Crew"
+    Crew:
+      type: array
+      description: >
+        How many people of each role the shift needs (SCRUM-65): each role at most once; a role left out needs
+        nobody. The counts add up to 1 to 50.
+      minItems: 1
+      items:
+        $ref: "#/components/schemas/CrewNeed"
+      example:
+        - role: CREW_CHIEF
+          count: 1
+        - role: DRIVER
+          count: 1
+        - role: CREW_MEMBER
+          count: 3
+    CrewNeed:
+      type: object
+      required: [role, count]
+      properties:
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        count:
           type: integer
-          minimum: 1
+          minimum: 0
           maximum: 50
-          example: 3
     PiqueteResponse:
       type: object
       required: [id, dutyDate, slots]
@@ -1238,6 +1264,7 @@ components:
         minimumCrew:
           type: integer
           nullable: true
+          description: The number of people the crew needs (the sum of its counts); null on a piquete without times
         slots:
           type: array
           items:
@@ -1255,7 +1282,9 @@ components:
           $ref: "#/components/schemas/SlotStatus"
     SlotRole:
       type: string
-      description: SlotRole in escala-api. A new piquete has one slot, CREW_MEMBER.
+      description: >
+        SlotRole in escala-api. A shift has one slot per person of its crew; a walking-skeleton piquete has one,
+        CREW_MEMBER.
       enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
     SlotStatus:
       type: string
@@ -1435,7 +1464,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off]
+                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off, not_on_duty_date, too_small, too_large, below_filled]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]

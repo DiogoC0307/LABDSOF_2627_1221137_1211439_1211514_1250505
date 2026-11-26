@@ -24,7 +24,10 @@ class Piquete {
 	@Column(nullable = false)
 	private LocalDate dutyDate;
 
-	/** The shift's period, start, end and minimum crew (V6): all set together, or none on a piquete from before. */
+	/**
+	 * The shift's period, start, end and minimum crew (V7), the crew being its number of slots: all set together, or
+	 * none on a piquete from before.
+	 */
 	@Enumerated(EnumType.STRING)
 	@Column(length = 5)
 	private ShiftPeriod period;
@@ -74,7 +77,7 @@ class Piquete {
 		return slots;
 	}
 
-	/** Sets (or changes) the shift: its day, period, start, end and minimum crew. The service checks them first. */
+	/** Sets (or changes) the shift: its day, period, start, end and crew size. The service checks them first. */
 	void schedule(LocalDate dutyDate, ShiftPeriod period, Instant startsAt, Instant endsAt, int minimumCrew) {
 		this.dutyDate = dutyDate;
 		this.period = period;
@@ -86,5 +89,10 @@ class Piquete {
 	void addSlot(Slot slot) {
 		slots.add(slot);
 		slot.setPiquete(this);
+	}
+
+	/** The slot is deleted with the piquete's next save (orphan removal). */
+	void removeSlot(Slot slot) {
+		slots.remove(slot);
 	}
 }
