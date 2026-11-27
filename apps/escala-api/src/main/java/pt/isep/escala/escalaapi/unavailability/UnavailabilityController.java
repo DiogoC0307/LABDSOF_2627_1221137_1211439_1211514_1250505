@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import pt.isep.escala.escalaapi.auth.SignedInMember;
@@ -19,6 +20,8 @@ import pt.isep.escala.escalaapi.auth.SignedInMember;
 /**
  * "When I can't": each member declares, reads and deletes only their own periods (SCRUM-64). A period of another
  * member answers 404, not 403, so its existence is not revealed. There is no PUT: a change is delete and declare.
+ * 
+ * The supervisor also reads every member's periods of a week, to build the schedule (SCRUM-65).
  */
 @RestController
 @RequestMapping("/api/v1/unavailabilities")
@@ -40,6 +43,12 @@ class UnavailabilityController {
 	@GetMapping
 	List<UnavailabilityResponse> mine(@AuthenticationPrincipal SignedInMember member) {
 		return service.mine(member.memberId());
+	}
+
+	// Gets all members' unavailabilities of a week (only the supervisor has access to this endpoint in Security Config)
+	@GetMapping("/team")
+	List<TeamUnavailabilityResponse> team(@RequestParam(required = false) String week) {
+		return service.team(week);
 	}
 
 	@GetMapping("/{id}")

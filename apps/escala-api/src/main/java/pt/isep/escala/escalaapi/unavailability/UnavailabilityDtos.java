@@ -10,3 +10,7 @@ record UnavailabilityRequest(OffsetDateTime startsAt, OffsetDateTime endsAt) {
 
 record UnavailabilityResponse(UUID id, Instant startsAt, Instant endsAt, String source) {
 }
+
+// Member unavailability for a given period of time
+record TeamUnavailabilityResponse(UUID memberId, Instant startsAt, Instant endsAt) {
+}

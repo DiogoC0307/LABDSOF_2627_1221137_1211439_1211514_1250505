@@ -58,6 +58,11 @@ class Slot {
 		return assignmentId;
 	}
 
+	/** Someone has been proposed for the slot or holds it: a change to the shift's crew keeps it. */
+	boolean isTaken() {
+		return status == SlotStatus.PROPOSED || status == SlotStatus.FILLED;
+	}
+
 	/** An ELIGIBLE evaluation applies to a slot waiting for it, or to one whose evaluation failed and was replayed. */
 	boolean markEligible() {
 		if (status != SlotStatus.PENDING && status != SlotStatus.EVALUATION_FAILED) {
