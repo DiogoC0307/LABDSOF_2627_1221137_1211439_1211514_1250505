@@ -6,7 +6,9 @@ import {
   freeGaps,
   fromPiquete,
   missingCount,
+  missingLabel,
   newShiftRange,
+  overlaps,
   parseTime,
   rangeLabel,
   roleState,
@@ -141,6 +143,15 @@ describe('schedule-rules', () => {
       });
       expect(missingCount(spare)).toBe(1);
       expect(shiftState(spare, today)).toBe('short');
+      expect(missingLabel(spare)).toBe('Needs 1 crew chief');
+    });
+
+    it('says which roles a short shift still needs, and how many of each (TC-SCRUM-65-03)', () => {
+      const noDriver = shift({
+        crew: { CREW_CHIEF: 1, DRIVER: 1, CREW_MEMBER: 3 },
+        assigned: { CREW_CHIEF: ['a'], DRIVER: [], CREW_MEMBER: ['c'] },
+      });
+      expect(missingLabel(noDriver)).toBe('Needs 1 driver, 2 crew members');
     });
 
     it('is short for a shift with no roles yet, though nobody is missing', () => {
@@ -166,9 +177,10 @@ describe('schedule-rules', () => {
       { id: 'marta', name: 'Marta Silva', roles: ['CREW_CHIEF'] },
     ];
 
-    it('keeps only members who can fill the role', () => {
-      const names = candidates(shift(), 'DRIVER', members, [], new Set()).map((each) => each.member.name);
-      expect(names).toEqual(['Rui Almeida']);
+    it('keeps only members who can fill the role, with all their functions', () => {
+      const list = candidates(shift(), 'DRIVER', members, [], new Set());
+      expect(list.map((each) => each.member.name)).toEqual(['Rui Almeida']);
+      expect(candidates(shift(), 'CREW_MEMBER', members, [], new Set())[0].functions).toBe('Crew chief · Crew member');
     });
 
     it('leaves out members already on this shift, in any role', () => {
@@ -192,6 +204,33 @@ describe('schedule-rules', () => {
       const list = candidates(shift(), 'CREW_CHIEF', members, [morning, shift()], new Set());
       expect(list.find((each) => each.member.id === 'marta')?.alreadyOn).toBe('00:00 – 08:00');
       expect(list.find((each) => each.member.id === 'ana')?.alreadyOn).toBeNull();
+    });
+
+    it('leaves out members on another shift at any of its time, also across midnight (TC-SCRUM-65-17, -19)', () => {
+      // Friday 20:00 to Saturday 08:00, and Saturday 06:00 to 14:00
+      const fridayNight = shift({
+        id: 'fri',
+        dutyDate: '2026-11-27',
+        start: 20 * Hour,
+        end: 32 * Hour,
+        assigned: { ...emptyAssigned(), CREW_CHIEF: ['marta'] },
+      });
+      const saturday = shift({ id: 'sat', dutyDate: '2026-11-28', start: 6 * Hour, end: 14 * Hour });
+      const sameTime = shift({ id: 'same', assigned: { ...emptyAssigned(), CREW_CHIEF: ['joao'] } });
+
+      const ids = (list: { member: ScheduleMember }[]) => list.map((each) => each.member.id);
+      expect(ids(candidates(saturday, 'CREW_CHIEF', members, [fridayNight, saturday], new Set()))).toEqual(['ana', 'joao']);
+      expect(ids(candidates(shift(), 'CREW_CHIEF', members, [sameTime, shift()], new Set()))).toEqual(['ana', 'marta']);
+    });
+
+    it('keeps a member whose other shift ends exactly when this one starts (TC-SCRUM-65-18)', () => {
+      const fridayNight = shift({ id: 'fri', dutyDate: '2026-11-27', start: 20 * Hour, end: 32 * Hour });
+      const saturday = shift({ id: 'sat', dutyDate: '2026-11-28', start: 8 * Hour, end: 20 * Hour });
+      expect(overlaps(saturday, fridayNight)).toBe(false);
+      expect(overlaps(fridayNight, saturday)).toBe(false);
+      expect(overlaps({ ...saturday, start: 7 * Hour }, fridayNight)).toBe(true);
+      // On different days, with no time in common (TC-SCRUM-65-16)
+      expect(overlaps(shift({ dutyDate: '2026-11-25' }), shift())).toBe(false);
     });
   });
 

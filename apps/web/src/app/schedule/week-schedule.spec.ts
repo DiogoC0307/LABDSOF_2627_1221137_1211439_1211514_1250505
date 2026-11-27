@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
-import { LAST_PIQUETES_KEY } from '../auth/auth.service';
+import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
 import { WeekSchedule } from './week-schedule';
-import { http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
+import { SESSION_KEY, http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
 
 /**
  * Schedule page
@@ -127,20 +127,20 @@ describe('WeekSchedule', () => {
     flushDirectory(fixture);
   }
 
-  // Members as GET /api/v1/members answers
+  // Members as GET /api/v1/members answers: an inactive one and one off the active roster are never candidates
   const apiMembers = [
-    { id: 'm-ana', fullName: 'Ana Costa', active: true, functions: ['CREW_CHIEF', 'CREW_MEMBER'] },
-    { id: 'm-rui', fullName: 'Rui Almeida', active: true, functions: ['CREW_CHIEF', 'DRIVER', 'CREW_MEMBER'] },
-    { id: 'm-joao', fullName: 'João Pereira', active: true, functions: ['DRIVER', 'CREW_MEMBER'] },
-    { id: 'm-marta', fullName: 'Marta Silva', active: true, functions: ['DRIVER', 'CREW_MEMBER'] },
-    { id: 'm-pedro', fullName: 'Pedro Santos', active: true, functions: ['CREW_MEMBER'] },
-    { id: 'm-ines', fullName: 'Inês Rodrigues', active: true, functions: ['CREW_MEMBER'] },
-    { id: 'm-sofia', fullName: 'Sofia Martins', active: true, functions: ['CREW_MEMBER'] },
-    { id: 'm-carlos', fullName: 'Carlos Gomes', active: true, functions: ['CREW_CHIEF'] },
-    { id: 'm-beatriz', fullName: 'Beatriz Lopes', active: true, functions: ['CREW_MEMBER'] },
+    { id: 'm-ana', fullName: 'Ana Costa', functions: ['CREW_CHIEF', 'CREW_MEMBER'] },
+    { id: 'm-rui', fullName: 'Rui Almeida', functions: ['CREW_CHIEF', 'DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-joao', fullName: 'João Pereira', functions: ['DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-marta', fullName: 'Marta Silva', functions: ['DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-pedro', fullName: 'Pedro Santos', functions: ['CREW_MEMBER'] },
+    { id: 'm-ines', fullName: 'Inês Rodrigues', functions: ['CREW_MEMBER'] },
+    { id: 'm-sofia', fullName: 'Sofia Martins', functions: ['CREW_MEMBER'] },
+    { id: 'm-carlos', fullName: 'Carlos Gomes', functions: ['CREW_CHIEF'] },
+    { id: 'm-beatriz', fullName: 'Beatriz Lopes', functions: ['CREW_MEMBER'] },
     { id: 'm-old', fullName: 'Zé Inativo', active: false, functions: ['CREW_CHIEF'] },
-    { id: 'm-admin', fullName: 'Synthetic Admin', active: true, functions: [] },
-  ];
+    { id: 'm-admin', fullName: 'Synthetic Admin', rosterStatus: 'COMMAND_ROSTER', functions: ['CREW_CHIEF'] },
+  ].map((member) => ({ active: true, rosterStatus: 'ACTIVE_ROSTER', ...member }));
 
   // Who can't come in week 2026-W49: Ana all of Tuesday 1 December, Sofia only until 06:00 that day
   const teamUnavailability = [
@@ -314,7 +314,7 @@ describe('WeekSchedule', () => {
       const card = columns(fixture)[3].querySelector<HTMLButtonElement>('.shift-card')!;
       expect(card.getAttribute('aria-label')).toBe('Thursday 00:00 to 08:00, 0 of 1 firefighter');
       expect(card.textContent).toContain('00:00 – 08:00');
-      expect(card.textContent).toContain('Needs 1 more');
+      expect(card.textContent).toContain('Needs 1 crew member');
       expect(card.classList).toContain('shift-card--short');
       expect(card.style.top).toBe('calc(0% + 2px)');
       expect(card.style.height).toMatch(/^calc\(33\.33\d*% - 4px\)$/);
@@ -643,8 +643,9 @@ describe('WeekSchedule', () => {
       expect(cantCome.textContent).not.toContain('Sofia Martins');
       expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]')).toBeNull();
       expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
-      // Inactive members are never candidates.
+      // Inactive members and members off the active roster are never candidates (RN01).
       expect(panel(fixture)?.textContent).not.toContain('Zé Inativo');
+      expect(panel(fixture)?.textContent).not.toContain('Synthetic Admin');
     });
 
     it('says so when the members cannot be loaded', async () => {
@@ -742,6 +743,28 @@ describe('WeekSchedule', () => {
       expect(buttonByText(element(fixture), 'Edit schedule')).toBeUndefined();
       expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
     });
+  });
+
+  it("never shows a member the supervisor's unpublished changes made on this device", async () => {
+    const supervisor = render('SUPERVISOR');
+    flushWeek(supervisor, '2026-W48');
+    click(supervisor, '[aria-label="Next week"]');
+    flushWeek(supervisor, '2026-W49');
+    await addShift(supervisor, 1);
+    expect(element(supervisor).querySelectorAll('.shift-card').length).toBe(1);
+    supervisor.destroy();
+
+    // The supervisor signs out and a member signs in, without the page being reloaded.
+    signInAs('MEMBER');
+    TestBed.inject(AuthService).session.set(JSON.parse(localStorage.getItem(SESSION_KEY)!));
+    const member = TestBed.createComponent(WeekSchedule);
+    member.detectChanges();
+    flushWeek(member, '2026-W48');
+    click(member, '[aria-label="Next week"]');
+    flushWeek(member, '2026-W49');
+
+    expect(element(member).querySelectorAll('.shift-card').length).toBe(0);
+    expect(element(member).textContent).not.toContain('unpublished');
   });
 
   it('gives a member neither "Edit schedule" nor "Publish schedule"', () => {

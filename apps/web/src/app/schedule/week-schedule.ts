@@ -40,6 +40,7 @@ import {
   freeGaps,
   fromPiquete,
   missingCount,
+  missingLabel,
   newShiftRange,
   rangeLabel,
   rangeWords,
@@ -72,7 +73,7 @@ interface ShiftCard {
   from: string; // "00:00"
   to: string; // "08:00"
   people: string; // "4 of 5 firefighters"
-  tag: string; // "Full" or "Needs 2 more"
+  tag: string; // "Full" or "Needs 1 driver, 2 crew members"
   change: string | null; // "New" or "Edited" while unpublished
   label: string;
 }
@@ -192,7 +193,10 @@ export class WeekSchedule implements OnInit, OnDestroy {
       (this.weekKind() === 'future' || (this.weekKind() === 'current' && this.editing())),
   );
 
-  protected readonly shifts = computed(() => this.drafts.shifts(this.monday()));
+  // Members see only the published week; the supervisor sees their draft
+  protected readonly shifts = computed(() =>
+    this.auth.isSupervisor() ? this.drafts.shifts(this.monday()) : (this.drafts.week(this.monday())?.published ?? []),
+  );
   protected readonly changes = computed(() => this.drafts.changes(this.monday()));
 
   // Status label above the Edit and Publish buttons
@@ -311,11 +315,6 @@ export class WeekSchedule implements OnInit, OnDestroy {
     }
 
     return null;
-  });
-
-  protected readonly selectedDayShifts = computed(() => {
-    const shift = this.selected();
-    return shift ? this.shifts().filter((each) => each.dutyDate === shift.dutyDate) : [];
   });
 
   ngOnInit(): void {
@@ -467,7 +466,7 @@ export class WeekSchedule implements OnInit, OnDestroy {
       from: timeLabel(shift.start),
       to: timeLabel(shift.end),
       people,
-      tag: required === 0 ? 'Choose roles' : missing === 0 ? 'Full' : `Needs ${missing} more`,
+      tag: required === 0 ? 'Choose roles' : missing === 0 ? 'Full' : missingLabel(shift),
       change: shift.change === 'new' ? 'New' : shift.change === 'edited' ? 'Edited' : null,
       label: `${longDay(shift.dutyDate).split(' ')[0]} ${rangeWords(shift.start, shift.end)}, ${people}`,
     };

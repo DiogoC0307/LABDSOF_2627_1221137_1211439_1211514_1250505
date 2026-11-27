@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
 import { SlotRole } from './piquete';
 import { changeCount } from './schedule-rules';
 import { Crew, DraftShift, WeekDraft, emptyAssigned } from './schedule-model';
@@ -6,11 +7,17 @@ import { Crew, DraftShift, WeekDraft, emptyAssigned } from './schedule-model';
 /**
  * The supervisor's edits, week by week, are kept on the client until schedule is published.
  *
- * A week's edits stay when the supervisor looks at another week.
+ * A week's edits stay when the supervisor looks at another week. They belong to whoever made them: someone
+ * else who signs in on this device never sees them.
  */
 @Injectable({ providedIn: 'root' })
 export class ScheduleDraftService {
-  private readonly weeks = signal<Record<string, WeekDraft>>({}); // Weeks are keyed by their Monday
+  private readonly auth = inject(AuthService);
+  private readonly owner = computed(() => this.auth.session()?.memberId ?? null);
+
+  // The weeks of whoever made them, keyed by their Monday
+  private readonly store = signal<{ owner: string | null; weeks: Record<string, WeekDraft> }>({ owner: null, weeks: {} });
+  private readonly weeks = computed(() => (this.store().owner === this.owner() ? this.store().weeks : {}));
   private lastNew = 0;
 
   // Get the week for a given monday
@@ -143,6 +150,10 @@ export class ScheduleDraftService {
   }
 
   private set(monday: string, draft: WeekDraft): void {
-    this.weeks.update((weeks) => ({ ...weeks, [monday]: draft }));
+    const owner = this.owner();
+    this.store.update((store) => ({
+      owner,
+      weeks: { ...(store.owner === owner ? store.weeks : {}), [monday]: draft },
+    }));
   }
 }

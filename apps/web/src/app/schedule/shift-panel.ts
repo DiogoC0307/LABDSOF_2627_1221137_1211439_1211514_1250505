@@ -67,7 +67,7 @@ export class ShiftPanel {
 
   readonly monday = input.required<string>();
   readonly shift = input.required<DraftShift>();
-  readonly dayShifts = input.required<DraftShift[]>();
+  readonly weekShifts = input.required<DraftShift[]>(); // For who is already on a shift at the same time
   readonly editable = input.required<boolean>();
   readonly note = input<string | null>(null); // For shifts that have already happened
 
@@ -137,7 +137,7 @@ export class ShiftPanel {
       const required = shift.crew[role];
       const people = shift.assigned[role].map((id) => ({ id, name: this.directory.name(id) }));
       const state = roleState(required, people.length);
-      const all = candidates(shift, role, this.directory.members(), this.dayShifts(), unavailable);
+      const all = candidates(shift, role, this.directory.members(), this.weekShifts(), unavailable);
       const shown = this.expanded().has(role) ? all : all.slice(0, NUM_CANDIDATES);
       return {
         role,

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { http, testProviders } from '../testing/test-support';
+import { AuthService } from '../auth/auth.service';
+import { http, signInAs, testProviders } from '../testing/test-support';
 import { ScheduleDirectory } from './schedule-directory';
 import { DraftShift, emptyAssigned } from './schedule-model';
 
@@ -21,23 +22,52 @@ describe('ScheduleDirectory', () => {
   }
 
   beforeEach(() => {
+    signInAs('SUPERVISOR');
     TestBed.configureTestingModule({ providers: testProviders });
     directory = TestBed.inject(ScheduleDirectory);
   });
 
-  afterEach(() => http().verify());
+  afterEach(() => {
+    http().verify();
+    localStorage.clear();
+  });
 
-  it('asks for the members once and for each week once, and keeps active members with a role, by name', () => {
+  it("never shows the members or who can't come to someone else who signs in on this device", () => {
+    directory.load('2026-11-30');
+    http()
+      .expectOne('/api/v1/members')
+      .flush([{ id: 'a', fullName: 'Ana Costa', active: true, rosterStatus: 'ACTIVE_ROSTER', functions: ['CREW_CHIEF'] }]);
+    http()
+      .expectOne((req) => req.url === '/api/v1/unavailabilities/team')
+      .flush([{ memberId: 'a', startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-02T00:00:00Z' }]);
+    expect(directory.members().length).toBe(1);
+    expect(directory.unavailableFor(shift('2026-12-01', 8 * 60, 20 * 60)).size).toBe(1);
+
+    TestBed.inject(AuthService).session.set({
+      token: 'mock.MEMBER',
+      memberId: '00000000-0000-4000-8000-000000000001',
+      role: 'MEMBER',
+      fullName: 'Synthetic Member',
+    });
+    expect(directory.members()).toEqual([]);
+    expect(directory.unavailableFor(shift('2026-12-01', 8 * 60, 20 * 60)).size).toBe(0);
+    expect(directory.name('a')).toBe('Unknown member');
+  });
+
+  it('asks for the members once and for each week once, and keeps active members on the active roster with a role, by name', () => {
     directory.load('2026-11-30');
     directory.load('2026-11-30');
 
     http()
       .expectOne('/api/v1/members')
       .flush([
-        { id: 'b', fullName: 'Rui Almeida', active: true, functions: ['DRIVER'] },
-        { id: 'a', fullName: 'Ana Costa', active: true, functions: ['CREW_CHIEF', 'CREW_MEMBER'] },
-        { id: 'c', fullName: 'Inactive Member', active: false, functions: ['DRIVER'] },
-        { id: 'd', fullName: 'No Roles', active: true, functions: [] },
+        { id: 'b', fullName: 'Rui Almeida', active: true, rosterStatus: 'ACTIVE_ROSTER', functions: ['DRIVER'] },
+        { id: 'a', fullName: 'Ana Costa', active: true, rosterStatus: 'ACTIVE_ROSTER', functions: ['CREW_CHIEF', 'CREW_MEMBER'] },
+        { id: 'c', fullName: 'Inactive Member', active: false, rosterStatus: 'ACTIVE_ROSTER', functions: ['DRIVER'] },
+        { id: 'd', fullName: 'No Roles', active: true, rosterStatus: 'ACTIVE_ROSTER', functions: [] },
+        // RN01: off the active roster, even with a function (TC-SCRUM-65-04, -07)
+        { id: 'e', fullName: 'Synthetic Admin', active: true, rosterStatus: 'COMMAND_ROSTER', functions: ['CREW_CHIEF'] },
+        { id: 'f', fullName: 'Reserve Member', active: true, rosterStatus: 'RESERVE_ROSTER', functions: ['DRIVER'] },
       ]);
     const week = http().expectOne((req) => req.url === '/api/v1/unavailabilities/team');
     expect(week.request.params.get('week')).toBe('2026-W49');

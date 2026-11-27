@@ -1,4 +1,6 @@
 import { TestBed } from '@angular/core/testing';
+import { AuthService } from '../auth/auth.service';
+import { signInAs, testProviders } from '../testing/test-support';
 import { ScheduleDraftService } from './schedule-draft.service';
 import { DraftShift, emptyAssigned } from './schedule-model';
 
@@ -22,8 +24,30 @@ describe('ScheduleDraftService', () => {
   let drafts: ScheduleDraftService;
 
   beforeEach(() => {
+    signInAs('SUPERVISOR');
+    TestBed.configureTestingModule({ providers: testProviders });
     drafts = TestBed.inject(ScheduleDraftService);
     drafts.load(MONDAY, [published('a'), published('b')]);
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it("never gives someone else who signs in on this device the supervisor's edits", () => {
+    drafts.add(MONDAY, '2026-12-02', 20 * 60, 24 * 60, CREW);
+    expect(drafts.changes(MONDAY)).toBe(1);
+
+    TestBed.inject(AuthService).session.set({
+      token: 'mock.MEMBER',
+      memberId: '00000000-0000-4000-8000-000000000001',
+      role: 'MEMBER',
+      fullName: 'Synthetic Member',
+    });
+    expect(drafts.week(MONDAY)).toBeUndefined();
+
+    // The member's own view of the week is only what is published.
+    drafts.load(MONDAY, [published('a')]);
+    expect(drafts.shifts(MONDAY).map((shift) => shift.id)).toEqual(['a']);
+    expect(drafts.changes(MONDAY)).toBe(0);
   });
 
   it('starts a week with no changes, and keeps its edits when it is loaded again', () => {

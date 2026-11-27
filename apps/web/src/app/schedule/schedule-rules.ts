@@ -1,5 +1,5 @@
 import { addDays } from './iso-week';
-import { Piquete, SLOT_ROLES, SlotRole } from './piquete';
+import { Piquete, ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
 import { Crew, DraftShift, ScheduleMember, WeekDraft, emptyAssigned, emptyCrew } from './schedule-model';
 import { lisbonTime } from './shift-time';
 
@@ -126,6 +126,14 @@ export function missingCount(shift: DraftShift): number {
   return SLOT_ROLES.reduce((sum, role) => sum + Math.max(0, shift.crew[role] - shift.assigned[role].length), 0);
 }
 
+// Who a short shift still needs, by role: "Needs 1 driver, 2 crew members"
+export function missingLabel(shift: DraftShift): string {
+  const parts = SLOT_ROLES.map((role) => ({ role, missing: shift.crew[role] - shift.assigned[role].length }))
+    .filter((each) => each.missing > 0)
+    .map(({ role, missing }) => `${missing} ${ROLE_LABELS[role].toLowerCase()}${missing === 1 ? '' : 's'}`);
+  return `Needs ${parts.join(', ')}`;
+}
+
 /**
  * Past: on a day before today. Not editable.
  * 
@@ -155,28 +163,45 @@ export function roleState(required: number, assigned: number): RoleState {
 
 export interface Candidate {
   member: ScheduleMember;
-  alreadyOn: string | null;
+  functions: string; // Ex: "Crew chief · Driver"
+  alreadyOn: string | null; // Another shift of theirs that day, which does not overlap this one
+}
+
+// Whether two shifts share any minute; one that starts exactly when the other ends does not (RN05)
+export function overlaps(a: DraftShift, b: DraftShift): boolean {
+  const offset = (Date.parse(b.dutyDate) - Date.parse(a.dutyDate)) / 60000;
+  return a.start < offset + b.end && offset + b.start < a.end;
 }
 
 /**
- * Who can be assigned to the shift in that role
+ * Who can be assigned to the shift in that role: members with the role who are not on it already,
+ * can come (RN06) and are not on another shift at any of its time (RN05)
  */
 export function candidates(
   shift: DraftShift,
   role: SlotRole,
   members: ScheduleMember[],
-  dayShifts: DraftShift[],
+  weekShifts: DraftShift[],
   unavailable: ReadonlySet<string>,
 ): Candidate[] {
   const onShift = new Set(SLOT_ROLES.flatMap((each) => shift.assigned[each]));
 
   return members
-    .filter((member) => member.roles.includes(role) && !onShift.has(member.id) && !unavailable.has(member.id)) // Members that have the role and are not unavailable
-    .map((member) => {
-      const other = dayShifts.find(
+    .filter((member) => member.roles.includes(role) && !onShift.has(member.id) && !unavailable.has(member.id))
+    .map((member) => ({
+      member,
+      others: weekShifts.filter(
         (each) => each.id !== shift.id && SLOT_ROLES.some((slot) => each.assigned[slot].includes(member.id)),
-      );
-      return { member, alreadyOn: other ? rangeLabel(other.start, other.end) : null };
+      ),
+    }))
+    .filter(({ others }) => !others.some((other) => overlaps(shift, other)))
+    .map(({ member, others }) => {
+      const sameDay = others.find((other) => other.dutyDate === shift.dutyDate);
+      return {
+        member,
+        functions: member.roles.map((each) => ROLE_LABELS[each]).join(' · '),
+        alreadyOn: sameDay ? rangeLabel(sameDay.start, sameDay.end) : null,
+      };
     });
 }
 
