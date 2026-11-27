@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
 /**
  * An ISO 8601 week such as {@code 2026-W48}: Monday to Sunday. Week 1 is the
  * week with the year's first Thursday, so it can start in December. Duty dates are Lisbon
- * dates, so no time zone is involved here.
+ * dates, so no time zone is involved here. Public for the team's unavailability of a week (SCRUM-65).
  */
-record IsoWeek(LocalDate monday) {
+public record IsoWeek(LocalDate monday) {
 	private static final Pattern FORMAT = Pattern.compile("(\\d{4})-W(\\d{2})");
 
 	/**
@@ -22,7 +22,7 @@ record IsoWeek(LocalDate monday) {
 	 * @return the parsed week
 	 * @throws IllegalArgumentException when the text is not a week that exists, e.g. {@code 2025-W54}
 	 */
-	static IsoWeek parse(String text) {
+	public static IsoWeek parse(String text) {
 		Matcher matcher = text == null ? null : FORMAT.matcher(text);
 		if (matcher == null || !matcher.matches()) {
 			throw new IllegalArgumentException("Week must be in format YYYY-Www (e.g. 2026-W48), but was " + text);
@@ -43,7 +43,7 @@ record IsoWeek(LocalDate monday) {
 		return new IsoWeek(monday);
 	}
 
-	LocalDate sunday() {
+	public LocalDate sunday() {
 		return monday.plusDays(6);
 	}
 }

@@ -7,8 +7,10 @@ import {
   OnInit,
   afterNextRender,
   computed,
+  effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
@@ -27,6 +29,7 @@ import {
   PublishDialog,
   scheduleDialogConfig,
 } from './schedule-dialogs';
+import { ScheduleDirectory } from './schedule-directory';
 import { ScheduleDraftService } from './schedule-draft.service';
 import { DraftShift } from './schedule-model';
 import {
@@ -134,6 +137,7 @@ export class WeekSchedule implements OnInit, OnDestroy {
   private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
   protected readonly drafts = inject(ScheduleDraftService);
+  private readonly directory = inject(ScheduleDirectory);
   private request?: Subscription;
 
   private readonly grid = viewChild<ElementRef<HTMLElement>>('grid');
@@ -156,6 +160,14 @@ export class WeekSchedule implements OnInit, OnDestroy {
 
   protected readonly editing = signal(false); // This week is read-only until "Edit schedule" is pressed
   protected readonly selectedId = signal<string | null>(null);
+
+  // The members and who can't come in the week, loaded for the supervisor when a shift is opened
+  private readonly loadDirectory = effect(() => {
+    if (this.selectedId() !== null && this.auth.isSupervisor()) {
+      const monday = this.monday();
+      untracked(() => this.directory.load(monday));
+    }
+  });
 
   // Hour labels down the left side, every 2 hours ("00:00", "02:00" ... "22:00")
   protected readonly hours = Array.from({ length: 12 }, (_, index) => ({
@@ -299,6 +311,11 @@ export class WeekSchedule implements OnInit, OnDestroy {
     }
 
     return null;
+  });
+
+  protected readonly selectedDayShifts = computed(() => {
+    const shift = this.selected();
+    return shift ? this.shifts().filter((each) => each.dutyDate === shift.dutyDate) : [];
   });
 
   ngOnInit(): void {

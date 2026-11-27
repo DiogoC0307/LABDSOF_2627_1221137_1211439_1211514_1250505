@@ -68,6 +68,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, MEMBERS + "/*", MEMBERS + "/*/certifications").hasRole(ADMIN)
 						// SCRUM-64: every role declares its own unavailability (09); only one's own periods are
 						// found (checked in UnavailabilityService); a change is DELETE and POST, there is no PUT.
+						// SCRUM-65: only the supervisor reads every member's periods of a week, to build the schedule
+						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES + "/team").hasRole(SUPERVISOR)
 						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, UNAVAILABILITIES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)

@@ -90,6 +90,17 @@ describe('WeekSchedule', () => {
     return element(fixture).querySelector<HTMLElement>('[aria-label="Shift details"]');
   }
 
+  // Shift side panel's role buttons
+  function chooseRoles(fixture: ComponentFixture<WeekSchedule>, ...names: string[]) {
+    for (const name of names) {
+      const choice = Array.from(panel(fixture)!.querySelectorAll<HTMLButtonElement>('.role-choice')).find(
+        (button) => button.textContent?.trim() === name,
+      )!;
+      choice.click();
+      fixture.detectChanges();
+    }
+  }
+
   function dialog() {
     return document.querySelector<HTMLElement>('mat-dialog-container');
   }
@@ -113,6 +124,43 @@ describe('WeekSchedule', () => {
     press(fixture, 'Create shift');
     await fixture.whenStable();
     fixture.detectChanges();
+    flushDirectory(fixture);
+  }
+
+  // Members as GET /api/v1/members answers
+  const apiMembers = [
+    { id: 'm-ana', fullName: 'Ana Costa', active: true, functions: ['CREW_CHIEF', 'CREW_MEMBER'] },
+    { id: 'm-rui', fullName: 'Rui Almeida', active: true, functions: ['CREW_CHIEF', 'DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-joao', fullName: 'João Pereira', active: true, functions: ['DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-marta', fullName: 'Marta Silva', active: true, functions: ['DRIVER', 'CREW_MEMBER'] },
+    { id: 'm-pedro', fullName: 'Pedro Santos', active: true, functions: ['CREW_MEMBER'] },
+    { id: 'm-ines', fullName: 'Inês Rodrigues', active: true, functions: ['CREW_MEMBER'] },
+    { id: 'm-sofia', fullName: 'Sofia Martins', active: true, functions: ['CREW_MEMBER'] },
+    { id: 'm-carlos', fullName: 'Carlos Gomes', active: true, functions: ['CREW_CHIEF'] },
+    { id: 'm-beatriz', fullName: 'Beatriz Lopes', active: true, functions: ['CREW_MEMBER'] },
+    { id: 'm-old', fullName: 'Zé Inativo', active: false, functions: ['CREW_CHIEF'] },
+    { id: 'm-admin', fullName: 'Synthetic Admin', active: true, functions: [] },
+  ];
+
+  // Who can't come in week 2026-W49: Ana all of Tuesday 1 December, Sofia only until 06:00 that day
+  const teamUnavailability = [
+    { memberId: 'm-ana', startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-02T00:00:00Z' },
+    { memberId: 'm-sofia', startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-01T06:00:00Z' },
+  ];
+
+  function isDirectoryRequest(req: { url: string }): boolean {
+    return req.url === '/api/v1/members' || req.url === '/api/v1/unavailabilities/team';
+  }
+
+  // Answers the members and who can't come, loaded when a supervisor opens a shift
+  function flushDirectory(fixture?: ComponentFixture<WeekSchedule>) {
+    http()
+      .match('/api/v1/members')
+      .forEach((request) => request.flush(apiMembers));
+    http()
+      .match((req) => req.url === '/api/v1/unavailabilities/team')
+      .forEach((request) => request.flush(request.request.params.get('week') === '2026-W49' ? teamUnavailability : []));
+    fixture?.detectChanges();
   }
 
   function publishButton(fixture: ComponentFixture<WeekSchedule>) {
@@ -151,6 +199,7 @@ describe('WeekSchedule', () => {
   });
 
   afterEach(() => {
+    flushDirectory();
     http().verify();
     vi.useRealTimers();
     localStorage.clear();
@@ -330,6 +379,8 @@ describe('WeekSchedule', () => {
       expect(panel(fixture)?.textContent).toContain('This week is published. Press "Edit schedule" to make changes.');
       expect(panel(fixture)?.textContent).toContain('Thursday 26 November');
       expect(buttonByText(panel(fixture)!, 'Delete')).toBeUndefined();
+      expect(panel(fixture)?.querySelector('.needed-input')).toBeNull();
+      expect(panel(fixture)?.textContent).toContain('1 needed');
 
       press(fixture, 'Edit schedule');
       columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!.click();
@@ -433,6 +484,44 @@ describe('WeekSchedule', () => {
       expect(status(fixture)).toBe('No shifts yet');
     });
 
+    it('assigns people role by role, and the card turns full', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0, ['Crew chief', 'Driver', 'Crew member']);
+
+      const needed = (role: string) => panel(fixture)!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
+      expect(needed('Crew chief')!.type).toBe('text');
+      expect(needed('Crew chief')!.inputMode).toBe('numeric');
+      expect(needed('Crew member')!.value).toBe('1');
+      setValue(needed('Crew member')!, '3a');
+      fixture.detectChanges();
+      expect(needed('Crew member')!.value).toBe('3');
+      setValue(needed('Crew member')!, '0'); // 0 changes nothing: the role's button takes it off.
+      needed('Crew member')!.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      expect(needed('Crew member')!.value).toBe('3');
+      setValue(needed('Crew member')!, '1');
+      fixture.detectChanges();
+      chooseRoles(fixture, 'Driver');
+      expect(needed('Driver')).toBeNull();
+      expect(panel(fixture)?.querySelector('[aria-pressed="false"]')?.textContent?.trim()).toBe('Driver');
+
+      click(fixture, '[aria-label="Assign Ana Costa as Crew chief"]');
+      expect(panel(fixture)?.textContent).toContain('1 of 1 · Full');
+      
+      // Ana is on the shift now: she is no longer a candidate for another role.
+      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew member"]')).toBeNull();
+
+      const card = () => columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!;
+      expect(card().classList).toContain('shift-card--short');
+      click(fixture, '[aria-label="Assign Beatriz Lopes as Crew member"]');
+      expect(card().classList).toContain('shift-card--full');
+      expect(card().textContent).toContain('2 of 2 firefighters');
+      expect(card().textContent).toContain('Full');
+
+      click(fixture, '[aria-label="Remove Beatriz Lopes as Crew member"]');
+      expect(card().classList).toContain('shift-card--short');
+    });
+
     it("adds a shift from the day's own button, also on a day all covered and over its shifts", async () => {
       const fixture = render('SUPERVISOR');
       flushWeek(fixture, '2026-W48');
@@ -521,6 +610,72 @@ describe('WeekSchedule', () => {
       expect(panel(fixture)?.textContent).toContain('08:30 – 06:15');
     });
 
+    it('only shows the roles the shift needs, and keeps at least one', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+
+      const choice = (name: string) =>
+        Array.from(panel(fixture)!.querySelectorAll<HTMLButtonElement>('.role-choice')).find(
+          (button) => button.textContent?.trim() === name,
+        )!;
+      expect(panel(fixture)?.querySelector('[aria-label="Crew chief needed"]')).not.toBeNull();
+      expect(panel(fixture)?.querySelector('[aria-label="Driver needed"]')).toBeNull();
+      // Its only role can't be taken off.
+      expect(choice('Crew chief').disabled).toBe(true);
+      expect(panel(fixture)?.textContent).toContain('A shift needs at least one role.');
+
+      chooseRoles(fixture, 'Driver');
+      expect(choice('Crew chief').disabled).toBe(false);
+      chooseRoles(fixture, 'Crew chief');
+      expect(panel(fixture)?.querySelector('[aria-label="Crew chief needed"]')).toBeNull();
+      expect(choice('Driver').disabled).toBe(true);
+      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('0 of 1 firefighter');
+    });
+
+    it("shows who can't come during the shift and leaves them out of the candidates", async () => {
+      const fixture = await nextWeek();
+      // Tuesday 1 December, 08:00 to 20:00: Ana can't come all day, Sofia only until 06:00.
+      await addShift(fixture, 1);
+
+      const cantCome = panel(fixture)!.querySelector('[aria-labelledby="cant-come-title"]')!;
+      expect(cantCome.textContent).toContain("Can't come during this shift");
+      expect(cantCome.textContent).toContain('Ana Costa');
+      expect(cantCome.textContent).not.toContain('Sofia Martins');
+      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]')).toBeNull();
+      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
+      // Inactive members are never candidates.
+      expect(panel(fixture)?.textContent).not.toContain('Zé Inativo');
+    });
+
+    it('says so when the members cannot be loaded', async () => {
+      const fixture = await nextWeek();
+      columns(fixture)[0].querySelector<HTMLButtonElement>('.add-slot')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      chooseInDialog(fixture, 'Crew chief');
+      press(fixture, 'Create shift');
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      http().expectOne('/api/v1/members').flush(null, { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+      expect(panel(fixture)?.textContent).toContain('Could not load the members.');
+    });
+
+    it('shows three candidates, then the rest on "Show N more"', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 2, ['Crew member']);
+
+      const crewMember = () =>
+        panel(fixture)!.querySelectorAll('[aria-label^="Assign "][aria-label$=" as Crew member"]');
+      expect(crewMember().length).toBe(3);
+      const more = panel(fixture)!.querySelector<HTMLButtonElement>('[aria-label$="more who can be Crew member"]')!;
+      expect(more.textContent?.trim()).toMatch(/^Show \d+ more$/);
+      more.click();
+      fixture.detectChanges();
+      expect(crewMember().length).toBeGreaterThan(3);
+    });
+
     it('asks before deleting a shift; a new one deleted is no change', async () => {
       const fixture = await nextWeek();
       await addShift(fixture, 0);
@@ -598,6 +753,12 @@ describe('WeekSchedule', () => {
     click(fixture, '[aria-label="Next week"]');
     flushWeek(fixture, '2026-W49');
     expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
+
+    // A member opens a shift without asking for the members or who can't come (supervisor only).
+    click(fixture, '[aria-label="Previous week"]');
+    flushWeek(fixture, '2026-W48', [thursdayNight]);
+    click(fixture, '[data-shift-id="p-thu"]');
+    expect(http().match(isDirectoryRequest).length).toBe(0);
   });
 
   describe('on a phone', () => {

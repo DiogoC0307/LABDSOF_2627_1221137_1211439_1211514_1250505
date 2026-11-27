@@ -725,6 +725,42 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/unavailabilities/team:
+    get:
+      tags: [unavailabilities]
+      summary: Every member's unavailability in a week, to build the schedule (SCRUM-65)
+      description: >
+        Supervisor only. The periods of any member that overlap the week, from Monday 00:00 in Lisbon to the Tuesday
+        after it (so a night shift that starts on Sunday is covered until it ends), ordered by start. Who and when only:
+        no ID, no source, never a reason (09).
+      operationId: listTeamUnavailabilities
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+        - name: week
+          in: query
+          required: true
+          description: >
+            An ISO 8601 week, YYYY-Www, as for GET /api/v1/piquetes. A missing week or one that does not exist
+            answers 400 (invalid_week).
+          schema:
+            type: string
+            pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W48"
+      responses:
+        "200":
+          description: The periods (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamUnavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/unavailabilities/{id}:
     parameters:
       - name: id
@@ -1464,7 +1500,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off, not_on_duty_date, too_small, too_large, below_filled]
+                    enum: [required, invalid, invalid_week, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off, not_on_duty_date, too_small, too_large, below_filled]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1498,6 +1534,21 @@ components:
           type: string
           enum: [FORM, FREE_TEXT]
           description: FREE_TEXT when confirmed from a message (SCRUM-75)
+    TeamUnavailability:
+      type: object
+      required: [memberId, startsAt, endsAt]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+          description: In UTC (ADR 0012)
+        endsAt:
+          type: string
+          format: date-time
+          description: In UTC, exclusive
     UnavailabilityMessageSettings:
       type: object
       required: [aiEnabled]
