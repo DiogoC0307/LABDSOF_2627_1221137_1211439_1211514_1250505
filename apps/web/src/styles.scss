@@ -54,7 +54,6 @@ app-root {
 }
 
 /*
-<<<<<<< HEAD
  * Phones (below Tailwind's md, 768px): the navbar's tab bar is fixed to the bottom of the screen (SCRUM-167), so the
  * page leaves room for it and for the iPhone home indicator under its content.
  */
@@ -65,7 +64,10 @@ app-root {
 @media not (width >= 48rem) {
   app-navbar ~ .page {
     padding-bottom: calc(2rem + var(--app-tab-bar-height) + env(safe-area-inset-bottom));
-=======
+  }
+}
+
+/*
  * Schedule page
  * 
  * On a desktop the page is a column as tall as the screen that never scrolls. Smaller screens scroll as usual.
@@ -265,7 +267,6 @@ app-root:has(app-week-schedule) {
 
   p {
     margin: 0;
->>>>>>> origin/main
   }
 }
 
@@ -347,36 +348,21 @@ label {
   font-size: 0.875rem;
 }
 
-<<<<<<< HEAD
-input,
-button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
-  font: inherit;
-  min-height: 2.75rem;
-  padding: 0.5rem 0.75rem;
-}
-
-button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
-  background: #0b5cab;
-  color: #fff;
-  border: 0;
-  border-radius: 0.25rem;
-=======
-// Plain input button style
+// Plain input and button style, not on Angular Material buttons and menu items (SCRUM-167)
 @layer base {
   input,
-  button {
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
     font: inherit;
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
   }
 
-  button {
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
     background: #0b5cab;
     color: #fff;
     border: 0;
     border-radius: 0.25rem;
   }
->>>>>>> origin/main
 }
 
 .list {

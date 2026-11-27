@@ -66,10 +66,6 @@ describe('App', () => {
     expect(list.request.headers.get('Authorization')).toBe('Bearer mock.supervisor-token');
     list.flush([]);
     fixture.detectChanges();
-<<<<<<< HEAD
-    expect(page.querySelector('form button')?.textContent).toContain('Create piquete');
-    expect(page.querySelector('app-navbar .session')?.textContent?.trim()).toBe('Synthetic Supervisor');
-=======
     expect(page.querySelector('.week-grid')).not.toBeNull();
 
     // Current week is read-only until the user clicks "Edit schedule"
@@ -78,9 +74,7 @@ describe('App', () => {
       .click();
     fixture.detectChanges();
     expect(page.querySelectorAll('.add-slot').length).toBeGreaterThan(0);
-    expect(page.querySelector('.session')?.textContent).toContain('Synthetic Supervisor');
-    expect(page.querySelector('.session')?.textContent).toContain('SUPERVISOR');
->>>>>>> origin/main
+    expect(page.querySelector('app-navbar .session')?.textContent?.trim()).toBe('Synthetic Supervisor');
   });
 
   it('sends the token with every API call', async () => {
