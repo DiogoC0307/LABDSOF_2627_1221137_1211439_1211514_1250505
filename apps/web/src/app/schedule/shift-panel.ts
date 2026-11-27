@@ -22,12 +22,12 @@ import { DraftShift } from './schedule-model';
 import {
   Candidate,
   MINUTES_IN_DAY,
-  MAXIMUM_PER_ROLE,
   RoleState,
   candidates,
   endAfter,
   parseTime,
   rangeLabel,
+  readNeeded,
   roleState,
   rolesOf,
   timeLabel,
@@ -94,7 +94,12 @@ export class ShiftPanel {
 
     const shift = this.shift();
     if (start !== shift.start) {
-      this.draft.setTimes(this.monday(), shift.id, start, endAfter(start, shift.end % MINUTES_IN_DAY));
+      this.draft.setTimes(
+        this.monday(),
+        shift.id,
+        start,
+        endAfter(start, shift.end % MINUTES_IN_DAY),
+      );
     }
     return timeLabel(start);
   };
@@ -154,7 +159,9 @@ export class ShiftPanel {
 
   // Who can't come for some or all of the shift's time, from "When I can't"
   protected readonly cantCome = computed(() =>
-    [...this.directory.unavailableFor(this.shift())].map((id) => this.directory.name(id)).sort(),
+    [...this.directory.unavailableFor(this.shift())]
+      .map((id) => this.directory.name(id))
+      .sort((a, b) => a.localeCompare(b)),
   );
 
   constructor() {
@@ -184,9 +191,8 @@ export class ShiftPanel {
    * role's button takes it off the shift.
    */
   protected setNeeded(role: SlotRole, field: HTMLInputElement): void {
-    const digits = field.value.replace(/\D/g, '').slice(0, 2);
-    const count = Math.min(MAXIMUM_PER_ROLE, Number(digits));
-    field.value = digits === '' ? '' : count === 0 ? digits : String(count);
+    const { shown, count } = readNeeded(field.value);
+    field.value = shown;
     if (count > 0) {
       this.draft.setNeeded(this.monday(), this.shift().id, role, count);
     }

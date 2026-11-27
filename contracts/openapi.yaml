@@ -1284,10 +1284,10 @@ components:
           type: string
           format: date
         period:
-          description: Null on a piquete created without shift times
+          type: string
           nullable: true
-          allOf:
-            - $ref: "#/components/schemas/ShiftPeriod"
+          enum: [DAY, NIGHT]
+          description: The ShiftPeriod of the shift; null on a piquete created without shift times
         startsAt:
           type: string
           format: date-time

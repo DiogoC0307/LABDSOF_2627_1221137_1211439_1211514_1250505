@@ -1,6 +1,8 @@
 <section class="week flex flex-col lg:min-h-0 lg:flex-1" aria-labelledby="week-relative week-range">
   <!-- Page header (week selector, status label, Edit / Discard and Publish buttons), one per line on a phone -->
-  <div class="flex flex-col items-center gap-3 px-4 py-3 lg:flex-row lg:flex-wrap lg:justify-between lg:px-6">
+  <div
+    class="flex flex-col items-center gap-3 px-4 py-3 lg:flex-row lg:flex-wrap lg:justify-between lg:px-6"
+  >
     <!-- Week selector -->
     <app-week-selector
       [monday]="monday()"
@@ -10,12 +12,11 @@
     />
 
     <div class="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap">
-      <!-- Status label -->
-      <p
+      <!-- Status label (an output is announced like role="status") -->
+      <output
         class="week-status m-0 flex items-center gap-2 h-11 px-4 text-[16px] font-semibold rounded-full"
         [class.week-status--green]="status().tone === 'green'"
         [class.week-status--amber]="status().tone === 'amber'"
-        role="status"
       >
         <span
           class="status-dot"
@@ -24,24 +25,39 @@
           aria-hidden="true"
         ></span>
         {{ status().text }}
-      </p>
+      </output>
 
       <!-- Edit schedule / Stop editing / Discard changes, and Publish schedule -->
       @if (editAction() || auth.isSupervisor()) {
         <div class="flex flex-wrap justify-center gap-3">
           @switch (editAction()) {
             @case ('edit') {
-              <button mat-stroked-button type="button" class="btn-outline-primary" (click)="startEditing()">
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="startEditing()"
+              >
                 Edit schedule
               </button>
             }
             @case ('stop') {
-              <button mat-stroked-button type="button" class="btn-outline-primary" (click)="stopEditing()">
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="stopEditing()"
+              >
                 Stop editing
               </button>
             }
             @case ('discard') {
-              <button mat-stroked-button type="button" class="btn-outline-primary" (click)="discard()">
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="discard()"
+              >
                 Discard changes
               </button>
             }
@@ -76,13 +92,20 @@
     <div #grid tabindex="-1" class="week-grid flex min-w-0 flex-1 flex-col lg:min-h-0">
       <!-- Desktop: week grid -->
       @if (wide()) {
-        <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#D9D7D2] bg-white">
+        <div
+          class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#D9D7D2] bg-white"
+        >
           <!-- Grid header (day names and their "+" Add shift buttons) -->
-          <div class="grid-columns min-h-[52px] shrink-0 border-b border-[#D9D7D2]" role="presentation">
+          <div
+            class="grid-columns min-h-[52px] shrink-0 border-b border-[#D9D7D2]"
+            role="presentation"
+          >
             <span></span>
             @for (day of days(); track day.date) {
               <!-- In a narrow column, the "+" goes under the day name -->
-              <div class="flex flex-wrap items-center justify-center gap-1 border-l border-[#ECEBE7] px-1 py-1">
+              <div
+                class="flex flex-wrap items-center justify-center gap-1 border-l border-[#ECEBE7] px-1 py-1"
+              >
                 <span
                   class="day-header rounded-full px-3 py-1 text-[16px] font-bold"
                   [class.day-header--today]="day.today"
@@ -106,20 +129,19 @@
           </div>
 
           <!-- Grid body -->
-          <div class="grid-columns grid-body" role="list" aria-label="Days of the week">
-            <!-- Hour labels -->
-            <div class="relative" aria-hidden="true">
+          <ul class="grid-columns grid-body m-0 list-none p-0" aria-label="Days of the week">
+            <!-- Hour labels, hidden from screen readers, so the list has only the 7 days -->
+            <li class="relative" aria-hidden="true">
               @for (hour of hours; track hour.label) {
                 <span class="hour-label" [style.top.%]="hour.top">{{ hour.label }}</span>
               }
-            </div>
+            </li>
 
             <!-- Day columns -->
             @for (day of days(); track day.date) {
-              <div
+              <li
                 class="day-column"
                 [class.day-column--past]="day.past"
-                role="listitem"
                 [attr.aria-label]="day.header"
               >
                 <!-- Shift cards -->
@@ -158,9 +180,9 @@
                     <span class="block text-[13px]">{{ slot.range }}</span>
                   </button>
                 }
-              </div>
+              </li>
             }
-          </div>
+          </ul>
         </div>
       } @else {
         <!-- Phone: today first (this week only) -->
@@ -212,7 +234,12 @@
     <!-- Shift side panel, a drawer over the page on a phone (a tap outside or Escape closes it) -->
     @if (selected(); as shift) {
       @if (!wide()) {
-        <div class="drawer-backdrop" aria-hidden="true" (click)="closePanel()"></div>
+        <div
+          class="drawer-backdrop"
+          aria-hidden="true"
+          (click)="closePanel()"
+          (keydown.escape)="closePanel()"
+        ></div>
       }
       <aside
         class="shift-aside flex w-full shrink-0 flex-col lg:min-h-0 lg:w-[420px]"
@@ -255,7 +282,12 @@
           <ng-container *ngTemplateOutlet="cardBody; context: { $implicit: card }" />
         </button>
       } @else if (entry.slot; as slot) {
-        <button type="button" class="add-slot add-slot--row" [attr.aria-label]="slot.label" (click)="addShift(slot)">
+        <button
+          type="button"
+          class="add-slot add-slot--row"
+          [attr.aria-label]="slot.label"
+          (click)="addShift(slot)"
+        >
           <span class="text-[15px] font-bold">+ Add shift</span>
           <span class="text-[14px]">{{ slot.range }}</span>
         </button>
@@ -269,7 +301,12 @@
 <!-- Phone: a day's own Add shift button, for any time of the day -->
 <ng-template #dayAdd let-day>
   @if (day.add; as add) {
-    <button type="button" class="day-add-text" [attr.aria-label]="add.label" (click)="addOnDay(day)">
+    <button
+      type="button"
+      class="day-add-text"
+      [attr.aria-label]="add.label"
+      (click)="addOnDay(day)"
+    >
       + Add shift
     </button>
   }
@@ -279,15 +316,19 @@
 <ng-template #cardBody let-card>
   <!-- Times on one line, or broken after the dash in a narrow column -->
   <span class="block text-[15px] font-bold text-[#1C1B19]"
-    ><span class="whitespace-nowrap">{{ card.from }} –</span>&ngsp;<span class="whitespace-nowrap">{{
-      card.to
-    }}</span></span
+    ><span class="whitespace-nowrap">{{ card.from }} –</span>&ngsp;<span
+      class="whitespace-nowrap"
+      >{{ card.to }}</span
+    ></span
   >
   <span class="block text-[14px] text-[#33312D]">{{ card.people }}</span>
   <span class="mt-1 flex flex-wrap gap-1">
-    <span class="tag" [class.tag--full]="card.tag === 'Full'" [class.tag--short]="card.tag !== 'Full'">{{
-      card.tag
-    }}</span>
+    <span
+      class="tag"
+      [class.tag--full]="card.tag === 'Full'"
+      [class.tag--short]="card.tag !== 'Full'"
+      >{{ card.tag }}</span
+    >
     @if (card.change) {
       <span class="tag tag--change">{{ card.change }}</span>
     }

@@ -57,7 +57,7 @@ describe('WeekSchedule', () => {
   }
 
   function status(fixture: ComponentFixture<WeekSchedule>) {
-    return element(fixture).querySelector('[role="status"]')?.textContent?.trim();
+    return element(fixture).querySelector('output.week-status')?.textContent?.trim();
   }
 
   function toggle(fixture: ComponentFixture<WeekSchedule>): HTMLButtonElement {

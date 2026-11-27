@@ -52,6 +52,11 @@ class PiqueteService {
 
 	private static final Logger log = LoggerFactory.getLogger(PiqueteService.class);
 
+	// The fields and the code of a refused shift (ErrorResponse of the contract)
+	private static final String DUTY_DATE = "dutyDate";
+	private static final String ENDS_AT = "endsAt";
+	private static final String REQUIRED = "required";
+
 	private final PiqueteRepository piquetes;
 	private final OutboxEventRepository outbox;
 	private final AvaliacaoPedidaFactory pedidos;
@@ -125,12 +130,14 @@ class PiqueteService {
 			if (wanted > current.size()) {
 				added.addAll(addSlots(piquete, role, wanted - current.size()));
 			} else {
-				current.stream().sorted(FIRST_TO_REMOVE).limit(current.size() - wanted).forEach(piquete::removeSlot);
+				current.stream().sorted(FIRST_TO_REMOVE).limit((long) current.size() - wanted).forEach(piquete::removeSlot);
 			}
 		}
 		piquetes.save(piquete);
 		queueEvaluations(added, piquete.getDutyDate());
-		log.info("piquete changed id={} slots={} traceId={}", id, piquete.getSlots().size(), TraceId.current());
+		if (log.isInfoEnabled()) {
+			log.info("piquete changed id={} slots={} traceId={}", id, piquete.getSlots().size(), TraceId.current());
+		}
 		return Optional.of(toResponse(piquete));
 	}
 
@@ -168,27 +175,27 @@ class PiqueteService {
 	private void checkShift(PiqueteRequest request) {
 		List<InvalidField> errors = new ArrayList<>();
 		if (request.dutyDate() == null) {
-			errors.add(new InvalidField("dutyDate", "required"));
+			errors.add(new InvalidField(DUTY_DATE, REQUIRED));
 		} else if (request.dutyDate().isBefore(today())) {
-			errors.add(new InvalidField("dutyDate", "in_the_past"));
+			errors.add(new InvalidField(DUTY_DATE, "in_the_past"));
 		}
 		if (request.period() == null) {
-			errors.add(new InvalidField("period", "required"));
+			errors.add(new InvalidField("period", REQUIRED));
 		}
 		if (request.startsAt() == null) {
-			errors.add(new InvalidField("startsAt", "required"));
+			errors.add(new InvalidField("startsAt", REQUIRED));
 		} else if (request.dutyDate() != null
 				&& !request.startsAt().atZoneSameInstant(LISBON).toLocalDate().equals(request.dutyDate())) {
 			errors.add(new InvalidField("startsAt", "not_on_duty_date"));
 		}
 		if (request.endsAt() == null) {
-			errors.add(new InvalidField("endsAt", "required"));
+			errors.add(new InvalidField(ENDS_AT, REQUIRED));
 		} else if (request.startsAt() != null) {
 			Duration length = Duration.between(request.startsAt(), request.endsAt());
 			if (length.isZero() || length.isNegative()) {
-				errors.add(new InvalidField("endsAt", "ends_before_start"));
+				errors.add(new InvalidField(ENDS_AT, "ends_before_start"));
 			} else if (length.compareTo(LONGEST_SHIFT) > 0) {
-				errors.add(new InvalidField("endsAt", "too_long"));
+				errors.add(new InvalidField(ENDS_AT, "too_long"));
 			}
 		}
 		String crewError = crewError(request.crew());
@@ -206,7 +213,7 @@ class PiqueteService {
 	 */
 	private static String crewError(List<CrewNeed> crew) {
 		if (crew == null || crew.isEmpty()) {
-			return "required";
+			return REQUIRED;
 		}
 		Set<SlotRole> roles = EnumSet.noneOf(SlotRole.class);
 		long total = 0;
@@ -259,8 +266,10 @@ class PiqueteService {
 			String payload = pedidos.payload(slot, dutyDate, eventId);
 			outbox.save(new OutboxEvent(eventId, ROUTING_AVALIACAO_PEDIDA, payload, Instant.now()));
 			metrics.requested(AvaliacaoPedidaFactory.PURPOSE);
-			log.info("AvaliacaoPedida queued eventId={} assignmentId={} traceId={}", eventId, slot.getAssignmentId(),
-					TraceId.current());
+			if (log.isInfoEnabled()) {
+				log.info("AvaliacaoPedida queued eventId={} assignmentId={} traceId={}", eventId, slot.getAssignmentId(),
+						TraceId.current());
+			}
 		}
 	}
 

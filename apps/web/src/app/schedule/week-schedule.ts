@@ -156,7 +156,8 @@ export class WeekSchedule implements OnInit, OnDestroy {
    * Phone: the days as a list and the side panel as a drawer over the page. Without matchMedia (tests) it's a desktop.
    */
   protected readonly wide = signal(true);
-  private readonly media = typeof matchMedia === 'function' ? matchMedia('(min-width: 64rem)') : null;
+  private readonly media =
+    typeof matchMedia === 'function' ? matchMedia('(min-width: 64rem)') : null;
   private readonly onMediaChange = (event: MediaQueryListEvent) => this.wide.set(event.matches);
 
   protected readonly editing = signal(false); // This week is read-only until "Edit schedule" is pressed
@@ -195,7 +196,9 @@ export class WeekSchedule implements OnInit, OnDestroy {
 
   // Members see only the published week; the supervisor sees their draft
   protected readonly shifts = computed(() =>
-    this.auth.isSupervisor() ? this.drafts.shifts(this.monday()) : (this.drafts.week(this.monday())?.published ?? []),
+    this.auth.isSupervisor()
+      ? this.drafts.shifts(this.monday())
+      : (this.drafts.week(this.monday())?.published ?? []),
   );
   protected readonly changes = computed(() => this.drafts.changes(this.monday()));
 
@@ -208,7 +211,10 @@ export class WeekSchedule implements OnInit, OnDestroy {
     }
 
     if (changes > 0) {
-      return { text: `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`, tone: 'amber' };
+      return {
+        text: `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`,
+        tone: 'amber',
+      };
     }
 
     if (this.weekKind() === 'current' && this.editing()) {
@@ -274,6 +280,7 @@ export class WeekSchedule implements OnInit, OnDestroy {
           .map((card) => ({ key: card.key, card, at: card.shift.start })),
         ...slots.map((slot) => ({ key: slot.key, slot, at: slot.from })),
       ];
+      entries.sort((a, b) => a.at - b.at);
 
       return {
         date,
@@ -283,14 +290,16 @@ export class WeekSchedule implements OnInit, OnDestroy {
         past: date < this.today,
         cards,
         slots,
-        entries: entries.sort((a, b) => a.at - b.at),
+        entries,
         add: canAdd ? { ...suggested, label: `Add shift on ${longDay(date)}` } : null,
       };
     });
   });
 
   // The shift open in the side panel
-  protected readonly selected = computed(() => this.shifts().find((shift) => shift.id === this.selectedId()) ?? null);
+  protected readonly selected = computed(
+    () => this.shifts().find((shift) => shift.id === this.selectedId()) ?? null,
+  );
 
   protected readonly selectedEditable = computed(() => {
     const shift = this.selected();
@@ -390,7 +399,13 @@ export class WeekSchedule implements OnInit, OnDestroy {
       .afterClosed()
       .subscribe((created) => {
         if (created) {
-          const shift = this.drafts.add(this.monday(), date, created.start, created.end, created.crew);
+          const shift = this.drafts.add(
+            this.monday(),
+            date,
+            created.start,
+            created.end,
+            created.crew,
+          );
           this.selectedId.set(shift.id);
         }
       });
@@ -451,8 +466,8 @@ export class WeekSchedule implements OnInit, OnDestroy {
     const missing = missingCount(shift);
 
     // A shift from before roles has no roles yet
-    const people =
-      required === 0 ? 'No roles yet' : `${assigned} of ${required} ${required === 1 ? 'firefighter' : 'firefighters'}`;
+    const firefighters = required === 1 ? 'firefighter' : 'firefighters';
+    const people = required === 0 ? 'No roles yet' : `${assigned} of ${required} ${firefighters}`;
 
     return {
       key: `${shift.id}-${placed.from}`,
@@ -466,8 +481,8 @@ export class WeekSchedule implements OnInit, OnDestroy {
       from: timeLabel(shift.start),
       to: timeLabel(shift.end),
       people,
-      tag: required === 0 ? 'Choose roles' : missing === 0 ? 'Full' : missingLabel(shift),
-      change: shift.change === 'new' ? 'New' : shift.change === 'edited' ? 'Edited' : null,
+      tag: cardTag(shift, required, missing),
+      change: CHANGE_LABELS[shift.change],
       label: `${longDay(shift.dutyDate).split(' ')[0]} ${rangeWords(shift.start, shift.end)}, ${people}`,
     };
   }
@@ -532,6 +547,21 @@ export class WeekSchedule implements OnInit, OnDestroy {
 }
 
 // The week's piquetes from the API as draft shifts, without those that have no times yet
+// The change tag on a shift card while the week is not published
+const CHANGE_LABELS: Record<DraftShift['change'], string | null> = {
+  new: 'New',
+  edited: 'Edited',
+  published: null,
+};
+
+// The state tag on a shift card: no roles yet, full, or who it still needs
+function cardTag(shift: DraftShift, required: number, missing: number): string {
+  if (required === 0) {
+    return 'Choose roles';
+  }
+  return missing === 0 ? 'Full' : missingLabel(shift);
+}
+
 function toDraft(list: Piquete[]): DraftShift[] {
   return list.map(fromPiquete).filter((shift): shift is DraftShift => shift !== null);
 }
@@ -546,7 +576,9 @@ function writeCache(cached: CachedWeek): void {
 
 function readCache(): CachedWeek | null {
   try {
-    const parsed = JSON.parse(localStorage.getItem(LAST_PIQUETES_KEY) ?? 'null') as Partial<CachedWeek> | null;
+    const parsed = JSON.parse(
+      localStorage.getItem(LAST_PIQUETES_KEY) ?? 'null',
+    ) as Partial<CachedWeek> | null;
     return parsed && typeof parsed.week === 'string' && Array.isArray(parsed.piquetes)
       ? { week: parsed.week, piquetes: parsed.piquetes }
       : null;

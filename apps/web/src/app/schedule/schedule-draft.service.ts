@@ -16,8 +16,13 @@ export class ScheduleDraftService {
   private readonly owner = computed(() => this.auth.session()?.memberId ?? null);
 
   // The weeks of whoever made them, keyed by their Monday
-  private readonly store = signal<{ owner: string | null; weeks: Record<string, WeekDraft> }>({ owner: null, weeks: {} });
-  private readonly weeks = computed(() => (this.store().owner === this.owner() ? this.store().weeks : {}));
+  private readonly store = signal<{ owner: string | null; weeks: Record<string, WeekDraft> }>({
+    owner: null,
+    weeks: {},
+  });
+  private readonly weeks = computed(() =>
+    this.store().owner === this.owner() ? this.store().weeks : {},
+  );
   private lastNew = 0;
 
   // Get the week for a given monday
@@ -89,7 +94,10 @@ export class ScheduleDraftService {
   unassign(monday: string, id: string, role: SlotRole, memberId: string): void {
     this.update(monday, id, (shift) => ({
       ...shift,
-      assigned: { ...shift.assigned, [role]: shift.assigned[role].filter((each) => each !== memberId) },
+      assigned: {
+        ...shift.assigned,
+        [role]: shift.assigned[role].filter((each) => each !== memberId),
+      },
     }));
   }
 
@@ -97,8 +105,7 @@ export class ScheduleDraftService {
   remove(monday: string, id: string): void {
     this.edit(monday, (draft) => {
       // Removes shift if it's in the schedule draft
-      const shift = draft.shifts.find((each) => each.id === id);
-      if (!shift) {
+      if (!draft.shifts.some((each) => each.id === id)) {
         // If shift isn't found in the draft return unchanged draft
         return draft;
       }

@@ -9,8 +9,10 @@ import {
   missingLabel,
   newShiftRange,
   overlaps,
+  MAXIMUM_PER_ROLE,
   parseTime,
   rangeLabel,
+  readNeeded,
   roleState,
   rolesOf,
   shiftState,
@@ -77,6 +79,20 @@ describe('schedule-rules', () => {
     });
   });
 
+  describe('readNeeded', () => {
+    it('keeps digits only, at most the maximum per role, and changes nothing for an empty box or 0', () => {
+      expect(readNeeded('3')).toEqual({ shown: '3', count: 3 });
+      expect(readNeeded('a2b')).toEqual({ shown: '2', count: 2 });
+      expect(readNeeded('07')).toEqual({ shown: '7', count: 7 });
+      expect(readNeeded('99')).toEqual({
+        shown: String(MAXIMUM_PER_ROLE),
+        count: MAXIMUM_PER_ROLE,
+      });
+      expect(readNeeded('')).toEqual({ shown: '', count: 0 });
+      expect(readNeeded('0')).toEqual({ shown: '0', count: 0 });
+    });
+  });
+
   describe('parseTime', () => {
     it('reads the ways people write a time', () => {
       for (const text of ['8:30', '08:30', '8.30', '8h30', '830', '0830', ' 8:30 ']) {
@@ -86,6 +102,9 @@ describe('schedule-rules', () => {
       expect(parseTime('8h')).toBe(8 * Hour);
       expect(parseTime('0')).toBe(0);
       expect(parseTime('24:00')).toBe(24 * Hour);
+      expect(parseTime('20H')).toBe(20 * Hour);
+      expect(parseTime('2030')).toBe(20 * Hour + 30);
+      expect(parseTime('20h30h')).toBe(20 * Hour + 30);
     });
 
     it('ignores the "(next day)" of an end time', () => {
@@ -93,7 +112,20 @@ describe('schedule-rules', () => {
     });
 
     it('refuses what is not a time', () => {
-      for (const text of ['', 'abc', '8:3', '8:60', '25', '24:30', '12345', '-1']) {
+      for (const text of [
+        '',
+        'abc',
+        '8:3',
+        '8:60',
+        '25',
+        '24:30',
+        '12345',
+        '-1',
+        '8::30',
+        '8:300',
+        'h',
+        '860',
+      ]) {
         expect(parseTime(text)).toBeNull();
       }
     });
@@ -116,7 +148,10 @@ describe('schedule-rules', () => {
     });
 
     it('fills a gap of 12 hours or less, and cuts a longer one at 12 hours from its start', () => {
-      expect(newShiftRange({ from: 20 * Hour, to: 24 * Hour })).toEqual({ from: 20 * Hour, to: 24 * Hour });
+      expect(newShiftRange({ from: 20 * Hour, to: 24 * Hour })).toEqual({
+        from: 20 * Hour,
+        to: 24 * Hour,
+      });
       expect(newShiftRange({ from: 0, to: 20 * Hour })).toEqual({ from: 0, to: 12 * Hour });
     });
   });
@@ -155,11 +190,16 @@ describe('schedule-rules', () => {
     });
 
     it('is short for a shift with no roles yet, though nobody is missing', () => {
-      expect(shiftState(shift({ crew: { CREW_CHIEF: 0, DRIVER: 0, CREW_MEMBER: 0 } }), today)).toBe('short');
+      expect(shiftState(shift({ crew: { CREW_CHIEF: 0, DRIVER: 0, CREW_MEMBER: 0 } }), today)).toBe(
+        'short',
+      );
     });
 
     it('lists the roles a shift needs, in order', () => {
-      expect(rolesOf({ CREW_CHIEF: 0, DRIVER: 2, CREW_MEMBER: 1 })).toEqual(['DRIVER', 'CREW_MEMBER']);
+      expect(rolesOf({ CREW_CHIEF: 0, DRIVER: 2, CREW_MEMBER: 1 })).toEqual([
+        'DRIVER',
+        'CREW_MEMBER',
+      ]);
       expect(rolesOf({ CREW_CHIEF: 0, DRIVER: 0, CREW_MEMBER: 0 })).toEqual([]);
     });
 
@@ -180,17 +220,23 @@ describe('schedule-rules', () => {
     it('keeps only members who can fill the role, with all their functions', () => {
       const list = candidates(shift(), 'DRIVER', members, [], new Set());
       expect(list.map((each) => each.member.name)).toEqual(['Rui Almeida']);
-      expect(candidates(shift(), 'CREW_MEMBER', members, [], new Set())[0].functions).toBe('Crew chief · Crew member');
+      expect(candidates(shift(), 'CREW_MEMBER', members, [], new Set())[0].functions).toBe(
+        'Crew chief · Crew member',
+      );
     });
 
     it('leaves out members already on this shift, in any role', () => {
       const onIt = shift({ assigned: { ...emptyAssigned(), CREW_MEMBER: ['ana'] } });
-      const names = candidates(onIt, 'CREW_CHIEF', members, [onIt], new Set()).map((each) => each.member.id);
+      const names = candidates(onIt, 'CREW_CHIEF', members, [onIt], new Set()).map(
+        (each) => each.member.id,
+      );
       expect(names).toEqual(['joao', 'marta']);
     });
 
     it("leaves out members who can't come that day", () => {
-      const names = candidates(shift(), 'CREW_CHIEF', members, [], new Set(['joao'])).map((each) => each.member.id);
+      const names = candidates(shift(), 'CREW_CHIEF', members, [], new Set(['joao'])).map(
+        (each) => each.member.id,
+      );
       expect(names).toEqual(['ana', 'marta']);
     });
 
@@ -215,17 +261,39 @@ describe('schedule-rules', () => {
         end: 32 * Hour,
         assigned: { ...emptyAssigned(), CREW_CHIEF: ['marta'] },
       });
-      const saturday = shift({ id: 'sat', dutyDate: '2026-11-28', start: 6 * Hour, end: 14 * Hour });
-      const sameTime = shift({ id: 'same', assigned: { ...emptyAssigned(), CREW_CHIEF: ['joao'] } });
+      const saturday = shift({
+        id: 'sat',
+        dutyDate: '2026-11-28',
+        start: 6 * Hour,
+        end: 14 * Hour,
+      });
+      const sameTime = shift({
+        id: 'same',
+        assigned: { ...emptyAssigned(), CREW_CHIEF: ['joao'] },
+      });
 
       const ids = (list: { member: ScheduleMember }[]) => list.map((each) => each.member.id);
-      expect(ids(candidates(saturday, 'CREW_CHIEF', members, [fridayNight, saturday], new Set()))).toEqual(['ana', 'joao']);
-      expect(ids(candidates(shift(), 'CREW_CHIEF', members, [sameTime, shift()], new Set()))).toEqual(['ana', 'marta']);
+      expect(
+        ids(candidates(saturday, 'CREW_CHIEF', members, [fridayNight, saturday], new Set())),
+      ).toEqual(['ana', 'joao']);
+      expect(
+        ids(candidates(shift(), 'CREW_CHIEF', members, [sameTime, shift()], new Set())),
+      ).toEqual(['ana', 'marta']);
     });
 
     it('keeps a member whose other shift ends exactly when this one starts (TC-SCRUM-65-18)', () => {
-      const fridayNight = shift({ id: 'fri', dutyDate: '2026-11-27', start: 20 * Hour, end: 32 * Hour });
-      const saturday = shift({ id: 'sat', dutyDate: '2026-11-28', start: 8 * Hour, end: 20 * Hour });
+      const fridayNight = shift({
+        id: 'fri',
+        dutyDate: '2026-11-27',
+        start: 20 * Hour,
+        end: 32 * Hour,
+      });
+      const saturday = shift({
+        id: 'sat',
+        dutyDate: '2026-11-28',
+        start: 8 * Hour,
+        end: 20 * Hour,
+      });
       expect(overlaps(saturday, fridayNight)).toBe(false);
       expect(overlaps(fridayNight, saturday)).toBe(false);
       expect(overlaps({ ...saturday, start: 7 * Hour }, fridayNight)).toBe(true);
@@ -244,7 +312,11 @@ describe('schedule-rules', () => {
     it('counts new and edited shifts, and published shifts deleted', () => {
       const draft: WeekDraft = {
         published: [shift({ id: 'a' }), shift({ id: 'b' }), shift({ id: 'c' })],
-        shifts: [shift({ id: 'a', change: 'edited' }), shift({ id: 'b' }), shift({ id: 'new-1', change: 'new' })],
+        shifts: [
+          shift({ id: 'a', change: 'edited' }),
+          shift({ id: 'b' }),
+          shift({ id: 'new-1', change: 'new' }),
+        ],
         deleted: ['c'],
       };
       expect(changeCount(draft)).toBe(3);

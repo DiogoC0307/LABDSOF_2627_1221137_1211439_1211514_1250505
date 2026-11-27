@@ -1,10 +1,16 @@
 import { addDays } from './iso-week';
 import { Piquete, ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
-import { Crew, DraftShift, ScheduleMember, WeekDraft, emptyAssigned, emptyCrew } from './schedule-model';
+import {
+  Crew,
+  DraftShift,
+  ScheduleMember,
+  WeekDraft,
+  emptyAssigned,
+  emptyCrew,
+} from './schedule-model';
 import { lisbonTime } from './shift-time';
 
 // Schedule page's rules
-
 
 export const MINUTES_IN_DAY = 24 * 60;
 export const LONGEST_NEW_SHIFT = 12 * 60; // Maximum lenght of a shift
@@ -31,18 +37,27 @@ export function timeLabel(minutes: number): string {
 
 /**
  * Parses a written time into minutes from midnight
- * 
+ *
  * H, HH, H:MM, HH:MM, H.MM, HH.MM, HhMM, HHhMM and HMM all work, and a trailing "(next day)" is ignored.
  */
 export function parseTime(text: string): number | null {
-  const match = /^(\d{1,2})(?:[:.h]?(\d{2}))?h?$/i.exec(text.trim().replace(/\s*\(next day\)$/i, ''));
+  const written = text.trim().replace(/\s*\(next day\)$/i, '');
+  // With a separator: H:MM, HH.MM, HhMM; digits only: H, HH, HMM, HHMM, the last two digits being the minutes
+  const separated = /^(\d{1,2})[:.h](\d{2})h?$/i.exec(written);
+  const digitsOnly = /^(\d{1,4})h?$/i.exec(written);
 
-  if (!match) {
+  let hours: number;
+  let minutes: number;
+  if (separated) {
+    hours = Number(separated[1]);
+    minutes = Number(separated[2]);
+  } else if (digitsOnly) {
+    const digits = digitsOnly[1];
+    hours = Number(digits.length > 2 ? digits.slice(0, -2) : digits);
+    minutes = digits.length > 2 ? Number(digits.slice(-2)) : 0;
+  } else {
     return null;
   }
-
-  const hours = Number(match[1]);
-  const minutes = Number(match[2] ?? 0);
   if (minutes > 59 || hours > 24 || (hours === 24 && minutes > 0)) {
     return null;
   }
@@ -66,14 +81,26 @@ export function rangeWords(start: number, end: number): string {
 }
 
 // For shifts that go past midnight, returns the shift's segments for each day
-export function daySegments(shift: DraftShift): { date: string; from: number; to: number; continued: boolean }[] {
+export function daySegments(
+  shift: DraftShift,
+): { date: string; from: number; to: number; continued: boolean }[] {
   const segments = [
-    { date: shift.dutyDate, from: shift.start, to: Math.min(shift.end, MINUTES_IN_DAY), continued: false },
+    {
+      date: shift.dutyDate,
+      from: shift.start,
+      to: Math.min(shift.end, MINUTES_IN_DAY),
+      continued: false,
+    },
   ];
 
   // Pushes a segment for the next day if the shift goes past midnight
   if (shift.end > MINUTES_IN_DAY) {
-    segments.push({ date: addDays(shift.dutyDate, 1), from: 0, to: shift.end - MINUTES_IN_DAY, continued: true });
+    segments.push({
+      date: addDays(shift.dutyDate, 1),
+      from: 0,
+      to: shift.end - MINUTES_IN_DAY,
+      continued: true,
+    });
   }
 
   return segments;
@@ -123,22 +150,44 @@ export function assignedCount(shift: DraftShift): number {
 
 // The number of people missing from a shift
 export function missingCount(shift: DraftShift): number {
-  return SLOT_ROLES.reduce((sum, role) => sum + Math.max(0, shift.crew[role] - shift.assigned[role].length), 0);
+  return SLOT_ROLES.reduce(
+    (sum, role) => sum + Math.max(0, shift.crew[role] - shift.assigned[role].length),
+    0,
+  );
+}
+
+/**
+ * What a "needed" box keeps as the supervisor types: digits only, at most MAXIMUM_PER_ROLE. An empty box or 0 is
+ * kept as typed and changes nothing (count 0): the role's button takes the role off.
+ */
+export function readNeeded(value: string): { shown: string; count: number } {
+  const digits = value.replace(/\D/g, '').slice(0, 2);
+  const count = Math.min(MAXIMUM_PER_ROLE, Number(digits));
+  if (count === 0) {
+    return { shown: digits, count: 0 };
+  }
+  return { shown: String(count), count };
 }
 
 // Who a short shift still needs, by role: "Needs 1 driver, 2 crew members"
 export function missingLabel(shift: DraftShift): string {
-  const parts = SLOT_ROLES.map((role) => ({ role, missing: shift.crew[role] - shift.assigned[role].length }))
+  const parts = SLOT_ROLES.map((role) => ({
+    role,
+    missing: shift.crew[role] - shift.assigned[role].length,
+  }))
     .filter((each) => each.missing > 0)
-    .map(({ role, missing }) => `${missing} ${ROLE_LABELS[role].toLowerCase()}${missing === 1 ? '' : 's'}`);
+    .map(
+      ({ role, missing }) =>
+        `${missing} ${ROLE_LABELS[role].toLowerCase()}${missing === 1 ? '' : 's'}`,
+    );
   return `Needs ${parts.join(', ')}`;
 }
 
 /**
  * Past: on a day before today. Not editable.
- * 
+ *
  * Full: every role it needs has its people. Editable.
- * 
+ *
  * Short: someone is missing, or it has no roles yet. Editable.
  */
 export type ShiftState = 'past' | 'full' | 'short';
@@ -187,11 +236,16 @@ export function candidates(
   const onShift = new Set(SLOT_ROLES.flatMap((each) => shift.assigned[each]));
 
   return members
-    .filter((member) => member.roles.includes(role) && !onShift.has(member.id) && !unavailable.has(member.id))
+    .filter(
+      (member) =>
+        member.roles.includes(role) && !onShift.has(member.id) && !unavailable.has(member.id),
+    )
     .map((member) => ({
       member,
       others: weekShifts.filter(
-        (each) => each.id !== shift.id && SLOT_ROLES.some((slot) => each.assigned[slot].includes(member.id)),
+        (each) =>
+          each.id !== shift.id &&
+          SLOT_ROLES.some((slot) => each.assigned[slot].includes(member.id)),
       ),
     }))
     .filter(({ others }) => !others.some((other) => overlaps(shift, other)))
@@ -224,7 +278,8 @@ export function fromPiquete(piquete: Piquete): DraftShift | null {
   const start = lisbonTime(piquete.startsAt);
   const end = lisbonTime(piquete.endsAt);
   const days = Math.round(
-    (Date.parse(`${end.date}T00:00:00Z`) - Date.parse(`${piquete.dutyDate}T00:00:00Z`)) / 86_400_000,
+    (Date.parse(`${end.date}T00:00:00Z`) - Date.parse(`${piquete.dutyDate}T00:00:00Z`)) /
+      86_400_000,
   );
 
   const startMinutes = start.date === piquete.dutyDate ? start.minutes : 0;
@@ -246,7 +301,7 @@ export function fromPiquete(piquete: Piquete): DraftShift | null {
   if (extra > 0) {
     crew.CREW_MEMBER += extra;
   }
-  
+
   return {
     id: piquete.id,
     dutyDate: piquete.dutyDate,

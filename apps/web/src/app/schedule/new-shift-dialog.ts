@@ -10,7 +10,15 @@ import {
 } from '@angular/material/dialog';
 import { ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
 import { Crew, emptyCrew } from './schedule-model';
-import { MINUTES_IN_DAY, MAXIMUM_PER_ROLE, endAfter, parseTime, rolesOf, timeLabel, totalOf } from './schedule-rules';
+import {
+  MINUTES_IN_DAY,
+  endAfter,
+  parseTime,
+  readNeeded,
+  rolesOf,
+  timeLabel,
+  totalOf,
+} from './schedule-rules';
 import { TimeField, WHOLE_HOURS, endHours, endLabel } from './time-field';
 
 export interface NewShiftData {
@@ -34,7 +42,14 @@ export interface NewShift {
  */
 @Component({
   selector: 'app-new-shift-dialog',
-  imports: [MatButton, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogTitle, TimeField],
+  imports: [
+    MatButton,
+    MatDialogActions,
+    MatDialogClose,
+    MatDialogContent,
+    MatDialogTitle,
+    TimeField,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './new-shift-dialog.html',
 })
@@ -58,9 +73,15 @@ export class NewShiftDialog {
     SLOT_ROLES.map((role) => ({ role, name: ROLE_LABELS[role], chosen: this.crew()[role] > 0 })),
   );
   protected readonly chosen = computed(() =>
-    rolesOf(this.crew()).map((role) => ({ role, name: ROLE_LABELS[role], needed: this.crew()[role] })),
+    rolesOf(this.crew()).map((role) => ({
+      role,
+      name: ROLE_LABELS[role],
+      needed: this.crew()[role],
+    })),
   );
-  protected readonly canCreate = computed(() => totalOf(this.crew()) > 0 && !this.startWrong() && !this.endWrong());
+  protected readonly canCreate = computed(
+    () => totalOf(this.crew()) > 0 && !this.startWrong() && !this.endWrong(),
+  );
 
   /** A new start keeps the end time; when the end is then at or before the start, it is the next day's. */
   protected readonly takeStart = (text: string): string | null => {
@@ -93,9 +114,8 @@ export class NewShiftDialog {
 
   /** Digits only, 1 to 20. An empty box or 0 changes nothing: the role's button takes the role off. */
   protected setNeeded(role: SlotRole, field: HTMLInputElement): void {
-    const digits = field.value.replace(/\D/g, '').slice(0, 2);
-    const count = Math.min(MAXIMUM_PER_ROLE, Number(digits));
-    field.value = digits === '' ? '' : count === 0 ? digits : String(count);
+    const { shown, count } = readNeeded(field.value);
+    field.value = shown;
     if (count > 0) {
       this.crew.update((crew) => ({ ...crew, [role]: count }));
     }
