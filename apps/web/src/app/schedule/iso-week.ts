@@ -93,36 +93,6 @@ export function monthTitle(first: string): string {
   return `${MONTH.format(day)} ${day.getUTCFullYear()}`;
 }
 
-/**
- * The week in words for screen readers and the calendar rows, e.g. "November 2026 · Days 23 to 29". A week across
- * two months or years names both:
- * "November – December 2026 · Days 30 to 6", "December 2026 – January 2027 · Days 28 to 3".
- */
-export function weekTitle(monday: string): string {
-  const days = weekDays(monday).map(toUtc);
-  const first = days[0];
-  const last = days[6];
-  const firstMonth = MONTH.format(first);
-  const lastMonth = MONTH.format(last);
-  let months: string;
-  if (first.getUTCFullYear() !== last.getUTCFullYear()) {
-    months = `${firstMonth} ${first.getUTCFullYear()} – ${lastMonth} ${last.getUTCFullYear()}`;
-  } else if (firstMonth === lastMonth) {
-    months = `${firstMonth} ${first.getUTCFullYear()}`;
-  } else {
-    months = `${firstMonth} – ${lastMonth} ${first.getUTCFullYear()}`;
-  }
-  return `${months} · Days ${first.getUTCDate()} to ${last.getUTCDate()}`;
-}
-
-/**
- * The heading of the week, e.g. "November 2026 - Week 48". A week across two months or years takes the month and
- * year of its Thursday, as its ISO number does: 30 November to 6 December 2026 is "December 2026 - Week 49".
- */
-export function weekHeading(monday: string): string {
-  return `${monthTitle(firstOfMonth(addDays(monday, 3)))} - Week ${isoWeekNumber(monday)}`;
-}
-
 /** A column heading, e.g. "Mon 23". */
 export function shortDay(date: string): string {
   const day = toUtc(date);

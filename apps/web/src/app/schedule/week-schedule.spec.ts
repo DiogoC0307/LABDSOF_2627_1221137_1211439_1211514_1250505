@@ -1,8 +1,14 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { LAST_PIQUETES_KEY } from '../auth/auth.service';
 import { WeekSchedule } from './week-schedule';
-import { http, signInAs, testProviders, weekRequest } from '../testing/test-support';
+import { http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
 
-/** The week's schedule (SCRUM-65, mockup). The clock is fixed on Wednesday 2026-11-25, in week 2026-W48. */
+/**
+ * Schedule page
+ *
+ * The clock is fixed on Wednesday 2026-11-25, in week 2026-W48 (23 to 29 November): Monday and Tuesday have passed.
+ */
 describe('WeekSchedule', () => {
   function render(role: string) {
     signInAs(role);
@@ -32,19 +38,116 @@ describe('WeekSchedule', () => {
     fixture.detectChanges();
   }
 
-  function title(fixture: ComponentFixture<WeekSchedule>) {
-    return element(fixture).querySelector('#week-title')?.textContent;
+  function buttonByText(root: ParentNode, text: string): HTMLButtonElement | undefined {
+    return Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find(
+      (button) => button.textContent?.replace(/\s+/g, ' ').trim() === text,
+    );
   }
 
-  function calendarRows(fixture: ComponentFixture<WeekSchedule>) {
-    return Array.from(element(fixture).querySelectorAll<HTMLButtonElement>('.calendar-week'));
+  function press(fixture: ComponentFixture<WeekSchedule>, text: string) {
+    buttonByText(document, text)!.click();
+    fixture.detectChanges();
   }
+
+  // The two lines of the week bar: "This week" over "23 – 29 November 2026"
+  function title(fixture: ComponentFixture<WeekSchedule>) {
+    const relative = element(fixture).querySelector('#week-relative')?.textContent?.trim();
+    const range = element(fixture).querySelector('#week-range')?.textContent?.trim();
+    return `${relative} / ${range}`;
+  }
+
+  function status(fixture: ComponentFixture<WeekSchedule>) {
+    return element(fixture).querySelector('[role="status"]')?.textContent?.trim();
+  }
+
+  function toggle(fixture: ComponentFixture<WeekSchedule>): HTMLButtonElement {
+    return element(fixture).querySelector<HTMLButtonElement>('.week-toggle')!;
+  }
+
+  // The calendar opens in the CDK overlay container, at the end of the page, not inside the component
+  function calendar(): HTMLElement | null {
+    return document.querySelector<HTMLElement>('.calendar');
+  }
+
+  function clickInCalendar(fixture: ComponentFixture<WeekSchedule>, selector: string) {
+    calendar()!.querySelector<HTMLElement>(selector)!.click();
+    fixture.detectChanges();
+  }
+
+  function calendarRows() {
+    return Array.from(calendar()?.querySelectorAll<HTMLButtonElement>('.calendar-week') ?? []);
+  }
+
+  function columns(fixture: ComponentFixture<WeekSchedule>) {
+    return Array.from(element(fixture).querySelectorAll<HTMLElement>('.day-column'));
+  }
+
+  function slotsPerDay(fixture: ComponentFixture<WeekSchedule>) {
+    return columns(fixture).map((column) => column.querySelectorAll('.add-slot').length);
+  }
+
+  function panel(fixture: ComponentFixture<WeekSchedule>) {
+    return element(fixture).querySelector<HTMLElement>('[aria-label="Shift details"]');
+  }
+
+  function dialog() {
+    return document.querySelector<HTMLElement>('mat-dialog-container');
+  }
+
+  // Presses a role's button in the Add shift dialog
+  function chooseInDialog(fixture: ComponentFixture<WeekSchedule>, name: string) {
+    Array.from(dialog()!.querySelectorAll<HTMLButtonElement>('.role-choice'))
+      .find((button) => button.textContent?.trim() === name)!
+      .click();
+    fixture.detectChanges();
+  }
+
+  // "+ Add shift" on a day of the week (0 is Monday), then the roles in the dialog, then "Create shift"
+  async function addShift(fixture: ComponentFixture<WeekSchedule>, day: number, roles = ['Crew chief']) {
+    columns(fixture)[day].querySelector<HTMLButtonElement>('.add-slot')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    for (const role of roles) {
+      chooseInDialog(fixture, role);
+    }
+    press(fixture, 'Create shift');
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  function publishButton(fixture: ComponentFixture<WeekSchedule>) {
+    return buttonByText(element(fixture), 'Publish schedule')!;
+  }
+
+  // A shift on 2026-11-26 (Thursday) from 00:00 to 08:00 that needs one crew member
+  const thursdayNight = {
+    id: 'p-thu',
+    dutyDate: '2026-11-26',
+    period: 'NIGHT',
+    startsAt: '2026-11-26T00:00:00Z',
+    endsAt: '2026-11-26T08:00:00Z',
+    minimumCrew: 1,
+    slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'PENDING' }],
+  };
+
+  const mondayDay = {
+    id: 'p-mon',
+    dutyDate: '2026-11-23',
+    period: 'DAY',
+    startsAt: '2026-11-23T08:00:00Z',
+    endsAt: '2026-11-23T20:00:00Z',
+    minimumCrew: 1,
+    slots: [{ id: 's2', role: 'CREW_MEMBER', status: 'PENDING' }],
+  };
 
   beforeEach(async () => {
     localStorage.clear();
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-11-25T10:00:00Z'));
-    await TestBed.configureTestingModule({ imports: [WeekSchedule], providers: testProviders }).compileComponents();
+    await TestBed.configureTestingModule({
+      imports: [WeekSchedule],
+      providers: [...testProviders, { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } }],
+    }).compileComponents();
   });
 
   afterEach(() => {
@@ -53,306 +156,528 @@ describe('WeekSchedule', () => {
     localStorage.clear();
   });
 
-  it("asks for this week's piquetes and titles the week with its month, year and number", () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
+  describe('the week selector', () => {
+    it("asks for this week's piquetes and names the week by its days, with no week number", () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
 
-    expect(title(fixture)).toBe('November 2026 - Week 48');
+      expect(title(fixture)).toBe('This week / 23 – 29 November 2026');
+      expect(toggle(fixture).getAttribute('aria-label')).toBe('This week, 23 – 29 November 2026. Choose week');
+      expect(toggle(fixture).getAttribute('aria-haspopup')).toBe('dialog');
+      expect(toggle(fixture).classList).toContain('week-toggle--current');
+      expect(element(fixture).querySelector('.week-bar')?.textContent).not.toMatch(/Week \d|Wk/);
+    });
+
+    it('goes back and forward a week with the arrows', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+
+      click(fixture, '[aria-label="Previous week"]');
+      flushWeek(fixture, '2026-W47');
+      expect(title(fixture)).toBe('Last week / 16 – 22 November 2026');
+
+      click(fixture, '[aria-label="Next week"]');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '[aria-label="Next week"]');
+      flushWeek(fixture, '2026-W49');
+      expect(title(fixture)).toBe('Next week / 30 Nov – 6 Dec 2026');
+      expect(calendar()).toBeNull();
+    });
+
+    it('drops the answer for a week the user has already left', () => {
+      const fixture = render('SUPERVISOR');
+      const first = weekRequest();
+
+      click(fixture, '[aria-label="Next week"]');
+      expect(first.cancelled).toBe(true);
+      flushWeek(fixture, '2026-W49');
+    });
+
+    it("opens a calendar only from the date, on the week's month, with the week chosen and focused", async () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+      expect(calendar()).toBeNull();
+
+      click(fixture, '.week-toggle');
+      await fixture.whenStable();
+
+      expect(toggle(fixture).getAttribute('aria-expanded')).toBe('true');
+      expect(calendar()?.querySelector('.calendar-month')?.textContent?.trim()).toBe('November 2026');
+      const rows = calendarRows();
+      expect(rows.length).toBe(6);
+      expect(rows[4].getAttribute('aria-label')).toBe('Week of 23 – 29 November 2026');
+      expect(rows[4].getAttribute('aria-pressed')).toBe('true');
+      expect(document.activeElement).toBe(rows[4]);
+    });
+
+    it('chooses a week from another month in the calendar, and the calendar closes', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '.week-toggle');
+
+      clickInCalendar(fixture, '[aria-label="Next month"]');
+      calendarRows()[1].click();
+      fixture.detectChanges();
+      flushWeek(fixture, '2026-W50');
+
+      expect(title(fixture)).toBe('In 2 weeks / 7 – 13 December 2026');
+      expect(calendar()).toBeNull();
+      expect(document.activeElement).toBe(toggle(fixture));
+    });
+
+    it('closes the calendar with Escape or a click outside it, without changing the week', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+
+      click(fixture, '.week-toggle');
+      calendar()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(calendar()).toBeNull();
+
+      click(fixture, '.week-toggle');
+      document.querySelector<HTMLElement>('.cdk-overlay-backdrop')!.click();
+      fixture.detectChanges();
+      expect(calendar()).toBeNull();
+      expect(title(fixture)).toBe('This week / 23 – 29 November 2026');
+    });
   });
 
-  it('shows the seven days from Monday to Sunday', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
+  describe('the grid', () => {
+    it('shows the seven days, today as the current date, and the hours every 2 hours', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
 
-    const days = element(fixture).querySelectorAll('.day');
-    expect(days.length).toBe(7);
-    expect(days[0].getAttribute('aria-label')).toBe('Monday 23 November');
-    expect(days[6].getAttribute('aria-label')).toBe('Sunday 29 November');
-    expect(days[2].getAttribute('aria-current')).toBe('date');
-    expect(element(fixture).querySelectorAll('.shift').length).toBe(0);
+      const headers = Array.from(element(fixture).querySelectorAll('.day-header')).map((day) => day.textContent);
+      expect(headers).toEqual(['Mon 23', 'Tue 24', 'Wed 25', 'Thu 26', 'Fri 27', 'Sat 28', 'Sun 29']);
+      expect(element(fixture).querySelector('.day-header--today')?.getAttribute('aria-current')).toBe('date');
+      expect(element(fixture).querySelectorAll('.day-header--past').length).toBe(2);
+      expect(element(fixture).querySelectorAll('.day-column--past').length).toBe(2);
+      const hours = Array.from(element(fixture).querySelectorAll('.hour-label')).map((hour) => hour.textContent);
+      expect(hours.length).toBe(12);
+      expect(hours[0]).toBe('00:00');
+      expect(hours[11]).toBe('22:00');
+    });
+
+    it('places a shift as a card at its hours, with how many people it has and needs', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [thursdayNight]);
+
+      const card = columns(fixture)[3].querySelector<HTMLButtonElement>('.shift-card')!;
+      expect(card.getAttribute('aria-label')).toBe('Thursday 00:00 to 08:00, 0 of 1 firefighter');
+      expect(card.textContent).toContain('00:00 – 08:00');
+      expect(card.textContent).toContain('Needs 1 more');
+      expect(card.classList).toContain('shift-card--short');
+      expect(card.style.top).toBe('calc(0% + 2px)');
+      expect(card.style.height).toMatch(/^calc\(33\.33\d*% - 4px\)$/);
+      expect(card.querySelector('button')).toBeNull();
+    });
+
+    it('greys a shift on a day that has passed', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [mondayDay]);
+
+      expect(columns(fixture)[0].querySelector('.shift-card')?.classList).toContain('shift-card--past');
+    });
   });
 
-  it('gives the supervisor a "+" from today to Sunday, and none on the days that have passed', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
+  describe('this week', () => {
+    it('is read-only until "Edit schedule", with nothing to publish', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [thursdayNight]);
 
-    const days = Array.from(element(fixture).querySelectorAll('.day'));
-    expect(days.map((day) => day.querySelector('.add-shift') !== null)).toEqual([
-      false,
-      false,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ]);
-    expect(days[0].classList).toContain('day--past');
-    expect(days[3].querySelector('.add-shift')?.getAttribute('aria-label')).toBe('Add a shift on Thursday 26 November');
-    // Below the day's name, as its own element.
-    const name = days[3].querySelector('.day-name')!;
-    expect(name.querySelector('.add-shift')).toBeNull();
-    expect(name.nextElementSibling?.classList).toContain('add-shift');
+      expect(status(fixture)).toBe('Published');
+      expect(element(fixture).querySelector('.status-dot--green')).not.toBeNull();
+      expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
+      expect(element(fixture).querySelectorAll('.day-add').length).toBe(0);
+      expect(publishButton(fixture).disabled).toBe(true);
+
+      press(fixture, 'Edit schedule');
+      expect(status(fixture)).toBe('Editing · no changes yet');
+      // Slots only today and later; Thursday has a slot after its night shift.
+      expect(slotsPerDay(fixture)).toEqual([0, 0, 1, 1, 1, 1, 1]);
+      // Monday and Tuesday have passed: no Add shift button on them either.
+      expect(
+        Array.from(element(fixture).querySelectorAll('.day-add')).map((button) => button.getAttribute('aria-label')),
+      ).toEqual([
+        'Add shift on Wednesday 25 November',
+        'Add shift on Thursday 26 November',
+        'Add shift on Friday 27 November',
+        'Add shift on Saturday 28 November',
+        'Add shift on Sunday 29 November',
+      ]);
+      expect(buttonByText(element(fixture), 'Stop editing')).toBeDefined();
+
+      press(fixture, 'Stop editing');
+      expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
+      expect(buttonByText(element(fixture), 'Edit schedule')).toBeDefined();
+    });
+
+    it('says "No shifts yet" for an empty week', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+
+      expect(status(fixture)).toBe('No shifts yet');
+    });
+
+    it('opens a shift read-only in the panel, saying why', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [thursdayNight, mondayDay]);
+
+      const thursday = columns(fixture)[3].querySelector<HTMLButtonElement>('.shift-card')!;
+      thursday.click();
+      fixture.detectChanges();
+      expect(thursday.getAttribute('aria-pressed')).toBe('true');
+      expect(panel(fixture)?.textContent).toContain('This week is published. Press "Edit schedule" to make changes.');
+      expect(panel(fixture)?.textContent).toContain('Thursday 26 November');
+      expect(buttonByText(panel(fixture)!, 'Delete')).toBeUndefined();
+
+      press(fixture, 'Edit schedule');
+      columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!.click();
+      fixture.detectChanges();
+      expect(panel(fixture)?.textContent).toContain("This shift has already happened, so it can't be changed.");
+      expect(buttonByText(panel(fixture)!, 'Delete')).toBeUndefined();
+    });
+
+    it('closes the panel and gives the focus back to the card', async () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [thursdayNight]);
+      const card = columns(fixture)[3].querySelector<HTMLButtonElement>('.shift-card')!;
+      card.click();
+      fixture.detectChanges();
+
+      click(fixture, '[aria-label="Close shift details"]');
+      await fixture.whenStable();
+      expect(panel(fixture)).toBeNull();
+      expect(document.activeElement?.getAttribute('data-shift-id')).toBe('p-thu');
+    });
   });
 
-  it('gives a member no "+", since only the supervisor adds shifts', () => {
+  describe('a later week', () => {
+    async function nextWeek() {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '[aria-label="Next week"]');
+      flushWeek(fixture, '2026-W49');
+      return fixture;
+    }
+
+    it('is always editable, with a slot over every empty day', async () => {
+      const fixture = await nextWeek();
+
+      expect(slotsPerDay(fixture)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+      const slot = columns(fixture)[0].querySelector('.add-slot')!;
+      expect(slot.getAttribute('aria-label')).toBe('Add shift on Monday, 00:00 to 24:00');
+      expect(buttonByText(element(fixture), 'Edit schedule')).toBeUndefined();
+      expect(element(fixture).querySelectorAll('.day-add').length).toBe(7);
+    });
+
+    it('asks for the times and roles of a new shift, then opens it and counts the change until it is discarded', async () => {
+      const fixture = await nextWeek();
+      columns(fixture)[0].querySelector<HTMLButtonElement>('.add-slot')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      expect(dialog()?.textContent).toContain('Add shift');
+      expect(dialog()?.textContent).toContain('Monday 30 November');
+      const box = (name: string) =>
+        [...dialog()!.querySelectorAll('mat-form-field')]
+          .find((field) => field.querySelector('mat-label')?.textContent?.trim() === name)!
+          .querySelector<HTMLInputElement>('input')!;
+      expect(box('Start').value).toBe('08:00');
+      expect(box('End').value).toBe('20:00');
+      // No role is chosen yet: nothing to create.
+      expect(dialog()?.querySelector('[aria-label$=" needed"]')).toBeNull();
+      expect(dialog()?.textContent).toContain('Choose at least one role.');
+      expect(buttonByText(dialog()!, 'Create shift')!.disabled).toBe(true);
+
+      // A new start keeps the end.
+      setValue(box('Start'), '9');
+      box('Start').dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      expect(box('End').value).toBe('20:00');
+      chooseInDialog(fixture, 'Crew chief');
+      chooseInDialog(fixture, 'Driver');
+      chooseInDialog(fixture, 'Crew member');
+      chooseInDialog(fixture, 'Driver');
+      const needed = (role: string) => dialog()!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
+      expect(needed('Driver')).toBeNull();
+      expect(needed('Crew chief')!.value).toBe('1');
+      setValue(needed('Crew member')!, '3a');
+      fixture.detectChanges();
+      expect(needed('Crew member')!.value).toBe('3');
+      // 0 changes nothing: the role's button takes the role off.
+      setValue(needed('Crew member')!, '0');
+      needed('Crew member')!.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      expect(needed('Crew member')!.value).toBe('3');
+
+      press(fixture, 'Create shift');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(dialog()).toBeNull();
+      const card = columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!;
+      expect(card.textContent).toContain('09:00 – 20:00');
+      expect(card.textContent).toContain('0 of 4 firefighters');
+      expect(card.textContent).toContain('New');
+      expect(card.getAttribute('aria-pressed')).toBe('true');
+      expect(panel(fixture)?.textContent).toContain('09:00 – 20:00');
+      // Before and after the new shift.
+      expect(columns(fixture)[0].querySelectorAll('.add-slot').length).toBe(2);
+      expect(status(fixture)).toBe('1 unpublished change');
+      expect(element(fixture).querySelector('.status-dot--amber')).not.toBeNull();
+      expect(publishButton(fixture).disabled).toBe(false);
+
+      press(fixture, 'Discard changes');
+      expect(columns(fixture)[0].querySelector('.shift-card')).toBeNull();
+      expect(panel(fixture)).toBeNull();
+      expect(status(fixture)).toBe('No shifts yet');
+    });
+
+    it("adds a shift from the day's own button, also on a day all covered and over its shifts", async () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '[aria-label="Next week"]');
+      const allDay = {
+        ...mondayDay,
+        id: 'p-all',
+        dutyDate: '2026-11-30',
+        startsAt: '2026-11-30T00:00:00Z',
+        endsAt: '2026-12-01T00:00:00Z',
+      };
+      flushWeek(fixture, '2026-W49', [allDay]);
+
+      // Monday is all covered: no free time, but its own button.
+      expect(slotsPerDay(fixture)).toEqual([0, 1, 1, 1, 1, 1, 1]);
+      click(fixture, '[aria-label="Add shift on Monday 30 November"]');
+      await fixture.whenStable();
+      expect(dialog()?.textContent).toContain('Monday 30 November');
+      chooseInDialog(fixture, 'Driver');
+      press(fixture, 'Create shift');
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const cards = columns(fixture)[0].querySelectorAll('.shift-card');
+      expect(cards.length).toBe(2);
+      expect(cards[1].textContent).toContain('08:00 – 20:00');
+      expect(status(fixture)).toBe('1 unpublished change');
+    });
+
+    it('adds nothing when the dialog is cancelled, or while a time in it is wrong', async () => {
+      const fixture = await nextWeek();
+      columns(fixture)[2].querySelector<HTMLButtonElement>('.add-slot')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      chooseInDialog(fixture, 'Driver');
+      const start = dialog()!.querySelector<HTMLInputElement>('mat-form-field input')!;
+      setValue(start, 'soon');
+      start.dispatchEvent(new Event('blur'));
+      fixture.detectChanges();
+      expect(dialog()?.textContent).toContain('Write a time like 08:30');
+      expect(buttonByText(dialog()!, 'Create shift')!.disabled).toBe(true);
+
+      press(fixture, 'Cancel');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(dialog()).toBeNull();
+      expect(columns(fixture)[2].querySelector('.shift-card')).toBeNull();
+      expect(status(fixture)).toBe('No shifts yet');
+    });
+
+    it('takes a written time, not only the whole hours of the list, and says when it is not a time', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+
+      const box = (name: string) =>
+        [...panel(fixture)!.querySelectorAll('mat-form-field')]
+          .find((field) => field.querySelector('mat-label')?.textContent?.trim() === name)!
+          .querySelector<HTMLInputElement>('input')!;
+      const write = (name: string, text: string) => {
+        setValue(box(name), text);
+        box(name).dispatchEvent(new Event('blur'));
+        fixture.detectChanges();
+      };
+
+      expect(box('Start').value).toBe('08:00');
+      write('Start', '8:30');
+      // The shift keeps its end.
+      expect(box('Start').value).toBe('08:30');
+      expect(box('End').value).toBe('20:00');
+      expect(panel(fixture)?.textContent).toContain('08:30 – 20:00');
+
+      write('End', '615');
+      expect(box('End').value).toBe('06:15 (next day)');
+      expect(panel(fixture)?.textContent).toContain('08:30 – 06:15');
+
+      // The end keeps its time (06:15): the next day's while the start is later, the same day's once it is earlier.
+      write('Start', '7');
+      expect(box('End').value).toBe('06:15 (next day)');
+      write('Start', '5');
+      expect(box('End').value).toBe('06:15');
+      write('Start', '8:30');
+      expect(box('End').value).toBe('06:15 (next day)');
+
+      write('Start', 'soon');
+      expect(panel(fixture)?.textContent).toContain('Write a time like 08:30');
+      expect(panel(fixture)?.textContent).toContain('08:30 – 06:15');
+    });
+
+    it('asks before deleting a shift; a new one deleted is no change', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+
+      press(fixture, 'Delete');
+      await fixture.whenStable();
+      const dialog = document.querySelector<HTMLElement>('mat-dialog-container')!;
+      expect(dialog.getAttribute('role')).toBe('alertdialog');
+      expect(dialog.textContent).toContain('Delete this shift?');
+      expect(dialog.textContent).toContain('Monday 30 November, 08:00 – 20:00.');
+      expect(dialog.textContent).not.toContain('will be taken off');
+
+      press(fixture, 'Delete shift');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(columns(fixture)[0].querySelector('.shift-card')).toBeNull();
+      expect(panel(fixture)).toBeNull();
+      expect(status(fixture)).toBe('No shifts yet');
+    });
+
+    it('asks before publishing, then shows the week as published', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+      await addShift(fixture, 1);
+
+      publishButton(fixture).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const dialog = document.querySelector<HTMLElement>('mat-dialog-container')!;
+      expect(dialog.textContent).toContain("Publish this week's schedule?");
+      expect(dialog.textContent).toContain('30 Nov – 6 Dec 2026 · 2 unpublished changes.');
+
+      press(fixture, 'Publish');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(status(fixture)).toBe('Published');
+      expect(publishButton(fixture).disabled).toBe(true);
+      expect(element(fixture).querySelector('.tag--change')).toBeNull();
+    });
+
+    it('keeps the changes when the supervisor looks at another week and comes back', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+
+      click(fixture, '[aria-label="Previous week"]');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '[aria-label="Next week"]');
+      flushWeek(fixture, '2026-W49', [thursdayNight]);
+
+      expect(status(fixture)).toBe('1 unpublished change');
+      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('New');
+    });
+  });
+
+  describe('a past week', () => {
+    it("can't be changed", () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48');
+      click(fixture, '[aria-label="Previous week"]');
+      flushWeek(fixture, '2026-W47');
+
+      expect(status(fixture)).toBe("Past week · can't be changed");
+      expect(publishButton(fixture).disabled).toBe(true);
+      expect(buttonByText(element(fixture), 'Edit schedule')).toBeUndefined();
+      expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
+    });
+  });
+
+  it('gives a member neither "Edit schedule" nor "Publish schedule"', () => {
     const fixture = render('MEMBER');
-    flushWeek(fixture, '2026-W48');
+    flushWeek(fixture, '2026-W48', [thursdayNight]);
 
-    expect(element(fixture).querySelectorAll('.add-shift').length).toBe(0);
-  });
-
-  it('goes back a week with the arrow, and a past week cannot be changed', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-
-    click(fixture, '[aria-label="Previous week"]');
-    flushWeek(fixture, '2026-W47');
-
-    expect(title(fixture)).toBe('November 2026 - Week 47');
-    expect(element(fixture).querySelectorAll('.add-shift').length).toBe(0);
-    expect(element(fixture).querySelectorAll('.day--past').length).toBe(7);
-    expect(element(fixture).querySelector('.week-note')?.textContent).toContain("can't be changed");
-  });
-
-  it('goes forward a week with the arrow, where every day is open', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-
+    expect(buttonByText(element(fixture), 'Edit schedule')).toBeUndefined();
+    expect(buttonByText(element(fixture), 'Publish schedule')).toBeUndefined();
     click(fixture, '[aria-label="Next week"]');
     flushWeek(fixture, '2026-W49');
-
-    expect(title(fixture)).toBe('December 2026 - Week 49');
-    expect(element(fixture).querySelectorAll('.add-shift').length).toBe(7);
-    expect(element(fixture).querySelector('.week-note')).toBeNull();
+    expect(element(fixture).querySelectorAll('.add-slot').length).toBe(0);
   });
 
-  it('drops the answer for a week the user has already left', () => {
-    const fixture = render('SUPERVISOR');
-    const first = weekRequest();
+  describe('on a phone', () => {
+    beforeEach(() => {
+      // Narrower than 64rem: the media query for a desktop does not match.
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      }));
+    });
 
-    click(fixture, '[aria-label="Next week"]');
-    expect(first.cancelled).toBe(true);
-    flushWeek(fixture, '2026-W49');
-  });
+    afterEach(() => vi.unstubAllGlobals());
 
-  it("opens a calendar under the title on the week's month, with the week chosen", () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-    expect(element(fixture).querySelector('.calendar')).toBeNull();
+    it('lists the days, each with its shifts in order and a night shift only on its first day', () => {
+      const fixture = render('SUPERVISOR');
+      const tuesdayNight = {
+        ...mondayDay,
+        id: 'p-tue',
+        dutyDate: '2026-11-24',
+        startsAt: '2026-11-24T20:00:00Z',
+        endsAt: '2026-11-25T08:00:00Z',
+      };
+      flushWeek(fixture, '2026-W48', [thursdayNight, tuesdayNight]);
 
-    click(fixture, '.week-toggle');
+      expect(columns(fixture)).toEqual([]);
+      const days = Array.from(element(fixture).querySelectorAll<HTMLElement>('.day-list-item'));
+      expect(days.map((day) => day.getAttribute('aria-label'))[0]).toBe('Monday 23 November');
+      expect(days[1].querySelector('.shift-card')?.textContent).toContain('20:00 – 08:00');
+      expect(days[2].querySelector('.shift-card')).toBeNull();
+      expect(days[2].textContent).toContain('No shifts');
+      expect(days[2].querySelector('h3')?.textContent).toContain('Today');
+      expect(days[3].querySelector('.shift-card')?.textContent).toContain('00:00 – 08:00');
+    });
 
-    expect(element(fixture).querySelector('.week-toggle')?.getAttribute('aria-expanded')).toBe('true');
-    expect(element(fixture).querySelector('.calendar-month')?.textContent).toBe('November 2026');
-    const rows = calendarRows(fixture);
-    expect(rows.length).toBe(6);
-    expect(rows[4].getAttribute('aria-label')).toBe('Week 48, November 2026 · Days 23 to 29');
-    expect(rows[4].getAttribute('aria-pressed')).toBe('true');
-    expect(rows.filter((row) => row.getAttribute('aria-pressed') === 'true').length).toBe(1);
-  });
-
-  it('chooses a week from another month in the calendar, and the calendar closes', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-    click(fixture, '.week-toggle');
-
-    click(fixture, '[aria-label="Next month"]');
-    expect(element(fixture).querySelector('.calendar-month')?.textContent).toBe('December 2026');
-    // December 2026 starts on a Tuesday: its rows start on 30 November, then 7 December.
-    calendarRows(fixture)[1].click();
-    fixture.detectChanges();
-    flushWeek(fixture, '2026-W50');
-
-    expect(title(fixture)).toBe('December 2026 - Week 50');
-    expect(element(fixture).querySelector('.calendar')).toBeNull();
-  });
-
-  it('comes back to this week from the calendar', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-    click(fixture, '[aria-label="Previous week"]');
-    flushWeek(fixture, '2026-W47');
-
-    click(fixture, '.week-toggle');
-    click(fixture, '.calendar-this-week');
-    flushWeek(fixture, '2026-W48');
-
-    expect(title(fixture)).toBe('November 2026 - Week 48');
-  });
-
-  it('closes the calendar with Escape or a click outside it, without changing the week', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-
-    click(fixture, '.week-toggle');
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    fixture.detectChanges();
-    expect(element(fixture).querySelector('.calendar')).toBeNull();
-
-    click(fixture, '.week-toggle');
-    click(fixture, '[aria-label="Next month"]');
-    expect(element(fixture).querySelector('.calendar')).not.toBeNull();
-    document.body.click();
-    fixture.detectChanges();
-    expect(element(fixture).querySelector('.calendar')).toBeNull();
-    expect(title(fixture)).toBe('November 2026 - Week 48');
-  });
-
-  it("puts each piquete in its day's column", () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48', [
-      {
-        id: 'p-thu',
-        dutyDate: '2026-11-26',
-        slots: [
-          { id: 's1', role: 'DRIVER', status: 'OPEN' },
-          { id: 's2', role: 'CREW_MEMBER', status: 'OPEN' },
-        ],
-      },
-    ]);
-
-    const days = element(fixture).querySelectorAll('.day');
-    expect(days[3].querySelector('.shift')?.textContent).toContain('2 slots');
-    expect(days[0].querySelector('.shift')).toBeNull();
-  });
-
-  it('shows the hours down the left side, every 2 hours', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-
-    const hours = Array.from(element(fixture).querySelectorAll('.hour')).map((hour) => hour.textContent);
-    expect(hours.length).toBe(12);
-    expect(hours[0]).toBe('00:00');
-    expect(hours[1]).toBe('02:00');
-    expect(hours[6]).toBe('12:00');
-    expect(hours[11]).toBe('22:00');
-  });
-
-  it('places a shift at its hours, with "From … to …" on top', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48', [
-      {
-        id: 'p-noon',
-        dutyDate: '2026-11-26',
-        startsAt: '2026-11-26T12:00:00Z',
-        endsAt: '2026-11-26T13:30:00Z',
-        slots: [{ id: 's1', role: 'DRIVER', status: 'OPEN' }],
-      },
-    ]);
-
-    const shift = element(fixture).querySelectorAll('.day')[3].querySelector<HTMLElement>('.day-body .shift')!;
-    expect(shift.querySelector('.shift-time')?.textContent).toBe('From 12:00 to 13:30');
-    expect(shift.textContent).toContain('1 slot');
-    expect(shift.getAttribute('aria-label')).toBe('Shift from 12:00 to 13:30, 1 slot');
-    expect(parseFloat(shift.style.top)).toBeCloseTo(50);
-    expect(parseFloat(shift.style.height)).toBeCloseTo((90 / 1440) * 100);
-  });
-
-  it('shows a night shift on both days it covers, split at midnight', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48', [
-      {
-        id: 'p-night',
-        dutyDate: '2026-11-26',
-        startsAt: '2026-11-26T20:00:00Z',
-        endsAt: '2026-11-27T08:00:00Z',
-        slots: [],
-      },
-    ]);
-
-    const days = element(fixture).querySelectorAll('.day');
-    const thursday = days[3].querySelector<HTMLElement>('.day-body .shift')!;
-    const friday = days[4].querySelector<HTMLElement>('.day-body .shift')!;
-    expect(thursday.querySelector('.shift-time')?.textContent).toBe('From 20:00 to 08:00');
-    expect(friday.querySelector('.shift-time')?.textContent).toBe('From 20:00 to 08:00');
-    expect(friday.classList).toContain('shift--continued');
-    expect(parseFloat(friday.style.top)).toBe(0);
-  });
-
-  it('lists a shift with no times yet under its day, as "Time not set"', () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48', [{ id: 'p-old', dutyDate: '2026-11-24', slots: [] }]);
-
-    const tuesday = element(fixture).querySelectorAll('.day')[1];
-    expect(tuesday.querySelector('.day-head .shift')?.textContent).toContain('Time not set');
-    expect(tuesday.querySelector('.day-body .shift')).toBeNull();
-  });
-
-  it('opens the add form on the day of the "+" that was clicked', async () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-    expect(element(fixture).querySelector('app-shift-form')).toBeNull();
-
-    element(fixture).querySelectorAll<HTMLButtonElement>('.add-shift')[1].click(); // Thursday
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    expect(element(fixture).querySelector('#shift-form-title')?.textContent).toBe('Add a shift');
-    expect(element(fixture).querySelector<HTMLInputElement>('#shift-day')?.value).toBe('2026-11-26');
-  });
-
-  it('reads the week again after a shift is saved, and closes the form', async () => {
-    const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48');
-    element(fixture).querySelectorAll<HTMLButtonElement>('.add-shift')[0].click(); // Wednesday
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-
-    element(fixture).querySelector<HTMLButtonElement>('.shift-form button[type="submit"]')!.click();
-    http()
-      .expectOne({ method: 'POST', url: '/api/v1/piquetes' })
-      .flush({ id: 'p-new', dutyDate: '2026-11-25', slots: [] });
-    flushWeek(fixture, '2026-W48', [
-      {
-        id: 'p-new',
+    it("shows today's shifts first in this week, and not in another week", () => {
+      const fixture = render('SUPERVISOR');
+      const wednesday = {
+        ...thursdayNight,
+        id: 'p-wed',
         dutyDate: '2026-11-25',
-        period: 'DAY',
         startsAt: '2026-11-25T08:00:00Z',
         endsAt: '2026-11-25T20:00:00Z',
-        minimumCrew: 1,
-        slots: [],
-      },
-    ]);
+      };
+      flushWeek(fixture, '2026-W48', [thursdayNight, wednesday]);
 
-    expect(element(fixture).querySelector('app-shift-form')).toBeNull();
-    expect(element(fixture).querySelectorAll('.day')[2].querySelector('.shift')?.textContent).toContain(
-      'Minimum 1 firefighter',
-    );
-  });
+      const today = element(fixture).querySelector<HTMLElement>('[aria-labelledby="today-heading"]')!;
+      expect(today.textContent).toContain('Today');
+      expect(today.textContent).toContain('Wednesday 25 November');
+      expect(
+        Array.from(today.querySelectorAll('.shift-card')).map((card) => card.getAttribute('data-shift-id')),
+      ).toEqual(['p-wed']);
+      // Then the whole week, today in it too.
+      expect(today.compareDocumentPosition(element(fixture).querySelector('.day-list')!)).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      expect(element(fixture).querySelectorAll('.day-list .shift-card').length).toBe(2);
 
-  it('gives each shift from today on an Edit button that opens it, and none on a day that has passed', async () => {
-    const fixture = render('SUPERVISOR');
-    const shift = (id: string, day: string) => ({
-      id,
-      dutyDate: day,
-      period: 'DAY',
-      startsAt: `${day}T09:00:00Z`,
-      endsAt: `${day}T13:00:00Z`,
-      minimumCrew: 2,
-      slots: [],
+      click(fixture, '[aria-label="Next week"]');
+      flushWeek(fixture, '2026-W49');
+      expect(element(fixture).querySelector('[aria-labelledby="today-heading"]')).toBeNull();
+      // A later week can always change: each day has its own Add shift button.
+      expect(element(fixture).querySelectorAll('.day-list .day-add-text').length).toBe(7);
     });
-    flushWeek(fixture, '2026-W48', [shift('p-mon', '2026-11-23'), shift('p-fri', '2026-11-27')]);
 
-    const days = element(fixture).querySelectorAll('.day');
-    expect(days[0].querySelector('.edit-shift')).toBeNull();
-    const edit = days[4].querySelector<HTMLButtonElement>('.edit-shift')!;
-    expect(edit.getAttribute('aria-label')).toBe('Edit the shift from 09:00 to 13:00 on Friday 27 November');
+    it('opens the shift in a drawer that a tap outside or Escape closes', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [thursdayNight]);
 
-    edit.click();
-    fixture.detectChanges();
-    await fixture.whenStable();
-    fixture.detectChanges();
-    expect(element(fixture).querySelector('#shift-form-title')?.textContent).toBe('Edit shift');
-    expect(element(fixture).querySelector<HTMLInputElement>('#shift-crew')?.value).toBe('2');
-  });
+      click(fixture, '[data-shift-id="p-thu"]');
+      expect(element(fixture).querySelector('.shift-aside--drawer')).not.toBeNull();
+      click(fixture, '.drawer-backdrop');
+      expect(panel(fixture)).toBeNull();
 
-  it('gives a member no Edit button', () => {
-    const fixture = render('MEMBER');
-    flushWeek(fixture, '2026-W48', [{ id: 'p-fri', dutyDate: '2026-11-27', slots: [] }]);
-
-    expect(element(fixture).querySelectorAll('.edit-shift').length).toBe(0);
+      click(fixture, '[data-shift-id="p-thu"]');
+      panel(fixture)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(panel(fixture)).toBeNull();
+    });
   });
 
   it('says so when the week cannot be loaded', () => {
@@ -365,18 +690,13 @@ describe('WeekSchedule', () => {
   });
 
   it('shows the last loaded week when it cannot be loaded again (offline, RNF06)', () => {
-    const piquete = { id: 'p-thu', dutyDate: '2026-11-26', slots: [{ id: 's1', role: 'DRIVER', status: 'OPEN' }] };
+    // Kept from an earlier visit; the API cannot be reached now.
+    localStorage.setItem(LAST_PIQUETES_KEY, JSON.stringify({ week: '2026-W48', piquetes: [thursdayNight] }));
     const fixture = render('SUPERVISOR');
-    flushWeek(fixture, '2026-W48', [piquete]);
-
-    click(fixture, '[aria-label="Next week"]');
-    flushWeek(fixture, '2026-W49', 'fail', { status: 0, statusText: 'Unknown Error' });
-    expect(element(fixture).querySelector('[role="alert"]')).not.toBeNull();
-
-    click(fixture, '[aria-label="Previous week"]');
     flushWeek(fixture, '2026-W48', 'fail', { status: 0, statusText: 'Unknown Error' });
+
     expect(element(fixture).querySelector('[role="alert"]')).toBeNull();
     expect(element(fixture).textContent).toContain('Showing the last loaded roster');
-    expect(element(fixture).querySelectorAll('.day')[3].querySelector('.shift')).not.toBeNull();
+    expect(columns(fixture)[3].querySelector('.shift-card')).not.toBeNull();
   });
 });

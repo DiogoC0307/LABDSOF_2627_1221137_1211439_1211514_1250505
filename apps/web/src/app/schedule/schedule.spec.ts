@@ -36,7 +36,9 @@ describe('Schedule', () => {
 
   it.each(['MEMBER', 'ADMIN'])('TC-SCRUM-63-01 "%s" signed in sees the week but cannot add shifts', (role) => {
     const page = render(role);
-    expect(page.querySelectorAll('.day').length).toBe(7);
-    expect(page.querySelectorAll('.add-shift').length).toBe(0);
+    expect(page.querySelectorAll('.day-column').length).toBe(7);
+    expect(page.querySelectorAll('.add-slot').length).toBe(0);
+    expect(page.textContent).not.toContain('Edit schedule');
+    expect(page.textContent).not.toContain('Publish schedule');
   });
 });

@@ -1,0 +1,31 @@
+// Layout, spacing and type are Tailwind classes in the template; these are the panel's own pieces.
+
+.icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+// The role's state
+.role-pill--full {
+  background: #e3f4e6;
+  color: #1d5b2a;
+}
+
+.role-pill--short {
+  background: #fff0d1;
+  color: #6e4300;
+}
+
+// The only role of a shift stays chosen
+.role-choice:disabled {
+  cursor: default;
+}
+
+.outline-none {
+  outline: none;
+}

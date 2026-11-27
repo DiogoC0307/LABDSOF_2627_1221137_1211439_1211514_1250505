@@ -53,7 +53,12 @@ describe('App', () => {
     const signIn = http().expectOne({ method: 'POST', url: '/api/v1/auth/mock-sign-in' });
     expect(signIn.request.body).toEqual({ memberId: users[1].id });
     expect(signIn.request.headers.has('Authorization')).toBe(false);
-    signIn.flush({ token: 'mock.supervisor-token', memberId: users[1].id, role: 'SUPERVISOR', fullName: 'Synthetic Supervisor' });
+    signIn.flush({
+      token: 'mock.supervisor-token',
+      memberId: users[1].id,
+      role: 'SUPERVISOR',
+      fullName: 'Synthetic Supervisor',
+    });
     await fixture.whenStable();
     fixture.detectChanges();
 
@@ -62,7 +67,13 @@ describe('App', () => {
     list.flush([]);
     fixture.detectChanges();
     expect(page.querySelector('.week-grid')).not.toBeNull();
-    expect(page.querySelectorAll('.add-shift').length).toBeGreaterThan(0);
+
+    // Current week is read-only until the user clicks "Edit schedule"
+    Array.from(page.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Edit schedule')!
+      .click();
+    fixture.detectChanges();
+    expect(page.querySelectorAll('.add-slot').length).toBeGreaterThan(0);
     expect(page.querySelector('.session')?.textContent).toContain('Synthetic Supervisor');
     expect(page.querySelector('.session')?.textContent).toContain('SUPERVISOR');
   });

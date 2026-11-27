@@ -10,5 +10,6 @@ import { WeekSchedule } from './week-schedule';
   imports: [WeekSchedule],
   templateUrl: './schedule.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'flex flex-col flex-1 min-h-0' }, // Passes the height the page leaves under the menu on to the week.
 })
 export class Schedule {}

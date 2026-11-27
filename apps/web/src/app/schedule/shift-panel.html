@@ -1,0 +1,52 @@
+<section
+  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#D9D7D2] bg-white"
+  aria-label="Shift details"
+>
+  <!-- Shift side panel header (day, time and delete button) -->
+  <header class="flex items-start justify-between gap-3 border-b border-[#D9D7D2] px-5 py-4">
+    <div class="min-w-0">
+      <p class="m-0 text-[15px] text-[#57554F]">{{ day() }}</p>
+      <h2 #heading tabindex="-1" class="m-0 text-[24px] font-bold leading-tight text-[#1C1B19] outline-none">
+        {{ time() }}
+      </h2>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      @if (editable()) {
+        <button mat-stroked-button type="button" class="btn-destructive" (click)="deleteRequested.emit()">
+          Delete
+        </button>
+      }
+      <button mat-icon-button type="button" class="btn-close" aria-label="Close shift details" (click)="closed.emit()">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Shift details content -->
+  <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+    <!-- Note for shifts that have already happened -->
+    @if (!editable() && note()) {
+      <p class="m-0 rounded-xl bg-[#ECEBE7] px-4 py-3 text-[16px] text-[#33312D]">{{ note() }}</p>
+    }
+
+    <!-- End and start times input fields -->
+    <div class="grid grid-cols-2 items-start gap-3">
+      <app-time-field
+        label="Start"
+        example="08:30"
+        [value]="startShown()"
+        [options]="startOptions"
+        [disabled]="!editable()"
+        [accept]="takeStart"
+      />
+      <app-time-field
+        label="End"
+        example="20:30"
+        [value]="endShown()"
+        [options]="endOptions()"
+        [disabled]="!editable()"
+        [accept]="takeEnd"
+      />
+    </div>
+  </div>
+</section>

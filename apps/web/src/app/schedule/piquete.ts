@@ -1,15 +1,31 @@
 /** A piquete as GET /api/v1/piquetes returns it, and the shift the supervisor sends (contracts/openapi.yaml). */
 
+export const SLOT_ROLES = ['CREW_CHIEF', 'DRIVER', 'CREW_MEMBER'] as const;
+export type SlotRole = (typeof SLOT_ROLES)[number];
+
+export const ROLE_LABELS: Record<SlotRole, string> = {
+  CREW_CHIEF: 'Crew chief',
+  DRIVER: 'Driver',
+  CREW_MEMBER: 'Crew member',
+};
+
 export interface Slot {
   id: string;
   role: string;
   status: string;
 }
 
+// How many people of a role for a shift
+export interface CrewNeed {
+  role: SlotRole;
+  count: number;
+}
+
 export type ShiftPeriod = 'DAY' | 'NIGHT';
 
 /**
  * A shift (SCRUM-65): period, startsAt, endsAt and minimumCrew are null on a piquete created before shifts had times.
+ * minimumCrew is the number of people its crew needs, one slot each.
  * startsAt and endsAt are instants in UTC (ADR 0012).
  */
 export interface Piquete {
@@ -28,7 +44,7 @@ export interface ShiftRequest {
   period: ShiftPeriod;
   startsAt: string;
   endsAt: string;
-  minimumCrew: number;
+  crew: CrewNeed[]; // Required roles and quantity of each role for the shift. When count is 0, the role is not required for the shift.
 }
 
 /** What the form opens on: a new shift on a day, or a shift to change. */

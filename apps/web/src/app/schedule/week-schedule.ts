@@ -11,51 +11,99 @@ import {
   signal,
   viewChild,
 } from '@angular/core';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpClient, HttpParams } from '@angular/common/http';
+import { MatButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { Subscription } from 'rxjs';
 import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
+import { addDays, isoWeek, longDay, mondayOf, shortDay, todayInLisbon, weekDays } from './iso-week';
+import { Piquete } from './piquete';
 import {
-  addDays,
-  addMonths,
-  firstOfMonth,
-  isoWeek,
-  isoWeekNumber,
-  longDay,
-  mondayOf,
-  monthMondays,
-  monthTitle,
-  shortDay,
-  todayInLisbon,
-  weekDays,
-  weekHeading,
-  weekTitle,
-} from './iso-week';
-import { Piquete, ShiftFormTarget } from './piquete';
-import { ShiftForm } from './shift-form';
-import { PlacedSegment, ShiftSegment, placeSegments, shiftSegments } from './shift-time';
+  DeleteShiftData,
+  DeleteShiftDialog,
+  PublishData,
+  PublishDialog,
+  scheduleDialogConfig,
+} from './schedule-dialogs';
+import { ScheduleDraftService } from './schedule-draft.service';
+import { DraftShift } from './schedule-model';
+import {
+  Range,
+  ShiftState,
+  assignedCount,
+  daySegments,
+  freeGaps,
+  fromPiquete,
+  missingCount,
+  newShiftRange,
+  rangeLabel,
+  rangeWords,
+  shiftState,
+  timeLabel,
+  totalOf,
+} from './schedule-rules';
+import { NewShift, NewShiftData, NewShiftDialog } from './new-shift-dialog';
+import { ShiftPanel } from './shift-panel';
+import { PlacedSegment, placeSegments } from './shift-time';
+import { weekRange } from './week-label';
+import { WeekSelector } from './week-selector';
 
-interface WeekDay {
-  date: string;
-  short: string;
-  long: string;
-  past: boolean;
-  today: boolean;
-  canAdd: boolean;
-  /** The day has not passed and the user builds the schedule: its shifts can be changed. */
-  canEdit: boolean;
-  /** Shifts with a start and an end, placed on the hour grid. */
-  shifts: PlacedSegment<Piquete>[];
-  /** Shifts with no times yet, listed under the day's name. */
-  untimed: Piquete[];
+type WeekKind = 'past' | 'current' | 'future';
+
+type StatusTone = 'green' | 'amber' | 'grey';
+
+type EditAction = 'edit' | 'stop' | 'discard' | null; // The button left of Publish
+
+// A shift as a card in the grid, or as a row in the phone's list
+interface ShiftCard {
+  key: string;
+  shift: DraftShift;
+  state: ShiftState;
+  selected: boolean;
+  top: number;
+  height: number;
+  left: number;
+  width: number;
+  from: string; // "00:00"
+  to: string; // "08:00"
+  people: string; // "4 of 5 firefighters"
+  tag: string; // "Full" or "Needs 2 more"
+  change: string | null; // "New" or "Edited" while unpublished
+  label: string;
 }
 
-interface CalendarWeek {
-  monday: string;
-  number: number;
+// "+ Add shift" in a free time of a day
+interface AddSlot {
+  key: string;
+  date: string;
+  from: number;
+  to: number;
+  top: number;
+  height: number;
+  range: string;
   label: string;
-  selected: boolean;
-  current: boolean;
-  days: { date: string; day: number; outside: boolean; today: boolean }[];
+}
+
+// A row of a day in the phone's list: a shift or a free time
+interface DayEntry {
+  key: string;
+  card?: ShiftCard;
+  slot?: AddSlot;
+}
+
+// A day of the week: its column in the grid, or its card in the phone's list
+interface DayColumn {
+  date: string;
+  header: string; // "Thu 26"
+  title: string; // "Thursday 26 November", in the phone's list
+  today: boolean;
+  past: boolean;
+  cards: ShiftCard[];
+  slots: AddSlot[];
+  entries: DayEntry[]; // The day's shifts (a night shift only on the day it starts) and free times, in order
+  add: (Range & { label: string }) | null; // The day's own Add shift button, with the times its dialog opens on
 }
 
 /** The last week loaded, kept so the roster stays readable offline (RNF06); sign-out removes it. */
@@ -65,216 +113,378 @@ interface CachedWeek {
 }
 
 /**
- * The week's schedule, Monday to Sunday, one column per day (SCRUM-65, mockup). Reads GET /api/v1/piquetes?week=.
- * The arrows move a week back or forward and the title opens a calendar to choose a week. Days before today, and so
- * every past week, are read-only here; the "+" in the other columns is a placeholder until adding a shift exists.
+ * Schedule page: the week's grid, all 24 hours of the seven days, with the selected shift in a side panel.
+ *
+ * The supervisor edits a draft of the week and publishes it; members see nothing before that.
+ *
+ * A past week is read-only, this week is read-only until "Edit schedule" and later weeks are always editable. A shift
+ * on a day that has passed never changes.
  */
 @Component({
   selector: 'app-week-schedule',
-  imports: [ShiftForm],
+  imports: [WeekSelector, ShiftPanel, MatButton, NgTemplateOutlet, CdkTrapFocus],
   templateUrl: './week-schedule.html',
   styleUrl: './week-schedule.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: {
-    '(document:click)': 'closeOnOutsideClick($event)',
-    '(document:keydown.escape)': 'closeOnEscape()',
-  },
+  host: { class: 'schedule-theme flex flex-col lg:flex-1 lg:min-h-0' }, // Takes the height left under the menu
 })
 export class WeekSchedule implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
+  private readonly dialog = inject(MatDialog);
+  private readonly injector = inject(Injector);
   protected readonly auth = inject(AuthService);
+  protected readonly drafts = inject(ScheduleDraftService);
   private request?: Subscription;
 
-  private readonly picker = viewChild<ElementRef<HTMLElement>>('picker');
-  private readonly pickerToggle = viewChild<ElementRef<HTMLButtonElement>>('pickerToggle');
   private readonly grid = viewChild<ElementRef<HTMLElement>>('grid');
-
-  private readonly injector = inject(Injector);
-  private scrolledToFirstHour = false;
-
-  /** The hour the grid opens on (a labelled one), so the working day shows first; earlier hours are a scroll up. */
-  private static readonly FIRST_VISIBLE_HOUR = 6;
 
   protected readonly today = todayInLisbon();
   protected readonly currentMonday = mondayOf(this.today);
 
-  protected readonly monday = signal(this.currentMonday);
-  protected readonly title = computed(() => weekHeading(this.monday()));
-  /** The week's days, for screen readers: the title names the week by its number. */
-  protected readonly titleDays = computed(() => weekTitle(this.monday()));
-  protected readonly piquetes = signal<Piquete[]>([]);
+  protected readonly monday = signal(this.currentMonday); // The Monday of the week shown
   protected readonly error = signal<string | null>(null);
   protected readonly offline = signal(false);
 
-  /** Submitting (publishing) a week does not exist yet (RF46), so every week is still open to new shifts. */
-  protected readonly submitted = signal(false);
+  /**
+   * Desktop (64rem and wider): the week's grid with the side panel beside it.
+   *
+   * Phone: the days as a list and the side panel as a drawer over the page. Without matchMedia (tests) it's a desktop.
+   */
+  protected readonly wide = signal(true);
+  private readonly media = typeof matchMedia === 'function' ? matchMedia('(min-width: 64rem)') : null;
+  private readonly onMediaChange = (event: MediaQueryListEvent) => this.wide.set(event.matches);
 
-  protected readonly canAddShifts = computed(() => this.auth.isSupervisor() && !this.submitted());
+  protected readonly editing = signal(false); // This week is read-only until "Edit schedule" is pressed
+  protected readonly selectedId = signal<string | null>(null);
 
-  /** The whole week is before today: nothing in it can change here. */
-  protected readonly pastWeek = computed(() => addDays(this.monday(), 6) < this.today);
+  // Hour labels down the left side, every 2 hours ("00:00", "02:00" ... "22:00")
+  protected readonly hours = Array.from({ length: 12 }, (_, index) => ({
+    label: `${String(index * 2).padStart(2, '0')}:00`,
+    top: (index / 12) * 100,
+  }));
 
-  /** The hour labels down the left side, every 2 hours: "00:00", "02:00" … "22:00". */
-  protected readonly hours = Array.from({ length: 12 }, (_, index) => `${String(index * 2).padStart(2, '0')}:00`);
+  // Past, current or future week
+  protected readonly weekKind = computed<WeekKind>(() => {
+    if (addDays(this.monday(), 6) < this.today) {
+      return 'past';
+    }
 
-  protected readonly days = computed<WeekDay[]>(() => {
-    const segments: (ShiftSegment & { item: Piquete })[] = this.piquetes().flatMap((piquete) =>
-      piquete.startsAt && piquete.endsAt
-        ? shiftSegments(piquete.startsAt, piquete.endsAt).map((segment) => ({ ...segment, item: piquete }))
-        : [],
-    );
-    return weekDays(this.monday()).map((date) => ({
-      date,
-      short: shortDay(date),
-      long: longDay(date),
-      past: date < this.today,
-      today: date === this.today,
-      canAdd: this.canAddShifts() && date >= this.today,
-      canEdit: this.canAddShifts() && date >= this.today,
-      shifts: placeSegments(segments.filter((segment) => segment.date === date)),
-      untimed: this.piquetes().filter(
-        (piquete) => piquete.dutyDate === date && !(piquete.startsAt && piquete.endsAt),
-      ),
-    }));
+    return this.monday() === this.currentMonday ? 'current' : 'future';
   });
 
-  /** The add or edit form while it is open. */
-  protected readonly form = signal<ShiftFormTarget | null>(null);
+  // The supervisor can change the week now (days before today still can't)
+  protected readonly editable = computed(
+    () =>
+      this.auth.isSupervisor() &&
+      this.drafts.week(this.monday()) !== undefined &&
+      (this.weekKind() === 'future' || (this.weekKind() === 'current' && this.editing())),
+  );
 
-  protected readonly pickerOpen = signal(false);
-  protected readonly pickerMonth = signal(firstOfMonth(this.currentMonday));
-  protected readonly pickerTitle = computed(() => monthTitle(this.pickerMonth()));
-  protected readonly pickerWeeks = computed<CalendarWeek[]>(() => {
-    const month = this.pickerMonth().slice(0, 7);
-    return monthMondays(this.pickerMonth()).map((monday) => ({
-      monday,
-      number: isoWeekNumber(monday),
-      label: `Week ${isoWeekNumber(monday)}, ${weekTitle(monday)}`,
-      selected: monday === this.monday(),
-      current: monday === this.currentMonday,
-      days: weekDays(monday).map((date) => ({
+  protected readonly shifts = computed(() => this.drafts.shifts(this.monday()));
+  protected readonly changes = computed(() => this.drafts.changes(this.monday()));
+
+  // Status label above the Edit and Publish buttons
+  protected readonly status = computed<{ text: string; tone: StatusTone }>(() => {
+    const changes = this.changes();
+
+    if (this.weekKind() === 'past') {
+      return { text: "Past week · can't be changed", tone: 'grey' };
+    }
+
+    if (changes > 0) {
+      return { text: `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`, tone: 'amber' };
+    }
+
+    if (this.weekKind() === 'current' && this.editing()) {
+      return { text: 'Editing · no changes yet', tone: 'grey' };
+    }
+
+    if (this.shifts().length === 0) {
+      return { text: 'No shifts yet', tone: 'grey' };
+    }
+
+    return { text: 'Published', tone: 'green' };
+  });
+
+  // Today's day, shown first on a phone in this week only
+  protected readonly todayColumn = computed(() =>
+    this.weekKind() === 'current' ? (this.days().find((day) => day.today) ?? null) : null,
+  );
+
+  // Edit schedule, Stop editing or Discard changes
+  protected readonly editAction = computed<EditAction>(() => {
+    if (!this.auth.isSupervisor() || this.weekKind() === 'past') {
+      return null;
+    }
+
+    if (this.changes() > 0) {
+      return 'discard';
+    }
+
+    if (this.weekKind() === 'current') {
+      return this.editing() ? 'stop' : 'edit';
+    }
+
+    return null;
+  });
+
+  protected readonly canPublish = computed(() => this.weekKind() !== 'past' && this.changes() > 0);
+
+  // The seven days of the week, with their shift cards and Add shift slots and buttons
+  protected readonly days = computed<DayColumn[]>(() => {
+    const shifts = this.shifts();
+
+    // A night shift is split into its day and the next morning
+    const segments = shifts.flatMap((shift) =>
+      daySegments(shift).map((segment) => ({ ...segment, label: '', item: shift })),
+    );
+
+    return weekDays(this.monday()).map((date) => {
+      const ofDay = segments.filter((segment) => segment.date === date);
+      const cards = placeSegments(ofDay).map((placed) => this.card(placed.item, placed));
+
+      // Add shift slots in the free times, only on days that can still change
+      const canAdd = this.editable() && date >= this.today;
+      const gaps = canAdd ? freeGaps(ofDay) : [];
+      const slots = gaps.map((gap) => this.slot(date, gap.from, gap.to));
+
+      // The day's own Add shift button opens on the first free time, or 08:00 to 20:00 when the day is all covered
+      const suggested = gaps.length > 0 ? newShiftRange(gaps[0]) : { from: 8 * 60, to: 20 * 60 };
+
+      // The phone's list: shifts (a night shift only on the day it starts) and free times, in order
+      const entries: (DayEntry & { at: number })[] = [
+        ...cards
+          .filter((card) => card.shift.dutyDate === date)
+          .map((card) => ({ key: card.key, card, at: card.shift.start })),
+        ...slots.map((slot) => ({ key: slot.key, slot, at: slot.from })),
+      ];
+
+      return {
         date,
-        day: Number(date.slice(8)),
-        outside: date.slice(0, 7) !== month,
+        header: shortDay(date),
+        title: longDay(date),
         today: date === this.today,
-      })),
-    }));
+        past: date < this.today,
+        cards,
+        slots,
+        entries: entries.sort((a, b) => a.at - b.at),
+        add: canAdd ? { ...suggested, label: `Add shift on ${longDay(date)}` } : null,
+      };
+    });
+  });
+
+  // The shift open in the side panel
+  protected readonly selected = computed(() => this.shifts().find((shift) => shift.id === this.selectedId()) ?? null);
+
+  protected readonly selectedEditable = computed(() => {
+    const shift = this.selected();
+
+    return shift !== null && this.editable() && shift.dutyDate >= this.today;
+  });
+
+  // Why the selected shift can't be changed, shown on top of the side panel
+  protected readonly selectedNote = computed(() => {
+    const shift = this.selected();
+
+    if (!shift || this.selectedEditable()) {
+      return null;
+    }
+
+    if (shift.dutyDate < this.today) {
+      return "This shift has already happened, so it can't be changed.";
+    }
+
+    if (this.weekKind() === 'current' && this.auth.isSupervisor()) {
+      return 'This week is published. Press "Edit schedule" to make changes.';
+    }
+
+    return null;
   });
 
   ngOnInit(): void {
+    // Desktop or phone, and again whenever the screen width crosses 64rem
+    if (this.media) {
+      this.wide.set(this.media.matches);
+      this.media.addEventListener('change', this.onMediaChange);
+    }
+
     this.load();
   }
 
   ngOnDestroy(): void {
+    this.media?.removeEventListener('change', this.onMediaChange);
     this.request?.unsubscribe();
   }
 
-  protected addShift(date: string): void {
-    this.form.set({ kind: 'add', date });
-  }
-
-  protected editShift(piquete: Piquete): void {
-    this.form.set({ kind: 'edit', piquete });
-  }
-
-  /** A shift was added or changed: the week is read again, so it shows what the API kept. */
-  protected onShiftSaved(): void {
-    this.load();
-  }
-
-  protected onFormClosed(): void {
-    this.form.set(null);
-  }
-
-  /** "Minimum 4 firefighters" for a shift with times; the slot count for a piquete from before. */
-  protected crewLabel(piquete: Piquete): string {
-    if (piquete.minimumCrew) {
-      return `Minimum ${piquete.minimumCrew} ${piquete.minimumCrew === 1 ? 'firefighter' : 'firefighters'}`;
-    }
-    return `${piquete.slots.length} ${piquete.slots.length === 1 ? 'slot' : 'slots'}`;
-  }
-
-  protected previousWeek(): void {
-    this.goTo(addDays(this.monday(), -7));
-  }
-
-  protected nextWeek(): void {
-    this.goTo(addDays(this.monday(), 7));
-  }
-
-  protected togglePicker(): void {
-    if (!this.pickerOpen()) {
-      // Open on the month of the week's Thursday, the month the ISO week belongs to.
-      this.pickerMonth.set(firstOfMonth(addDays(this.monday(), 3)));
-    }
-    this.pickerOpen.update((open) => !open);
-  }
-
-  protected previousMonth(): void {
-    this.pickerMonth.update((first) => addMonths(first, -1));
-  }
-
-  protected nextMonth(): void {
-    this.pickerMonth.update((first) => addMonths(first, 1));
-  }
-
-  protected chooseWeek(monday: string): void {
-    this.closePicker();
-    this.goTo(monday);
-  }
-
-  protected closeOnOutsideClick(event: Event): void {
-    const picker = this.picker()?.nativeElement;
-    if (this.pickerOpen() && picker && !event.composedPath().includes(picker)) {
-      this.pickerOpen.set(false);
+  // Shows another week, chosen in the week selector
+  protected goTo(monday: string): void {
+    if (monday !== this.monday()) {
+      this.selectedId.set(null);
+      this.monday.set(monday);
+      this.load();
     }
   }
 
-  protected closeOnEscape(): void {
-    if (this.pickerOpen()) {
-      this.closePicker();
-    }
+  // Edit schedule and Stop editing, for this week
+  protected startEditing(): void {
+    this.editing.set(true);
   }
 
-  private closePicker(): void {
-    this.pickerOpen.set(false);
-    this.pickerToggle()?.nativeElement.focus();
+  protected stopEditing(): void {
+    this.editing.set(false);
+  }
+
+  // Back to the week as published, with no dialog; editing ends
+  protected discard(): void {
+    this.drafts.discard(this.monday());
+    this.editing.set(false);
+  }
+
+  // Opens a shift in the side panel
+  protected select(shift: DraftShift): void {
+    this.selectedId.set(shift.id);
+  }
+
+  // "+ Add shift" in a free time: the dialog opens on that time, at most 12 hours of it
+  protected addShift(slot: AddSlot): void {
+    this.askNewShift(slot.date, newShiftRange({ from: slot.from, to: slot.to }));
+  }
+
+  // The day's own Add shift button
+  protected addOnDay(day: DayColumn): void {
+    if (day.add) {
+      this.askNewShift(day.date, day.add);
+    }
   }
 
   /**
-   * Once, after the first week has rendered (its heads may have grown), scrolls the grid so 06:00 sits just under the
-   * day names. Later weeks keep the hour the user scrolled to.
+   * Add shift dialog: asks for the new shift's times and roles
+   *
+   * "Create shift" adds it to the draft, selected so the side panel opens on it.
    */
-  private scrollToFirstHourOnce(): void {
-    if (this.scrolledToFirstHour) {
+  private askNewShift(date: string, range: Range): void {
+    const data: NewShiftData = { day: longDay(date), start: range.from, end: range.to };
+
+    this.dialog
+      .open<NewShiftDialog, NewShiftData, NewShift>(NewShiftDialog, {
+        ...scheduleDialogConfig(data, 'dialog'),
+        // The title, not the Start box: its list of hours would open over the dialog.
+        autoFocus: 'first-heading',
+      })
+      .afterClosed()
+      .subscribe((created) => {
+        if (created) {
+          const shift = this.drafts.add(this.monday(), date, created.start, created.end, created.crew);
+          this.selectedId.set(shift.id);
+        }
+      });
+  }
+
+  // Closes the side panel and gives the focus back to the shift's card
+  protected closePanel(): void {
+    const id = this.selectedId();
+    this.selectedId.set(null);
+    this.focusLater(id ? `[data-shift-id="${id}"]` : null);
+  }
+
+  // Delete shift dialog, then removes the shift from the draft
+  protected confirmDelete(): void {
+    const shift = this.selected();
+
+    if (!shift) {
       return;
     }
-    this.scrolledToFirstHour = true;
+
+    const data: DeleteShiftData = {
+      day: longDay(shift.dutyDate),
+      time: rangeLabel(shift.start, shift.end),
+      people: assignedCount(shift),
+    };
+
+    this.dialog
+      .open(DeleteShiftDialog, scheduleDialogConfig(data, 'alertdialog'))
+      .afterClosed()
+      .subscribe((confirmed) => {
+        if (confirmed) {
+          this.drafts.remove(this.monday(), shift.id);
+          this.selectedId.set(null);
+          this.focusLater(null);
+        }
+      });
+  }
+
+  // Publish schedule dialog, then publishes the week's draft
+  protected confirmPublish(): void {
+    const data: PublishData = { range: weekRange(this.monday()), changes: this.changes() };
+
+    this.dialog
+      .open(PublishDialog, scheduleDialogConfig(data, 'dialog'))
+      .afterClosed()
+      .subscribe((confirmed) => {
+        if (confirmed) {
+          this.drafts.publish(this.monday());
+          this.editing.set(false);
+        }
+      });
+  }
+
+  // A shift's card, placed at its hours in the day's column
+  private card(shift: DraftShift, placed: PlacedSegment<DraftShift>): ShiftCard {
+    const required = totalOf(shift.crew);
+    const assigned = assignedCount(shift);
+    const missing = missingCount(shift);
+
+    // A shift from before roles has no roles yet
+    const people =
+      required === 0 ? 'No roles yet' : `${assigned} of ${required} ${required === 1 ? 'firefighter' : 'firefighters'}`;
+
+    return {
+      key: `${shift.id}-${placed.from}`,
+      shift,
+      state: shiftState(shift, this.today),
+      selected: shift.id === this.selectedId(),
+      top: placed.topPercent,
+      height: placed.heightPercent,
+      left: placed.leftPercent,
+      width: placed.widthPercent,
+      from: timeLabel(shift.start),
+      to: timeLabel(shift.end),
+      people,
+      tag: required === 0 ? 'Choose roles' : missing === 0 ? 'Full' : `Needs ${missing} more`,
+      change: shift.change === 'new' ? 'New' : shift.change === 'edited' ? 'Edited' : null,
+      label: `${longDay(shift.dutyDate).split(' ')[0]} ${rangeWords(shift.start, shift.end)}, ${people}`,
+    };
+  }
+
+  // An Add shift slot, placed at its hours in the day's column
+  private slot(date: string, from: number, to: number): AddSlot {
+    return {
+      key: `${date}-${from}`,
+      date,
+      from,
+      to,
+      top: (from / 1440) * 100,
+      height: ((to - from) / 1440) * 100,
+      range: rangeLabel(from, to),
+      label: `Add shift on ${longDay(date).split(' ')[0]}, ${rangeWords(from, to)}`,
+    };
+  }
+
+  // After the next render, focuses the element, or the grid when it is gone
+  private focusLater(selector: string | null): void {
     afterNextRender(
       () => {
         const grid = this.grid()?.nativeElement;
-        const body = grid?.querySelector<HTMLElement>('.day-body');
-        const head = grid?.querySelector<HTMLElement>('.day-head');
-        if (grid && body && head) {
-          const bodyTop = body.getBoundingClientRect().top - grid.getBoundingClientRect().top + grid.scrollTop;
-          const hourTop = bodyTop + (body.offsetHeight * WeekSchedule.FIRST_VISIBLE_HOUR) / 24;
-          grid.scrollTop = hourTop - head.offsetHeight;
-        }
+        const target = selector ? grid?.querySelector<HTMLElement>(selector) : null;
+        (target ?? grid)?.focus();
       },
       { injector: this.injector },
     );
   }
 
-  private goTo(monday: string): void {
-    if (monday !== this.monday()) {
-      this.monday.set(monday);
-      this.piquetes.set([]);
-      this.load();
-    }
-  }
-
   private load(): void {
-    const week = isoWeek(this.monday());
+    const monday = this.monday();
+    const week = isoWeek(monday);
     // A newer week replaces a request still on its way, so a slow answer never fills the wrong week.
     this.request?.unsubscribe();
     this.request = this.http
@@ -283,21 +493,19 @@ export class WeekSchedule implements OnInit, OnDestroy {
         next: (list) => {
           this.error.set(null);
           this.offline.set(false);
-          this.piquetes.set(list);
+          this.drafts.load(monday, toDraft(list));
           writeCache({ week, piquetes: list });
-          this.scrollToFirstHourOnce();
         },
         error: () => {
           if (!this.auth.session()) {
             // 401: the interceptor signed out; the shell shows the sign-in screen, with no roster.
-            this.piquetes.set([]);
             return;
           }
           const cached = readCache();
           if (cached?.week === week) {
             this.error.set(null);
             this.offline.set(true);
-            this.piquetes.set(cached.piquetes);
+            this.drafts.load(monday, toDraft(cached.piquetes));
             return;
           }
           this.offline.set(false);
@@ -305,6 +513,11 @@ export class WeekSchedule implements OnInit, OnDestroy {
         },
       });
   }
+}
+
+// The week's piquetes from the API as draft shifts, without those that have no times yet
+function toDraft(list: Piquete[]): DraftShift[] {
+  return list.map(fromPiquete).filter((shift): shift is DraftShift => shift !== null);
 }
 
 function writeCache(cached: CachedWeek): void {

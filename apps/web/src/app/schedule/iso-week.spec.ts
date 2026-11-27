@@ -11,8 +11,6 @@ import {
   shortDay,
   todayInLisbon,
   weekDays,
-  weekHeading,
-  weekTitle,
 } from './iso-week';
 
 describe('iso-week', () => {
@@ -79,18 +77,6 @@ describe('iso-week', () => {
     // February 2027 starts on a Monday and has 28 days: four rows.
     expect(monthMondays('2027-02-01')).toEqual(['2027-02-01', '2027-02-08', '2027-02-15', '2027-02-22']);
     expect(monthTitle('2026-11-01')).toBe('November 2026');
-  });
-
-  it('heads the week with the month and year of its Thursday and its number', () => {
-    expect(weekHeading('2026-11-23')).toBe('November 2026 - Week 48');
-    expect(weekHeading('2026-11-30')).toBe('December 2026 - Week 49');
-    expect(weekHeading('2025-12-29')).toBe('January 2026 - Week 1');
-  });
-
-  it('titles the week with its month and days', () => {
-    expect(weekTitle('2026-11-23')).toBe('November 2026 · Days 23 to 29');
-    expect(weekTitle('2026-11-30')).toBe('November – December 2026 · Days 30 to 6');
-    expect(weekTitle('2026-12-28')).toBe('December 2026 – January 2027 · Days 28 to 3');
   });
 
   it('labels a day short for the column and long for screen readers', () => {
