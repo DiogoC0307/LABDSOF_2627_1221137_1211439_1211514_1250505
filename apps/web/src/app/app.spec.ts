@@ -12,7 +12,7 @@ import {
   users,
 } from './testing/test-support';
 
-/** The shell: sign-in, the menu by role, the router with its role guards, sign-out and the install prompt. */
+/** The shell: sign-in, the navbar by role, the router with its role guards, sign-out and the install prompt. */
 describe('App', () => {
   beforeEach(async () => {
     localStorage.clear();
@@ -74,8 +74,7 @@ describe('App', () => {
       .click();
     fixture.detectChanges();
     expect(page.querySelectorAll('.add-slot').length).toBeGreaterThan(0);
-    expect(page.querySelector('.session')?.textContent).toContain('Synthetic Supervisor');
-    expect(page.querySelector('.session')?.textContent).toContain('SUPERVISOR');
+    expect(page.querySelector('app-navbar .session')?.textContent?.trim()).toBe('Synthetic Supervisor');
   });
 
   it('sends the token with every API call', async () => {
@@ -116,7 +115,7 @@ describe('App', () => {
     const fixture = await start();
     weekRequest().flush([]);
     fixture.detectChanges();
-    expect((fixture.nativeElement as HTMLElement).querySelector('.menu a[href="/members"]')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav[aria-label="Main"] a[href="/members"]')).not.toBeNull();
   });
 
   it('the menu of a member has no Members, and the guard sends them back to the schedule', async () => {
@@ -127,7 +126,7 @@ describe('App', () => {
     http().expectNone('/api/v1/members');
     fixture.detectChanges();
     expect(TestBed.inject(Router).url).toBe('/');
-    expect((fixture.nativeElement as HTMLElement).querySelector('.menu a[href="/members"]')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('nav[aria-label="Main"] a[href="/members"]')).toBeNull();
   });
 
   it('TC-SCRUM-46-02 offers install when the browser fires beforeinstallprompt', async () => {

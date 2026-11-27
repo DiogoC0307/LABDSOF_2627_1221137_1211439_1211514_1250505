@@ -34,3 +34,17 @@
   --color-outline: var(--mat-sys-outline);
   --color-outline-variant: var(--mat-sys-outline-variant);
 }
+
+/*
+ * The navbar's color palette
+
+ * blue color-brand is the apps' primary color (buttons and the sign-in screen);
+ * color-fire-600 is the apps' fire icon color.
+ */
+@theme {
+  --color-brand: #0b5cab;
+  --color-fire-600: #b3261e;
+  --color-ink: #1c1b19;
+  --color-ink-muted: #4a4843;
+  --color-line: #d9d7d2;
+}

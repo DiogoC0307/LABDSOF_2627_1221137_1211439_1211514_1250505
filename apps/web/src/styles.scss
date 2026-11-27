@@ -3,8 +3,10 @@
 /*
  * Angular Material theme (ADR 0020, SCRUM-165). mat.theme() only defines the --mat-sys-* tokens
  * (colour, typography, shape) on <html>; Tailwind's colours point to the same tokens (src/tailwind.css).
- * The font is the app's current system font, so no web font is loaded from a third party and the
- * PWA keeps working offline (RNF06). The page's own background, colour and font sizes are unchanged.
+ * The font is the app's current system font. No web font is loaded for text; the page's own background,
+ * colour and font sizes are unchanged. 
+ *
+ * Navbar's icons come fron GoogleFonts (in index.html)
  */
 html {
   color-scheme: light;
@@ -49,6 +51,20 @@ app-root {
   width: min(100%, 24rem);
   margin: 0 auto;
   padding: 1rem 1rem 2rem;
+}
+
+/*
+ * Phones (below Tailwind's md, 768px): the navbar's tab bar is fixed to the bottom of the screen (SCRUM-167), so the
+ * page leaves room for it and for the iPhone home indicator under its content.
+ */
+:root {
+  --app-tab-bar-height: 92px;
+}
+
+@media not (width >= 48rem) {
+  app-navbar ~ .page {
+    padding-bottom: calc(2rem + var(--app-tab-bar-height) + env(safe-area-inset-bottom));
+  }
 }
 
 /*
@@ -332,28 +348,21 @@ label {
   font-size: 0.875rem;
 }
 
-// Plain input button style
+// Plain input and button style, not on Angular Material buttons and menu items (SCRUM-167)
 @layer base {
   input,
-  button {
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
     font: inherit;
     min-height: 2.75rem;
     padding: 0.5rem 0.75rem;
   }
 
-  button {
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
     background: #0b5cab;
     color: #fff;
     border: 0;
     border-radius: 0.25rem;
   }
-}
-
-.install {
-  flex-shrink: 0;
-  min-height: 2.5rem;
-  padding: 0.4rem 0.7rem;
-  font-size: 0.875rem;
 }
 
 .list {
@@ -385,27 +394,6 @@ label {
 }
 
 .notice {
-  color: #0b5cab;
-}
-
-.menu {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0 0 1rem;
-  font-size: 0.875rem;
-}
-
-.sign-out {
-  min-height: 2.5rem;
-  padding: 0.4rem 0.7rem;
-  background: #fff;
-  color: #0b5cab;
-  border: 1px solid #0b5cab;
-}
-
-.menu a {
   color: #0b5cab;
 }
 
