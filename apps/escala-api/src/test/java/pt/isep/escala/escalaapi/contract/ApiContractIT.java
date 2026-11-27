@@ -226,6 +226,13 @@ class ApiContractIT {
 		assertThat(call("DELETE", all + "/{id}", one, MockTokens.member(), null).statusCode()).as("already removed")
 				.isEqualTo(404);
 		assertThat(call("GET", all, all, null, null).statusCode()).isEqualTo(401);
+
+		// SCRUM-65: every member's periods of a week, for the supervisor
+		String team = all + "/team";
+		assertThat(call("GET", team, team + "?week=2026-W49", MockTokens.supervisor(), null).statusCode()).isEqualTo(200);
+		assertThat(call("GET", team, team + "?week=2025-W54", MockTokens.supervisor(), null).statusCode()).isEqualTo(400);
+		assertThat(call("GET", team, team + "?week=2026-W49", MockTokens.member(), null).statusCode()).isEqualTo(403);
+		assertThat(call("GET", team, team + "?week=2026-W49", null, null).statusCode()).isEqualTo(401);
 	}
 
 	@Test

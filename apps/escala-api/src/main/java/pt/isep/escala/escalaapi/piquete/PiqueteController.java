@@ -8,8 +8,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -24,7 +26,7 @@ class PiqueteController {
 	}
 
 	@PostMapping
-	ResponseEntity<PiqueteResponse> create(@RequestBody CreatePiqueteRequest request) {
+	ResponseEntity<PiqueteResponse> create(@RequestBody PiqueteRequest request) {
 		PiqueteResponse created = piquetes.create(request);
 		return ResponseEntity.created(URI.create("/api/v1/piquetes/" + created.id())).body(created);
 	}
@@ -34,8 +36,15 @@ class PiqueteController {
 		return piquetes.get(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
 	}
 
+	/** Changes a shift (SCRUM-65): 404 when there is no such piquete, 409 when its day has passed. */
+	@PutMapping("/{id}")
+	PiqueteResponse update(@PathVariable UUID id, @RequestBody PiqueteRequest request) {
+		return piquetes.update(id, request).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+	}
+
+	/** Every piquete, or with {@code week} (e.g. {@code 2026-W48}) the week's, Monday to Sunday, in date order. */
 	@GetMapping
-	List<PiqueteResponse> list() {
-		return piquetes.list();
+	List<PiqueteResponse> list(@RequestParam(required = false) String week) {
+		return week == null ? piquetes.list() : piquetes.listWeek(week);
 	}
 }

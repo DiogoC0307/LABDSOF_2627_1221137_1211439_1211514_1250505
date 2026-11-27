@@ -7,7 +7,7 @@ info:
     Authentication is a mocked bearer token carrying memberId and role (ADR 0006).
 
 
-    Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
+    Implemented in escala-api today: GET and POST /api/v1/piquetes, GET and PUT /api/v1/piquetes/{id}, the two mocked sign-in endpoints
     under /api/v1/auth, the members and certification types under /api/v1/members and
     /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
     (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
@@ -193,13 +193,24 @@ paths:
   /api/v1/piquetes:
     get:
       tags: [piquetes]
-      summary: List piquetes (walking skeleton, SCRUM-45)
+      summary: List piquetes, or the piquetes of one week (SCRUM-45, SCRUM-65)
       description: >
-        All piquetes with their slots, in the order the database returns them. Any signed-in role
+        With week, the piquetes from that week's Monday to its Sunday, in date order (SCRUM-65). Without it,
+        all piquetes in the order the database returns them (walking skeleton, SCRUM-45). Any signed-in role
         (MEMBER, SUPERVISOR, ADMIN).
       operationId: listPiquetes
       parameters:
         - $ref: "#/components/parameters/TraceId"
+        - name: week
+          in: query
+          required: false
+          description: >
+            An ISO 8601 week, YYYY-Www: Monday to Sunday, the week of RN12. Week 1 is the week with the year's first
+            Thursday, so 2026-W01 starts on 2025-12-29. A week that does not exist (e.g. 2025-W53) answers 400.
+          schema:
+            type: string
+            pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W48"
       responses:
         "200":
           description: Piquetes with their slots (an empty array when there are none)
@@ -212,15 +223,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PiqueteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [piquetes]
-      summary: Create a piquete for a date with one slot
+      summary: Create a piquete (a shift) with a slot for each person its crew needs
       description: >
-        The new slot has role CREW_MEMBER and status PENDING; escala-api queues AvaliacaoPedida and the
-        slot becomes ELIGIBLE after the worker answers (a few seconds). Fields other than dutyDate are
-        ignored. SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
+        A shift the supervisor defines (SCRUM-65, D1): dutyDate, period, startsAt, endsAt and crew, how many
+        people of each role it needs. When any of the last four is sent, all are required and checked (400 with
+        a code per field): the day is today or later in Lisbon (in_the_past), the shift starts on that day in
+        Lisbon (not_on_duty_date), ends after it starts (ends_before_start) and lasts at most 24 hours
+        (too_long); crew lists each role at most once (duplicate) with a count of 0 or more (invalid), and its
+        counts add up to 1 to 50 (too_small, too_large). The piquete gets one slot per person, in the order
+        CREW_CHIEF, DRIVER, CREW_MEMBER, and minimumCrew is their number. A body with only dutyDate still creates
+        a piquete with no times and one CREW_MEMBER slot (walking skeleton, SCRUM-45). Every new slot has status
+        PENDING; escala-api queues one AvaliacaoPedida per slot and each becomes ELIGIBLE after the worker answers
+        (a few seconds). SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
         403 and nothing is created.
       operationId: createPiquete
       parameters:
@@ -237,7 +257,8 @@ paths:
           headers:
             Location:
               description: >
-                /api/v1/piquetes/{id} of the new piquete; GET /api/v1/piquetes/{id} answers it (SCRUM-88).
+                /api/v1/piquetes/{id} of the new piquete; GET /api/v1/piquetes/{id} answers it (SCRUM-88) and
+                PUT on it changes the shift (SCRUM-65).
               schema:
                 type: string
                 example: /api/v1/piquetes/9f6456d9-0df5-46db-9adc-6c412207a4df
@@ -292,6 +313,60 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: No piquete with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags: [piquetes]
+      summary: Change a shift's day, period, times and crew (SCRUM-65)
+      description: >
+        Every field is required and checked as on create (400 with a code per field). A piquete whose day has
+        passed in Lisbon cannot change (409), nor can a shift be moved to such a day (400, in_the_past). A role
+        that needs more people gets new PENDING slots, each with its AvaliacaoPedida; a role that needs fewer
+        loses the slots furthest from being filled (OPEN, then EVALUATION_FAILED, PENDING, ELIGIBLE). A slot
+        someone was proposed for or holds (PROPOSED, FILLED) is never removed: a count below their number for its
+        role is refused (400, crew below_filled) and nothing changes. The other slots are kept as they are.
+        SUPERVISOR only: MEMBER and ADMIN get 403 and nothing changes.
+      operationId: updatePiquete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePiqueteRequest"
+      responses:
+        "200":
+          description: The changed piquete
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PiqueteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No piquete with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The piquete's day has passed in Lisbon, so it cannot change here (the JSON error body)
           content:
             application/json:
               schema:
@@ -650,6 +725,42 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/unavailabilities/team:
+    get:
+      tags: [unavailabilities]
+      summary: Every member's unavailability in a week, to build the schedule (SCRUM-65)
+      description: >
+        Supervisor only. The periods of any member that overlap the week, from Monday 00:00 in Lisbon to the Tuesday
+        after it (so a night shift that starts on Sunday is covered until it ends), ordered by start. Who and when only:
+        no ID, no source, never a reason (09).
+      operationId: listTeamUnavailabilities
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+        - name: week
+          in: query
+          required: true
+          description: >
+            An ISO 8601 week, YYYY-Www, as for GET /api/v1/piquetes. A missing week or one that does not exist
+            answers 400 (invalid_week).
+          schema:
+            type: string
+            pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W48"
+      responses:
+        "200":
+          description: The periods (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamUnavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/unavailabilities/{id}:
     parameters:
       - name: id
@@ -1088,14 +1199,80 @@ components:
           $ref: "#/components/schemas/AccessRole"
         fullName:
           type: string
+    ShiftPeriod:
+      type: string
+      description: The period of a shift, chosen by the supervisor (SCRUM-65, D1)
+      enum: [DAY, NIGHT]
     CreatePiqueteRequest:
       type: object
       required: [dutyDate]
+      description: >
+        With period, startsAt, endsAt or crew, all five fields are required (as in UpdatePiqueteRequest).
+        With only dutyDate, a piquete with no times (walking skeleton).
       properties:
         dutyDate:
           type: string
           format: date
-          example: "2026-11-01"
+          example: "2026-12-01"
+        period:
+          $ref: "#/components/schemas/ShiftPeriod"
+        startsAt:
+          type: string
+          format: date-time
+          description: ISO 8601 with an offset or Z; on dutyDate in Europe/Lisbon.
+          example: "2026-12-01T08:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          description: Exclusive; after startsAt and at most 24 hours later. A night shift ends the next day.
+          example: "2026-12-01T20:00:00Z"
+        crew:
+          $ref: "#/components/schemas/Crew"
+    UpdatePiqueteRequest:
+      type: object
+      required: [dutyDate, period, startsAt, endsAt, crew]
+      properties:
+        dutyDate:
+          type: string
+          format: date
+          example: "2026-12-01"
+        period:
+          $ref: "#/components/schemas/ShiftPeriod"
+        startsAt:
+          type: string
+          format: date-time
+          example: "2026-12-01T20:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          example: "2026-12-02T08:00:00Z"
+        crew:
+          $ref: "#/components/schemas/Crew"
+    Crew:
+      type: array
+      description: >
+        How many people of each role the shift needs (SCRUM-65): each role at most once; a role left out needs
+        nobody. The counts add up to 1 to 50.
+      minItems: 1
+      items:
+        $ref: "#/components/schemas/CrewNeed"
+      example:
+        - role: CREW_CHIEF
+          count: 1
+        - role: DRIVER
+          count: 1
+        - role: CREW_MEMBER
+          count: 3
+    CrewNeed:
+      type: object
+      required: [role, count]
+      properties:
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        count:
+          type: integer
+          minimum: 0
+          maximum: 50
     PiqueteResponse:
       type: object
       required: [id, dutyDate, slots]
@@ -1106,6 +1283,24 @@ components:
         dutyDate:
           type: string
           format: date
+        period:
+          type: string
+          nullable: true
+          enum: [DAY, NIGHT]
+          description: The ShiftPeriod of the shift; null on a piquete created without shift times
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: In UTC (ADR 0012); null on a piquete created without shift times
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        minimumCrew:
+          type: integer
+          nullable: true
+          description: The number of people the crew needs (the sum of its counts); null on a piquete without times
         slots:
           type: array
           items:
@@ -1123,7 +1318,9 @@ components:
           $ref: "#/components/schemas/SlotStatus"
     SlotRole:
       type: string
-      description: SlotRole in escala-api. A new piquete has one slot, CREW_MEMBER.
+      description: >
+        SlotRole in escala-api. A shift has one slot per person of its crew; a walking-skeleton piquete has one,
+        CREW_MEMBER.
       enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
     SlotStatus:
       type: string
@@ -1303,7 +1500,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off]
+                    enum: [required, invalid, invalid_week, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off, not_on_duty_date, too_small, too_large, below_filled]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1337,6 +1534,21 @@ components:
           type: string
           enum: [FORM, FREE_TEXT]
           description: FREE_TEXT when confirmed from a message (SCRUM-75)
+    TeamUnavailability:
+      type: object
+      required: [memberId, startsAt, endsAt]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+          description: In UTC (ADR 0012)
+        endsAt:
+          type: string
+          format: date-time
+          description: In UTC, exclusive
     UnavailabilityMessageSettings:
       type: object
       required: [aiEnabled]

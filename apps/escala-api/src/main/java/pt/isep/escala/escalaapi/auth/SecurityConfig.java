@@ -58,6 +58,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/mock-sign-in").permitAll()
 						.requestMatchers(HttpMethod.GET, PIQUETES, PIQUETES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
+						// SCRUM-65: only the supervisor changes a shift, as only they create one.
+						.requestMatchers(HttpMethod.PUT, PIQUETES + "/*").hasRole(SUPERVISOR)
 						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
 						// only themself (checked in MemberController); the contact only for the admin and the member.
 						.requestMatchers(HttpMethod.GET, MEMBERS, "/api/v1/certification-types").hasAnyRole(SUPERVISOR, ADMIN)
@@ -66,6 +68,8 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.PUT, MEMBERS + "/*", MEMBERS + "/*/certifications").hasRole(ADMIN)
 						// SCRUM-64: every role declares its own unavailability (09); only one's own periods are
 						// found (checked in UnavailabilityService); a change is DELETE and POST, there is no PUT.
+						// SCRUM-65: only the supervisor reads every member's periods of a week, to build the schedule
+						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES + "/team").hasRole(SUPERVISOR)
 						.requestMatchers(HttpMethod.GET, UNAVAILABILITIES, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.POST, UNAVAILABILITIES).hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
 						.requestMatchers(HttpMethod.DELETE, UNAVAILABILITIES + "/*").hasAnyRole(MEMBER, SUPERVISOR, ADMIN)
