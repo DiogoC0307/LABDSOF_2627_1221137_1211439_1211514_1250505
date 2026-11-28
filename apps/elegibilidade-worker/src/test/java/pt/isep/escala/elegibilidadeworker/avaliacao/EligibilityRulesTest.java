@@ -79,7 +79,9 @@ class EligibilityRulesTest {
 	@DisplayName("A period that is not an instant is a malformed event, not a guess")
 	void anUnreadablePeriodIsMalformed() {
 		String broken = "[{\"start\":\"Saturday\",\"end\":\"2026-12-05T13:00:00Z\"}]";
-		assertThatThrownBy(() -> EligibilityRules.violated(slot(), candidate(true, broken, "[]")))
+		JsonNode slot = slot();
+		JsonNode candidate = candidate(true, broken, "[]");
+		assertThatThrownBy(() -> EligibilityRules.violated(slot, candidate))
 				.isInstanceOf(MalformedEventException.class);
 	}
 

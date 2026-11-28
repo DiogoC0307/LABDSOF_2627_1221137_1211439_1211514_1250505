@@ -66,6 +66,8 @@ class CandidateCheck {
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	// When the answer (or the failure) came back
+	@Column
 	private Instant evaluatedAt;
 
 	protected CandidateCheck() {
