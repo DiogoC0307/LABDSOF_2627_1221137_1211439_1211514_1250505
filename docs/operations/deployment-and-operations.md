@@ -242,7 +242,7 @@ Not rehearsed: the SQL and the order come from the code of both versions, not fr
 
 ## Observability
 
-- **Dashboard:** Grafana at https://escala-grafana.duckdns.org shows traces and logs for all environments (log in as `admin`; the password is in the Secret `grafana-admin`). The dashboard **Escala - operations** (folder *Escala*, RF39, SCRUM-97) shows SLI 1 and SLI 2, evaluations requested and completed, outbox rows not published, the dead-letter queues, HTTP requests and 5xx of `escala-api`, and JVM heap. It is kept in Git, `infra/observability/dashboards/escala-operations.json`, and is read-only in Grafana.
+- **Dashboard:** Grafana at https://escala-grafana.duckdns.org shows traces and logs for all environments (log in as `admin`; the password is in the Secret `grafana-admin`). The dashboard **Escala - operations** (folder *Escala*, RF39, SCRUM-97) shows SLI 1 and SLI 2, evaluations requested and completed, outbox rows not published, the dead-letter queues, the checks waiting for the worker (SCRUM-98), HTTP requests and 5xx of `escala-api`, and JVM heap. It is kept in Git, `infra/observability/dashboards/escala-operations.json`, and is read-only in Grafana.
 - **Metrics:** Prometheus (namespace `observability`, one for dev, QA and prod; Compose: profile `observability`, http://localhost:9090) scrapes `/actuator/prometheus` of both services every 30 s and keeps 7 days, at most 2GB. Only `/api/actuator/health` is forwarded by the web proxy: every other Actuator endpoint answers 404 from outside (SCRUM-97).
 - **Traces:** the OpenTelemetry Java agent in both Java images records HTTP requests, database queries and RabbitMQ publish and consume. Tempo keeps them 7 days. The trace breaks at the outbox: the relay publishes outside any active span, so Tempo shows the request and the evaluation as separate traces; the application `traceId` in the event payload still links them. Fixing it is a code change, planned in SCRUM-93. In Grafana: Explore, Tempo, Search by service name (`escala-api` or `elegibilidade-worker`).
 - **Logs:** Grafana Alloy collects the logs of every pod in the `escala-*` namespaces and sends them to Loki, which keeps them 90 days. Log lines carry `[trace_id,span_id]`, so Grafana jumps from a log line to its trace. With Docker Compose, read them with `docker compose logs -f escala-api` (or any other service name); they rotate at 10 Mi and 5 files per container.
@@ -258,7 +258,8 @@ Not rehearsed: the SQL and the order come from the code of both versions, not fr
   - `escala_evaluations_requested_total{purpose}` and `escala_evaluations_completed_total{result, applied}` (`escala-api`);
   - `escala_evaluations_completed_total{result, source}` and `escala_evaluation_processing_seconds` (`elegibilidade-worker`);
   - `escala_evaluation_latency_seconds{result}`: SLI 1, from the request in the outbox to the answer applied, with a bucket at 5 s;
-  - `escala_outbox_pending`, `escala_dlq_messages{queue}` and `escala_messages_dead_lettered_total{queue}` (both services).
+  - `escala_outbox_pending`, `escala_dlq_messages{queue}` and `escala_messages_dead_lettered_total{queue}` (both services);
+  - `escala_checks_waiting{purpose}` (`escala-api`, SCRUM-98): the requests sent to the worker that still wait for an answer, by `purpose` (`ASSIGNMENT`: slots and week assignments; `CANDIDATE`: "who can come"; `EXTRACTION`: free text), counted every 15 s in the `escala-api` database from an index on (state, date) per table (migration V11). It is not the size of the worker queues: a request the worker is retrying counts too. `escala-api` cannot read the `worker.*` queues, on purpose: its broker user may only touch `api.*` (least privilege), and even a passive declare needs the *configure* permission. Covers and swaps get their own value when they exist.
 
   Every metric carries `application`; tag values come from closed lists, so no ID nor free text reaches a label (threat model T-07).
 - **Error reporting:** [TODO: how errors reach the team, e.g. an error-rate panel and alerts, Diogo Costa]
@@ -329,12 +330,85 @@ In the UI: Queues, the `.dlq` queue, "Move messages", destination the queue with
 |---|---|---|---|
 | IPMA down | [TODO: switch `tools/ipma-sim` to *unavailable*, Diogo Costa. SCRUM-43 committed the fixtures only] | The last RCM value is shown with its age (RF29); beyond the staleness threshold, the higher risk level is assumed (ADR 0013). Planned, not built yet | Planned, after the simulator container |
 | AI down | [TODO: the AI feature flag (ADR 0011) does not exist yet, Diogo Costa] | Form fallback: the free-text box is replaced by the unavailability form (RF35). Planned, not built yet | Planned, after the flag exists |
-| Worker down | `docker compose stop elegibilidade-worker` | Tested on Compose on 2026-11-01: the API keeps accepting requests (`POST /api/v1/piquetes` answers `201`), the slot stays `PENDING` and the request waits in the queue `worker.avaliacao-pedida` | `docker compose start elegibilidade-worker`: the waiting request is processed and the slot became `ELIGIBLE` within 9 seconds in that test. Check the dead-letter queue is empty |
+| Worker down | `docker compose stop elegibilidade-worker`; in the cluster, scale the Deployment to 0 (see [Worker down](#worker-down)) | The API keeps answering; the week stays `CHECKING`, "who can come" fails after 20 s with *Check again*, free text falls back to the form after 10 s; nothing is applied or notified (RNF04). Rehearsed on Compose on 2026-11-28 | `docker compose start elegibilidade-worker` (or scale to 1): the waiting checks complete, the week is published and the members are notified; check the queues and the DLQs |
 
 - The other §6.5 cases (delayed, incomplete, invalid IPMA data) will be reproduced with the simulator modes once the container exists. SCRUM-43 committed the fixture files only.
 - The "worker down" scenario was tried on Compose only, not on Kubernetes.
 - **Seen on dev, 2026-11-01: `POST /api/v1/piquetes` answers `500` while `GET` and the health check answer `200`.** The log of `escala-api` (Grafana, Loki) showed `new row for relation "slot" violates check constraint "slot_status_check"`: the dev database was created when a slot status had three values (`OPEN`, `PROPOSED`, `FILLED`) and `ddl-auto=update` did not change the constraint when `PENDING` and `ELIGIBLE` were added. Fixed in Argo CD, not in Git: delete the PVC `data-pg-escala-api-0` and the pod `pg-escala-api-0` of `escala-dev` (the data of dev was test data only), then delete the pod of `escala-api` so it creates the tables again. Afterwards `POST` answered `201` and the slot went from `PENDING` to `ELIGIBLE` in 3 seconds. qa and prod were not affected: version `0.2.0` had no `slot` table. The missing migration tool is the TODO in [Deploy](#deploy).
-- Demo recordings: [TODO: links, Diogo Pereira]
+- Demo recordings: worker down, the [step log and screenshots](rehearsals/2026-11-28-worker-down.md) of 2026-11-28. [TODO: the other scenarios, Diogo Pereira]
+
+### Worker down
+
+The scripted failure demo of SCRUM-98 (§6.8, §7.2.2 row 13; RNF04). Everything that needs a decision from the eligibility rules or from the extraction goes through `elegibilidade-worker`. With the worker stopped, `escala-api` keeps serving: it writes each request to its outbox and publishes it to RabbitMQ, where it waits in `worker.avaliacao-pedida` or `worker.extracao-pedida`. These queues have no message TTL, so nothing is lost. Nothing is applied and nobody is notified until the answer arrives.
+
+**1. Before.** The worker queues have 1 consumer and 0 messages, and every DLQ is empty:
+
+```bash
+docker compose exec rabbitmq rabbitmqctl list_queues -q name messages consumers | grep -E '^(worker|api)\.'
+```
+
+**2. Stop the worker.**
+
+- **Compose:** `docker compose stop elegibilidade-worker`
+- **Cluster** (dev; written for Diogo Pereira or Diogo Costa, who has the kubeconfig, and not run yet):
+
+  ```bash
+  kubectl -n escala-dev scale deployment/elegibilidade-worker --replicas=0
+  kubectl -n escala-dev get pods -l app=elegibilidade-worker      # no pod left
+  ```
+
+  - The Deployment has no `replicas` field (the HPA sets it), so Argo CD's self-heal has no drift to revert.
+  - With 0 replicas, the HPA stops scaling (`ScalingActive=False`) until the Deployment is scaled up again.
+  - When you run it the first time, check both and note them here.
+
+**3. What the user sees.** The texts are the ones in the app:
+
+| Flow | With the worker stopped | On the server |
+|---|---|---|
+| **Publish the week** (supervisor) | *Publish* answers at once. After 60 s the page says: "Still checking the members on this week. It is published when the checks finish, unless one finds a conflict; nobody has been told yet. Reload the page in a moment to see it." | The publication stays `CHECKING` and its assignments `PROPOSED`, with evaluation `PENDING`. No notification is sent |
+| **"Who can come"** (supervisor, shift panel) | "Checking who can come…", then after 20 s "Couldn't check who can come." with *Check again* | The `candidate_check` rows stay `PENDING`; each *Check again* adds a request |
+| **Free text** (member, "In my own words") | "Reading…", then after 10 s: "This is taking too long. Your text is still here; use the form above." The member uses the form, which needs no worker | The PWA discards the message after 10 s (SCRUM-89). The `ExtracaoPedida` stays in `worker.extracao-pedida` |
+| **Covers and swaps** | Added here when they exist (SCRUM-72, SCRUM-73, SCRUM-68, SCRUM-69) | — |
+
+**4. Show it.**
+
+- **Queues:** the `messages` column of `worker.avaliacao-pedida` and `worker.extracao-pedida` grows, with 0 consumers (`rabbitmqctl list_queues` as in step 1; in the cluster: `kubectl -n escala-dev exec deploy/rabbitmq -- rabbitmqctl list_queues -q name messages consumers`).
+- **Dashboard:** *Escala - operations*, panel **Checks waiting for the worker** (`escala_checks_waiting{purpose}`). It grows by purpose.
+  - It counts the requests that still wait for an answer, retries included, in the `escala-api` database. It is **not** the size of the queues.
+  - `escala-api` has no permission on the `worker.*` queues, on purpose (least privilege).
+  - `EXTRACTION` drops back to 0 once the PWA has discarded the message, although the request is still in the queue.
+
+**5. Bring it back.**
+
+- **Compose:** `docker compose start elegibilidade-worker`
+- **Cluster:**
+
+  ```bash
+  kubectl -n escala-dev scale deployment/elegibilidade-worker --replicas=1
+  kubectl -n escala-dev rollout status deployment/elegibilidade-worker
+  ```
+
+The waiting requests are processed:
+
+- the week becomes `PUBLISHED`, or `BLOCKED` if a check finds a conflict;
+- the members are notified;
+- *Check again* shows who can come;
+- the panel drains to 0.
+
+**A late free-text result is ignored on purpose.** By then the message was discarded and the member has used the form. `escala-api` logs `ExtracaoConcluida ignored, no message waits for it` and saves nothing (TC-SCRUM-89-03).
+
+**6. Check.**
+
+- Both worker queues are at 0 messages with 1 consumer.
+- Every DLQ is empty. If not, see [Dead-letter queues](#dead-letter-queues).
+- The panel is at 0.
+
+**Rehearsed** once on Compose on 2026-11-28; see the [step log and screenshots](rehearsals/2026-11-28-worker-down.md).
+
+- The worker was down for 4 min 14 s.
+- 4 evaluation requests and 1 extraction request were waiting.
+- Everything completed 9 s after the start, and the week was published.
+- Nothing went to a DLQ.
 
 ## Known limitations in the evaluation environment
 

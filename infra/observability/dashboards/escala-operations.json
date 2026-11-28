@@ -5,7 +5,7 @@
   "tags": ["escala", "sli"],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "editable": true,
   "refresh": "30s",
   "time": { "from": "now-6h", "to": "now" },
@@ -160,11 +160,28 @@
       ]
     },
     {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Checks waiting for the worker",
+      "description": "Requests escala-api sent to elegibilidade-worker that still wait for an answer, by purpose, counted in the escala-api database every 15 s (SCRUM-98). Not the size of the worker queues: a request the worker is retrying counts too, and escala-api has no permission on the worker.* queues on purpose (least privilege). It grows while the worker is down and drains when it is back.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
+      "fieldConfig": { "defaults": { "unit": "short", "decimals": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (purpose) (escala_checks_waiting{application=\"escala-api\"})",
+          "legendFormat": "{{purpose}}"
+        }
+      ]
+    },
+    {
       "id": 8,
       "type": "timeseries",
       "title": "escala-api HTTP requests by URI template",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 32, "w": 12, "h": 8 },
       "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
       "targets": [
         {
@@ -180,7 +197,7 @@
       "type": "timeseries",
       "title": "escala-api HTTP 5xx share",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 32, "w": 12, "h": 8 },
       "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
       "targets": [
         {
@@ -197,7 +214,7 @@
       "title": "JVM heap used",
       "description": "Heap only; compare with the container memory limit of each service.",
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 8 },
+      "gridPos": { "x": 0, "y": 40, "w": 24, "h": 8 },
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
       "targets": [
         {
