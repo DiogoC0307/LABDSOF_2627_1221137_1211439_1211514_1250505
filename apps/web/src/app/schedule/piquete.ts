@@ -9,11 +9,14 @@ export const ROLE_LABELS: Record<SlotRole, string> = {
   CREW_MEMBER: 'Crew member',
 };
 
+export type PresenceStatus = 'UNCONFIRMED' | 'COMING' | 'CANNOT_COME';
+
 export interface Slot {
   id: string;
   role: string;
   status: string;
   memberId?: string | null; // Who holds the slot once its week is published (SCRUM-66)
+  presenceStatus?: PresenceStatus | null;
 }
 
 // How many people of a role for a shift

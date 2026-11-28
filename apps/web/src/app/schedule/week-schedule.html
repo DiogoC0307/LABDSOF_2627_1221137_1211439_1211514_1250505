@@ -115,7 +115,7 @@
                   [class.day-header--today]="day.today"
                   [class.day-header--past]="day.past"
                   [attr.aria-current]="day.today ? 'date' : null"
-                  >{{ day.header }}</span
+                >{{ day.header }}</span
                 >
                 @if (day.add; as add) {
                   <button
@@ -219,7 +219,7 @@
                     [class.day-header--today]="day.today"
                     [class.day-header--past]="day.past"
                     [attr.aria-current]="day.today ? 'date' : null"
-                    >{{ day.title }}</span
+                  >{{ day.title }}</span
                   >
                   @if (day.today) {
                     <span class="text-[14px] font-semibold text-[#0B5CAB]">Today</span>
@@ -258,6 +258,7 @@
           [weekShifts]="shifts()"
           [editable]="selectedEditable()"
           [note]="selectedNote()"
+          (presenceUpdated)="reloadFromServer()"
           (closed)="closePanel()"
           (deleteRequested)="confirmDelete()"
         />
@@ -320,10 +321,10 @@
 <ng-template #cardBody let-card>
   <!-- Times on one line, or broken after the dash in a narrow column -->
   <span class="block text-[15px] font-bold text-[#1C1B19]"
-    ><span class="whitespace-nowrap">{{ card.from }} –</span>&ngsp;<span
-      class="whitespace-nowrap"
-      >{{ card.to }}</span
-    ></span
+  ><span class="whitespace-nowrap">{{ card.from }} –</span>&ngsp;<span
+    class="whitespace-nowrap"
+  >{{ card.to }}</span
+  ></span
   >
   <span class="block text-[14px] text-[#33312D]">{{ card.people }}</span>
   <span class="mt-1 flex flex-wrap gap-1">
@@ -331,7 +332,7 @@
       class="tag"
       [class.tag--full]="card.tag === 'Full'"
       [class.tag--short]="card.tag !== 'Full'"
-      >{{ card.tag }}</span
+    >{{ card.tag }}</span
     >
     @if (card.change) {
       <span class="tag tag--change">{{ card.change }}</span>

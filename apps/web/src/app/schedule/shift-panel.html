@@ -81,6 +81,10 @@
       <p class="error m-0" role="alert">{{ error }}</p>
     }
 
+    @if (presenceError(); as pError) {
+      <p class="error m-0" role="alert">{{ pError }}</p>
+    }
+
     <!-- Role sections with required number input and assigned people -->
     @for (section of sections(); track section.role) {
       <section
@@ -95,7 +99,7 @@
               class="role-pill rounded-full px-2.5 py-0.5 text-[13px] font-bold"
               [class.role-pill--full]="section.state === 'full'"
               [class.role-pill--short]="section.state === 'short'"
-              >{{ section.pill }}</span
+            >{{ section.pill }}</span
             >
           </div>
 
@@ -126,19 +130,49 @@
         <div class="flex flex-col gap-2">
           <h4 class="m-0 text-[14px] font-bold text-[#57554F]">On this shift</h4>
           @for (person of section.people; track person.id) {
-            <div class="flex min-h-[52px] items-center justify-between gap-3 rounded-xl bg-[#EEF5FC] px-3 py-1">
-              <span class="text-[17px] font-bold text-[#1C1B19]">{{ person.name }}</span>
-              @if (editable()) {
-                <button
-                  mat-stroked-button
-                  type="button"
-                  class="btn-remove"
-                  [attr.aria-label]="'Remove ' + person.name + ' as ' + section.name"
-                  (click)="unassign(section.role, person.id)"
-                >
-                  Remove
-                </button>
-              }
+            <div
+              class="flex min-h-[52px] flex-wrap items-center justify-between gap-2 rounded-xl bg-[#EEF5FC] px-3 py-2"
+            >
+              <div class="flex flex-col">
+                <span class="text-[17px] font-bold text-[#1C1B19]">{{ person.name }}</span>
+                @if (person.presenceStatus) {
+                  <span class="text-[13px] text-[#57554F]">Presence: {{ person.presenceStatus }}</span>
+                }
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                @if (person.canConfirm) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="confirm-coming"
+                    [disabled]="updatingPresenceId() === person.slotId"
+                    (click)="confirmPresence(person, 'COMING')"
+                  >
+                    I'm coming
+                  </button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="confirm-cannot-come"
+                    [disabled]="updatingPresenceId() === person.slotId"
+                    (click)="confirmPresence(person, 'CANNOT_COME')"
+                  >
+                    I can't come
+                  </button>
+                }
+                @if (editable()) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="btn-remove"
+                    [attr.aria-label]="'Remove ' + person.name + ' as ' + section.name"
+                    (click)="unassign(section.role, person.id)"
+                  >
+                    Remove
+                  </button>
+                }
+              </div>
             </div>
           } @empty {
             <p class="m-0 text-[16px] text-[#57554F]">Nobody yet.</p>

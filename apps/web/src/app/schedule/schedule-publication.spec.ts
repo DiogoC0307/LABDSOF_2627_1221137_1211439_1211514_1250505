@@ -19,6 +19,7 @@ describe('Schedule publication', () => {
       end: 20 * 60,
       crew: { CREW_CHIEF: 1, DRIVER: 1, CREW_MEMBER: 2 },
       assigned: emptyAssigned(),
+      slots: [],
       change: 'published',
       ...change,
     };
@@ -35,7 +36,13 @@ describe('Schedule publication', () => {
             assigned: { CREW_CHIEF: ['m-ana'], DRIVER: [], CREW_MEMBER: ['m-rui', 'm-joao'] },
             change: 'edited',
           }),
-          shift({ id: 'new-1', dutyDate: '2026-12-03', start: 20 * 60, end: 32 * 60, change: 'new' }),
+          shift({
+            id: 'new-1',
+            dutyDate: '2026-12-03',
+            start: 20 * 60,
+            end: 32 * 60,
+            change: 'new',
+          }),
         ],
         '2026-12-01',
       );
@@ -70,7 +77,11 @@ describe('Schedule publication', () => {
     });
 
     it('writes the times on the Lisbon clock, in summer too', () => {
-      const request = publicationRequest('2027-06-28', [shift({ id: 'p-s', dutyDate: '2027-06-30' })], '2027-06-28');
+      const request = publicationRequest(
+        '2027-06-28',
+        [shift({ id: 'p-s', dutyDate: '2027-06-30' })],
+        '2027-06-28',
+      );
       expect(request.shifts[0].startsAt).toBe('2027-06-30T07:00:00Z');
     });
 
@@ -91,15 +102,40 @@ describe('Schedule publication', () => {
       const lines = conflictLines(
         [
           { type: 'EMPTY_SHIFT', shiftKey: 'p-1', shiftId: 'p-1', dutyDate: '2026-12-02' },
-          { type: 'INELIGIBLE', shiftKey: 'p-1', shiftId: 'p-1', dutyDate: '2026-12-02', memberId: 'm-ana', role: 'CREW_CHIEF', rules: ['RN05'] },
-          { type: 'INELIGIBLE', shiftKey: 'p-1', shiftId: 'p-1', dutyDate: '2026-12-02', memberId: 'm-x', role: 'DRIVER', rules: ['RN01', 'RN06'] },
-          { type: 'NOT_CHECKED', shiftKey: 'p-1', shiftId: 'p-1', dutyDate: '2026-12-02', memberId: 'm-ana', role: 'CREW_CHIEF' },
+          {
+            type: 'INELIGIBLE',
+            shiftKey: 'p-1',
+            shiftId: 'p-1',
+            dutyDate: '2026-12-02',
+            memberId: 'm-ana',
+            role: 'CREW_CHIEF',
+            rules: ['RN05'],
+          },
+          {
+            type: 'INELIGIBLE',
+            shiftKey: 'p-1',
+            shiftId: 'p-1',
+            dutyDate: '2026-12-02',
+            memberId: 'm-x',
+            role: 'DRIVER',
+            rules: ['RN01', 'RN06'],
+          },
+          {
+            type: 'NOT_CHECKED',
+            shiftKey: 'p-1',
+            shiftId: 'p-1',
+            dutyDate: '2026-12-02',
+            memberId: 'm-ana',
+            role: 'CREW_CHIEF',
+          },
         ],
         shifts,
         members,
       );
 
-      expect(lines.map((line) => line.shift)).toEqual(Array(4).fill('Wednesday 2 December, 08:00 – 20:00'));
+      expect(lines.map((line) => line.shift)).toEqual(
+        Array(4).fill('Wednesday 2 December, 08:00 – 20:00'),
+      );
       expect(lines.map((line) => line.problem)).toEqual([
         'Nobody is on this shift. Add someone to it or delete it.',
         'Ana Costa (Crew chief) is on another shift at the same time.',
@@ -147,11 +183,15 @@ describe('Schedule publication', () => {
       start().flush({ id: 'pub-1', week: '2026-W49', status: 'CHECKING', conflicts: [] });
 
       vi.advanceTimersByTime(1000);
-      http().expectOne('/api/v1/schedule-publications/pub-1').flush({ id: 'pub-1', week: '2026-W49', status: 'CHECKING', conflicts: [] });
+      http()
+        .expectOne('/api/v1/schedule-publications/pub-1')
+        .flush({ id: 'pub-1', week: '2026-W49', status: 'CHECKING', conflicts: [] });
       expect(outcome).toBeUndefined();
 
       vi.advanceTimersByTime(1000);
-      http().expectOne('/api/v1/schedule-publications/pub-1').flush({ id: 'pub-1', week: '2026-W49', status: 'PUBLISHED', conflicts: [] });
+      http()
+        .expectOne('/api/v1/schedule-publications/pub-1')
+        .flush({ id: 'pub-1', week: '2026-W49', status: 'PUBLISHED', conflicts: [] });
       expect(outcome).toEqual({ kind: 'published' });
 
       vi.advanceTimersByTime(5000);
@@ -159,7 +199,9 @@ describe('Schedule publication', () => {
     });
 
     it('gives the conflicts of a blocked week', () => {
-      const conflicts = [{ type: 'EMPTY_SHIFT', shiftKey: 'new-1', shiftId: 'x', dutyDate: '2026-12-01' }];
+      const conflicts = [
+        { type: 'EMPTY_SHIFT', shiftKey: 'new-1', shiftId: 'x', dutyDate: '2026-12-01' },
+      ];
       start().flush({ id: 'pub-2', week: '2026-W49', status: 'BLOCKED', conflicts });
       expect(outcome).toEqual({ kind: 'blocked', conflicts });
     });
@@ -168,11 +210,17 @@ describe('Schedule publication', () => {
       start().flush({ id: 'pub-3', week: '2026-W49', status: 'CHECKING', conflicts: [] });
       for (let second = 1; second <= 59; second++) {
         vi.advanceTimersByTime(1000);
-        http().expectOne('/api/v1/schedule-publications/pub-3').flush({ id: 'pub-3', week: '2026-W49', status: 'CHECKING', conflicts: [] });
+        http()
+          .expectOne('/api/v1/schedule-publications/pub-3')
+          .flush({ id: 'pub-3', week: '2026-W49', status: 'CHECKING', conflicts: [] });
       }
       vi.advanceTimersByTime(1000);
       // The request still on its way at a minute is cancelled
-      expect(http().match('/api/v1/schedule-publications/pub-3').every((request) => request.cancelled)).toBe(true);
+      expect(
+        http()
+          .match('/api/v1/schedule-publications/pub-3')
+          .every((request) => request.cancelled),
+      ).toBe(true);
       expect(outcome).toEqual({ kind: 'timeout' });
     });
   });

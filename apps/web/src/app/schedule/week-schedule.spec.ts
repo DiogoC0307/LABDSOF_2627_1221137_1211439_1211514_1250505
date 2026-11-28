@@ -2,7 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
 import { WeekSchedule } from './week-schedule';
-import { SESSION_KEY, http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
+import {
+  SESSION_KEY,
+  http,
+  setValue,
+  signInAs,
+  testProviders,
+  weekRequest,
+} from '../testing/test-support';
 
 /**
  * Schedule page
@@ -93,9 +100,9 @@ describe('WeekSchedule', () => {
   // Shift side panel's role buttons
   function chooseRoles(fixture: ComponentFixture<WeekSchedule>, ...names: string[]) {
     for (const name of names) {
-      const choice = Array.from(panel(fixture)!.querySelectorAll<HTMLButtonElement>('.role-choice')).find(
-        (button) => button.textContent?.trim() === name,
-      )!;
+      const choice = Array.from(
+        panel(fixture)!.querySelectorAll<HTMLButtonElement>('.role-choice'),
+      ).find((button) => button.textContent?.trim() === name)!;
       choice.click();
       fixture.detectChanges();
     }
@@ -114,7 +121,11 @@ describe('WeekSchedule', () => {
   }
 
   // "+ Add shift" on a day of the week (0 is Monday), then the roles in the dialog, then "Create shift"
-  async function addShift(fixture: ComponentFixture<WeekSchedule>, day: number, roles = ['Crew chief']) {
+  async function addShift(
+    fixture: ComponentFixture<WeekSchedule>,
+    day: number,
+    roles = ['Crew chief'],
+  ) {
     columns(fixture)[day].querySelector<HTMLButtonElement>('.add-slot')!.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -139,7 +150,12 @@ describe('WeekSchedule', () => {
     { id: 'm-carlos', fullName: 'Carlos Gomes', functions: ['CREW_CHIEF'] },
     { id: 'm-beatriz', fullName: 'Beatriz Lopes', functions: ['CREW_MEMBER'] },
     { id: 'm-old', fullName: 'Zé Inativo', active: false, functions: ['CREW_CHIEF'] },
-    { id: 'm-admin', fullName: 'Synthetic Admin', rosterStatus: 'COMMAND_ROSTER', functions: ['CREW_CHIEF'] },
+    {
+      id: 'm-admin',
+      fullName: 'Synthetic Admin',
+      rosterStatus: 'COMMAND_ROSTER',
+      functions: ['CREW_CHIEF'],
+    },
   ].map((member) => ({ active: true, rosterStatus: 'ACTIVE_ROSTER', ...member }));
 
   // Who said they can't come, as the worker gets it in each check: Ana all of Tuesday 1 December, Sofia only until 06:00
@@ -181,13 +197,25 @@ describe('WeekSchedule', () => {
           if (!member.active || member.rosterStatus !== 'ACTIVE_ROSTER') {
             rules.push('RN01');
           }
-          if (body.otherShifts.some((other) => other.memberId === member.id && during(other.startsAt, other.endsAt))) {
+          if (
+            body.otherShifts.some(
+              (other) => other.memberId === member.id && during(other.startsAt, other.endsAt),
+            )
+          ) {
             rules.push('RN05');
           }
-          if (teamUnavailability.some((period) => period.memberId === member.id && during(period.startsAt, period.endsAt))) {
+          if (
+            teamUnavailability.some(
+              (period) => period.memberId === member.id && during(period.startsAt, period.endsAt),
+            )
+          ) {
             rules.push('RN06');
           }
-          return { memberId: member.id, result: rules.length > 0 ? 'INELIGIBLE' : 'ELIGIBLE', rules };
+          return {
+            memberId: member.id,
+            result: rules.length > 0 ? 'INELIGIBLE' : 'ELIGIBLE',
+            rules,
+          };
         }),
     };
   }
@@ -204,7 +232,11 @@ describe('WeekSchedule', () => {
   }
 
   // A new shift on that day of the week shown, with one role, its panel open, the members loaded but nobody checked
-  async function addShiftUnchecked(fixture: ComponentFixture<WeekSchedule>, day: number, role = 'Crew chief') {
+  async function addShiftUnchecked(
+    fixture: ComponentFixture<WeekSchedule>,
+    day: number,
+    role = 'Crew chief',
+  ) {
     columns(fixture)[day].querySelector<HTMLButtonElement>('.add-slot')!.click();
     fixture.detectChanges();
     await fixture.whenStable();
@@ -212,7 +244,9 @@ describe('WeekSchedule', () => {
     press(fixture, 'Create shift');
     await fixture.whenStable();
     fixture.detectChanges();
-    http().match('/api/v1/members').forEach((request) => request.flush(apiMembers));
+    http()
+      .match('/api/v1/members')
+      .forEach((request) => request.flush(apiMembers));
     fixture.detectChanges();
   }
 
@@ -247,7 +281,10 @@ describe('WeekSchedule', () => {
     vi.setSystemTime(new Date('2026-11-25T10:00:00Z'));
     await TestBed.configureTestingModule({
       imports: [WeekSchedule],
-      providers: [...testProviders, { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } }],
+      providers: [
+        ...testProviders,
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+      ],
     }).compileComponents();
   });
 
@@ -264,7 +301,9 @@ describe('WeekSchedule', () => {
       flushWeek(fixture, '2026-W48');
 
       expect(title(fixture)).toBe('This week / 23 – 29 November 2026');
-      expect(toggle(fixture).getAttribute('aria-label')).toBe('This week, 23 – 29 November 2026. Choose week');
+      expect(toggle(fixture).getAttribute('aria-label')).toBe(
+        'This week, 23 – 29 November 2026. Choose week',
+      );
       expect(toggle(fixture).getAttribute('aria-haspopup')).toBe('dialog');
       expect(toggle(fixture).classList).toContain('week-toggle--current');
       expect(element(fixture).querySelector('.week-bar')?.textContent).not.toMatch(/Week \d|Wk/);
@@ -304,7 +343,9 @@ describe('WeekSchedule', () => {
       await fixture.whenStable();
 
       expect(toggle(fixture).getAttribute('aria-expanded')).toBe('true');
-      expect(calendar()?.querySelector('.calendar-month')?.textContent?.trim()).toBe('November 2026');
+      expect(calendar()?.querySelector('.calendar-month')?.textContent?.trim()).toBe(
+        'November 2026',
+      );
       const rows = calendarRows();
       expect(rows.length).toBe(6);
       expect(rows[4].getAttribute('aria-label')).toBe('Week of 23 – 29 November 2026');
@@ -349,12 +390,26 @@ describe('WeekSchedule', () => {
       const fixture = render('SUPERVISOR');
       flushWeek(fixture, '2026-W48');
 
-      const headers = Array.from(element(fixture).querySelectorAll('.day-header')).map((day) => day.textContent);
-      expect(headers).toEqual(['Mon 23', 'Tue 24', 'Wed 25', 'Thu 26', 'Fri 27', 'Sat 28', 'Sun 29']);
-      expect(element(fixture).querySelector('.day-header--today')?.getAttribute('aria-current')).toBe('date');
+      const headers = Array.from(element(fixture).querySelectorAll('.day-header')).map(
+        (day) => day.textContent,
+      );
+      expect(headers).toEqual([
+        'Mon 23',
+        'Tue 24',
+        'Wed 25',
+        'Thu 26',
+        'Fri 27',
+        'Sat 28',
+        'Sun 29',
+      ]);
+      expect(
+        element(fixture).querySelector('.day-header--today')?.getAttribute('aria-current'),
+      ).toBe('date');
       expect(element(fixture).querySelectorAll('.day-header--past').length).toBe(2);
       expect(element(fixture).querySelectorAll('.day-column--past').length).toBe(2);
-      const hours = Array.from(element(fixture).querySelectorAll('.hour-label')).map((hour) => hour.textContent);
+      const hours = Array.from(element(fixture).querySelectorAll('.hour-label')).map(
+        (hour) => hour.textContent,
+      );
       expect(hours.length).toBe(12);
       expect(hours[0]).toBe('00:00');
       expect(hours[11]).toBe('22:00');
@@ -378,7 +433,9 @@ describe('WeekSchedule', () => {
       const fixture = render('SUPERVISOR');
       flushWeek(fixture, '2026-W48', [mondayDay]);
 
-      expect(columns(fixture)[0].querySelector('.shift-card')?.classList).toContain('shift-card--past');
+      expect(columns(fixture)[0].querySelector('.shift-card')?.classList).toContain(
+        'shift-card--past',
+      );
     });
   });
 
@@ -399,7 +456,9 @@ describe('WeekSchedule', () => {
       expect(slotsPerDay(fixture)).toEqual([0, 0, 1, 1, 1, 1, 1]);
       // Monday and Tuesday have passed: no Add shift button on them either.
       expect(
-        Array.from(element(fixture).querySelectorAll('.day-add')).map((button) => button.getAttribute('aria-label')),
+        Array.from(element(fixture).querySelectorAll('.day-add')).map((button) =>
+          button.getAttribute('aria-label'),
+        ),
       ).toEqual([
         'Add shift on Wednesday 25 November',
         'Add shift on Thursday 26 November',
@@ -429,7 +488,9 @@ describe('WeekSchedule', () => {
       thursday.click();
       fixture.detectChanges();
       expect(thursday.getAttribute('aria-pressed')).toBe('true');
-      expect(panel(fixture)?.textContent).toContain('This week is published. Press "Edit schedule" to make changes.');
+      expect(panel(fixture)?.textContent).toContain(
+        'This week is published. Press "Edit schedule" to make changes.',
+      );
       expect(panel(fixture)?.textContent).toContain('Thursday 26 November');
       expect(buttonByText(panel(fixture)!, 'Delete')).toBeUndefined();
       expect(panel(fixture)?.querySelector('.needed-input')).toBeNull();
@@ -438,7 +499,9 @@ describe('WeekSchedule', () => {
       press(fixture, 'Edit schedule');
       columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!.click();
       fixture.detectChanges();
-      expect(panel(fixture)?.textContent).toContain("This shift has already happened, so it can't be changed.");
+      expect(panel(fixture)?.textContent).toContain(
+        "This shift has already happened, so it can't be changed.",
+      );
       expect(buttonByText(panel(fixture)!, 'Delete')).toBeUndefined();
     });
 
@@ -503,7 +566,8 @@ describe('WeekSchedule', () => {
       chooseInDialog(fixture, 'Driver');
       chooseInDialog(fixture, 'Crew member');
       chooseInDialog(fixture, 'Driver');
-      const needed = (role: string) => dialog()!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
+      const needed = (role: string) =>
+        dialog()!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
       expect(needed('Driver')).toBeNull();
       expect(needed('Crew chief')!.value).toBe('1');
       setValue(needed('Crew member')!, '3a');
@@ -541,7 +605,8 @@ describe('WeekSchedule', () => {
       const fixture = await nextWeek();
       await addShift(fixture, 0, ['Crew chief', 'Driver', 'Crew member']);
 
-      const needed = (role: string) => panel(fixture)!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
+      const needed = (role: string) =>
+        panel(fixture)!.querySelector<HTMLInputElement>(`[aria-label="${role} needed"]`);
       expect(needed('Crew chief')!.type).toBe('text');
       expect(needed('Crew chief')!.inputMode).toBe('numeric');
       expect(needed('Crew member')!.value).toBe('1');
@@ -556,13 +621,17 @@ describe('WeekSchedule', () => {
       fixture.detectChanges();
       chooseRoles(fixture, 'Driver');
       expect(needed('Driver')).toBeNull();
-      expect(panel(fixture)?.querySelector('[aria-pressed="false"]')?.textContent?.trim()).toBe('Driver');
+      expect(panel(fixture)?.querySelector('[aria-pressed="false"]')?.textContent?.trim()).toBe(
+        'Driver',
+      );
 
       click(fixture, '[aria-label="Assign Ana Costa as Crew chief"]');
       expect(panel(fixture)?.textContent).toContain('1 of 1 · Full');
-      
+
       // Ana is on the shift now: she is no longer a candidate for another role.
-      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew member"]')).toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew member"]'),
+      ).toBeNull();
 
       const card = () => columns(fixture)[0].querySelector<HTMLButtonElement>('.shift-card')!;
       expect(card().classList).toContain('shift-card--short');
@@ -682,7 +751,9 @@ describe('WeekSchedule', () => {
       chooseRoles(fixture, 'Crew chief');
       expect(panel(fixture)?.querySelector('[aria-label="Crew chief needed"]')).toBeNull();
       expect(choice('Driver').disabled).toBe(true);
-      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('0 of 1 firefighter');
+      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain(
+        '0 of 1 firefighter',
+      );
     });
 
     it("shows who can't come during the shift and leaves them out of the candidates", async () => {
@@ -694,8 +765,12 @@ describe('WeekSchedule', () => {
       expect(cantCome.textContent).toContain("Can't come during this shift");
       expect(cantCome.textContent).toContain('Ana Costa');
       expect(cantCome.textContent).not.toContain('Sofia Martins');
-      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]')).toBeNull();
-      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]'),
+      ).toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]'),
+      ).not.toBeNull();
       // Inactive members and members off the active roster are never candidates (RN01).
       expect(panel(fixture)?.textContent).not.toContain('Zé Inativo');
       expect(panel(fixture)?.textContent).not.toContain('Synthetic Admin');
@@ -705,7 +780,9 @@ describe('WeekSchedule', () => {
       const fixture = await nextWeek();
       await addShiftUnchecked(fixture, 1);
 
-      expect(panel(fixture)?.querySelector('output.candidate-check')?.textContent).toContain('Checking who can come…');
+      expect(panel(fixture)?.querySelector('output.candidate-check')?.textContent).toContain(
+        'Checking who can come…',
+      );
       expect(panel(fixture)?.querySelector('[aria-label^="Assign "]')).toBeNull();
       const check = http().expectOne(isCandidateCheck);
       expect(check.request.body).toEqual({
@@ -718,8 +795,12 @@ describe('WeekSchedule', () => {
       check.flush(workerAnswer(check.request.body as CheckBody));
       fixture.detectChanges();
       expect(panel(fixture)?.textContent).not.toContain('Checking who can come…');
-      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
-      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]')).toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]'),
+      ).not.toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]'),
+      ).toBeNull();
     });
 
     it('asks the worker with who is on the other shifts of the week, and offers nobody it refuses (RN05)', async () => {
@@ -737,21 +818,31 @@ describe('WeekSchedule', () => {
       check.flush({
         ...answer,
         candidates: answer.candidates.map((candidate) =>
-          candidate.memberId === 'm-rui' ? { ...candidate, result: 'INELIGIBLE', rules: ['RN05'] } : candidate,
+          candidate.memberId === 'm-rui'
+            ? { ...candidate, result: 'INELIGIBLE', rules: ['RN05'] }
+            : candidate,
         ),
       });
       fixture.detectChanges();
-      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).toBeNull();
-      expect(element(fixture).querySelector('[aria-label="Assign Carlos Gomes as Crew chief"]')).not.toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]'),
+      ).toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Carlos Gomes as Crew chief"]'),
+      ).not.toBeNull();
       // On another shift is not "can't come"
-      expect(panel(fixture)?.querySelector('[aria-labelledby="cant-come-title"]')?.textContent ?? '').not.toContain('Rui Almeida');
+      expect(
+        panel(fixture)?.querySelector('[aria-labelledby="cant-come-title"]')?.textContent ?? '',
+      ).not.toContain('Rui Almeida');
     });
 
     it('says so when the worker could not be asked, and asks again on "Check again"', async () => {
       const fixture = await nextWeek();
       await addShiftUnchecked(fixture, 2);
 
-      http().expectOne(isCandidateCheck).flush(null, { status: 503, statusText: 'Service Unavailable' });
+      http()
+        .expectOne(isCandidateCheck)
+        .flush(null, { status: 503, statusText: 'Service Unavailable' });
       fixture.detectChanges();
       expect(panel(fixture)?.textContent).toContain("Couldn't check who can come.");
       expect(panel(fixture)?.querySelector('[aria-label^="Assign "]')).toBeNull();
@@ -759,7 +850,9 @@ describe('WeekSchedule', () => {
       click(fixture, '[aria-label="Check again who can be Crew chief"]');
       expect(panel(fixture)?.textContent).toContain('Checking who can come…');
       flushDirectory(fixture);
-      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
+      expect(
+        element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]'),
+      ).not.toBeNull();
     });
 
     it('says so when the members cannot be loaded', async () => {
@@ -784,7 +877,9 @@ describe('WeekSchedule', () => {
       const crewMember = () =>
         panel(fixture)!.querySelectorAll('[aria-label^="Assign "][aria-label$=" as Crew member"]');
       expect(crewMember().length).toBe(3);
-      const more = panel(fixture)!.querySelector<HTMLButtonElement>('[aria-label$="more who can be Crew member"]')!;
+      const more = panel(fixture)!.querySelector<HTMLButtonElement>(
+        '[aria-label$="more who can be Crew member"]',
+      )!;
       expect(more.textContent?.trim()).toMatch(/^Show \d+ more$/);
       more.click();
       fixture.detectChanges();
@@ -864,7 +959,9 @@ describe('WeekSchedule', () => {
       expect(status(fixture)).toBe('Published');
       expect(publishButton(fixture).disabled).toBe(true);
       expect(element(fixture).querySelector('.tag--change')).toBeNull();
-      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('1 of 1 firefighter');
+      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain(
+        '1 of 1 firefighter',
+      );
     });
 
     it('TC-SCRUM-66-02 lists the conflicts when the week cannot be published, keeps the draft, and shows the shift of one', async () => {
@@ -895,13 +992,19 @@ describe('WeekSchedule', () => {
       await fixture.whenStable();
 
       const dialog = document.querySelector<HTMLElement>('mat-dialog-container')!;
-      expect(dialog.querySelector('[mat-dialog-title]')?.textContent?.trim()).toBe('The schedule has conflicts');
+      expect(dialog.querySelector('[mat-dialog-title]')?.textContent?.trim()).toBe(
+        'The schedule has conflicts',
+      );
       expect(dialog.querySelectorAll('.conflict').length).toBe(2);
-      const conflicts = Array.from(dialog.querySelectorAll('.conflict')).map((each) => each.textContent!.replace(/\s+/g, ' ').trim());
+      const conflicts = Array.from(dialog.querySelectorAll('.conflict')).map((each) =>
+        each.textContent!.replace(/\s+/g, ' ').trim(),
+      );
       expect(conflicts[0]).toContain('Monday 30 November');
       expect(conflicts[0]).toContain('Nobody is on this shift.');
       expect(conflicts[1]).toContain('Tuesday 1 December');
-      expect(conflicts[1]).toContain("Ana Costa (Crew chief) said they can't come during this shift.");
+      expect(conflicts[1]).toContain(
+        "Ana Costa (Crew chief) said they can't come during this shift.",
+      );
       expect(status(fixture)).toBe('2 unpublished changes');
 
       buttonByText(dialog.querySelectorAll('.conflict')[1], 'Show shift')!.click();
@@ -910,7 +1013,9 @@ describe('WeekSchedule', () => {
       fixture.detectChanges();
       expect(document.querySelector('mat-dialog-container')).toBeNull();
       expect(panel(fixture)).not.toBeNull();
-      expect(element(fixture).querySelector('.shift-card--selected')?.getAttribute('data-shift-id')).toBe('new-2');
+      expect(
+        element(fixture).querySelector('.shift-card--selected')?.getAttribute('data-shift-id'),
+      ).toBe('new-2');
     });
 
     it('says so when the week could not be sent, and keeps the draft', async () => {
@@ -921,7 +1026,9 @@ describe('WeekSchedule', () => {
       publish.flush('', { status: 503, statusText: 'Service Unavailable' });
       fixture.detectChanges();
 
-      expect(element(fixture).textContent).toContain('Could not publish the week. Nothing was published; try again.');
+      expect(element(fixture).textContent).toContain(
+        'Could not publish the week. Nothing was published; try again.',
+      );
       expect(status(fixture)).toBe('1 unpublished change');
       expect(publishButton(fixture).disabled).toBe(false);
     });
@@ -937,6 +1044,126 @@ describe('WeekSchedule', () => {
 
       expect(status(fixture)).toBe('1 unpublished change');
       expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('New');
+    });
+  });
+
+  describe('shift presence confirmation', () => {
+    const confirmedSlotShift = {
+      id: 'p-confirm',
+      dutyDate: '2026-11-26',
+      period: 'DAY',
+      startsAt: '2026-11-26T08:00:00Z',
+      endsAt: '2026-11-26T20:00:00Z',
+      minimumCrew: 1,
+      slots: [
+        {
+          id: 'slot-1',
+          role: 'CREW_MEMBER',
+          status: 'FILLED',
+          memberId: '00000000-0000-4000-8000-000000000001',
+          presenceStatus: 'UNCONFIRMED',
+        },
+      ],
+    };
+
+    it('lets a member confirm coming or not coming and reloads the week', () => {
+      const fixture = render('MEMBER');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+
+      click(fixture, '[data-shift-id="p-confirm"]');
+      click(fixture, 'button.confirm-coming');
+
+      const comingReq = http().expectOne({ method: 'POST', url: '/api/v1/slots/slot-1/presence' });
+      expect(comingReq.request.body).toEqual({ decision: 'COMING' });
+      comingReq.flush({
+        slotId: 'slot-1',
+        presenceStatus: 'COMING',
+        slotStatus: 'FILLED',
+        slotFreed: false,
+      });
+      fixture.detectChanges();
+
+      expect(panel(fixture)?.textContent).toContain('Presence: COMING');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+
+      click(fixture, '[data-shift-id="p-confirm"]');
+      click(fixture, 'button.confirm-cannot-come');
+
+      const cannotReq = http().expectOne({ method: 'POST', url: '/api/v1/slots/slot-1/presence' });
+      expect(cannotReq.request.body).toEqual({ decision: 'CANNOT_COME' });
+      cannotReq.flush({
+        slotId: 'slot-1',
+        presenceStatus: 'CANNOT_COME',
+        slotStatus: 'OPEN',
+        slotFreed: true,
+      });
+      fixture.detectChanges();
+
+      expect(panel(fixture)?.textContent).toContain('Presence: CANNOT_COME');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+    });
+
+    it('ignores duplicate clicks while in-flight and allows supervisor confirmation', () => {
+      const fixture = render('SUPERVISOR');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+
+      click(fixture, '[data-shift-id="p-confirm"]');
+      const btn = panel(fixture)!.querySelector<HTMLButtonElement>('button.confirm-coming')!;
+      btn.click();
+      btn.click();
+      fixture.detectChanges();
+
+      const requests = http().match({ method: 'POST', url: '/api/v1/slots/slot-1/presence' });
+      expect(requests.length).toBe(1);
+
+      requests[0].flush({
+        slotId: 'slot-1',
+        presenceStatus: 'COMING',
+        slotStatus: 'FILLED',
+        slotFreed: false,
+      });
+      fixture.detectChanges();
+
+      expect(panel(fixture)?.textContent).toContain('Presence: COMING');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+    });
+
+    it('shows an error alert when confirming presence fails', () => {
+      const fixture = render('MEMBER');
+      flushWeek(fixture, '2026-W48', [confirmedSlotShift]);
+
+      click(fixture, '[data-shift-id="p-confirm"]');
+      click(fixture, 'button.confirm-coming');
+
+      const req = http().expectOne({ method: 'POST', url: '/api/v1/slots/slot-1/presence' });
+      req.flush('fail', { status: 500, statusText: 'Server Error' });
+      fixture.detectChanges();
+
+      expect(panel(fixture)?.querySelector('[role="alert"]')?.textContent).toContain(
+        'Could not update shift confirmation.',
+      );
+    });
+
+    it('hides confirmation buttons for another member who does not own the slot', () => {
+      const otherMemberShift = {
+        ...confirmedSlotShift,
+        id: 'p-other',
+        slots: [
+          {
+            id: 'slot-other',
+            role: 'CREW_MEMBER',
+            status: 'FILLED',
+            memberId: '99999999-9999-4999-8999-999999999999',
+            presenceStatus: null,
+          },
+        ],
+      };
+      const fixture = render('MEMBER');
+      flushWeek(fixture, '2026-W48', [otherMemberShift]);
+
+      click(fixture, '[data-shift-id="p-other"]');
+      expect(panel(fixture)?.querySelector('button.confirm-coming')).toBeNull();
+      expect(panel(fixture)?.querySelector('button.confirm-cannot-come')).toBeNull();
     });
   });
 
@@ -1038,11 +1265,15 @@ describe('WeekSchedule', () => {
       };
       flushWeek(fixture, '2026-W48', [thursdayNight, wednesday]);
 
-      const today = element(fixture).querySelector<HTMLElement>('[aria-labelledby="today-heading"]')!;
+      const today = element(fixture).querySelector<HTMLElement>(
+        '[aria-labelledby="today-heading"]',
+      )!;
       expect(today.textContent).toContain('Today');
       expect(today.textContent).toContain('Wednesday 25 November');
       expect(
-        Array.from(today.querySelectorAll('.shift-card')).map((card) => card.getAttribute('data-shift-id')),
+        Array.from(today.querySelectorAll('.shift-card')).map((card) =>
+          card.getAttribute('data-shift-id'),
+        ),
       ).toEqual(['p-wed']);
       // Then the whole week, today in it too.
       expect(today.compareDocumentPosition(element(fixture).querySelector('.day-list')!)).toBe(
@@ -1084,7 +1315,10 @@ describe('WeekSchedule', () => {
 
   it('shows the last loaded week when it cannot be loaded again (offline, RNF06)', () => {
     // Kept from an earlier visit; the API cannot be reached now.
-    localStorage.setItem(LAST_PIQUETES_KEY, JSON.stringify({ week: '2026-W48', piquetes: [thursdayNight] }));
+    localStorage.setItem(
+      LAST_PIQUETES_KEY,
+      JSON.stringify({ week: '2026-W48', piquetes: [thursdayNight] }),
+    );
     const fixture = render('SUPERVISOR');
     flushWeek(fixture, '2026-W48', 'fail', { status: 0, statusText: 'Unknown Error' });
 

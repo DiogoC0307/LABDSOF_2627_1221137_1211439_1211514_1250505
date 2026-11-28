@@ -61,6 +61,7 @@ export class ScheduleDraftService {
       end,
       crew: { ...crew },
       assigned: emptyAssigned(),
+      slots: [],
       change: 'new',
     };
 

@@ -366,6 +366,11 @@ export class WeekSchedule implements OnInit, OnDestroy {
     }
   }
 
+  // Replaces the week only when the API answers, so the open side panel keeps its shift meanwhile
+  protected reloadFromServer(): void {
+    this.load(true);
+  }
+
   // Edit schedule and Stop editing, for this week
   protected startEditing(): void {
     this.editing.set(true);
@@ -476,9 +481,9 @@ export class WeekSchedule implements OnInit, OnDestroy {
   }
 
   /**
-   * Sends the week to the API and waits while each member on it is checked. 
-   * 
-   * Published: the week is loaded again, as members now see it. 
+   * Sends the week to the API and waits while each member on it is checked.
+   *
+   * Published: the week is loaded again, as members now see it.
    * Blocked: the conflicts dialog, and the draft stays as it is to be fixed.
    */
   private publish(monday: string): void {

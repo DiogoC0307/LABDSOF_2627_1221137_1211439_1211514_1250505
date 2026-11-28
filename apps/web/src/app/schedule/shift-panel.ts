@@ -13,10 +13,13 @@ import {
   untracked,
   viewChild,
 } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { MatButton, MatIconButton } from '@angular/material/button';
+import { finalize } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
 import { CandidateChecks, CandidateQuestion, candidateQuestion } from './candidate-checks';
 import { longDay } from './iso-week';
-import { ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
+import { PresenceStatus, ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
 import { ScheduleDirectory } from './schedule-directory';
 import { ScheduleDraftService } from './schedule-draft.service';
 import { DraftShift } from './schedule-model';
@@ -38,13 +41,30 @@ import { TimeField, WHOLE_HOURS, endHours, endLabel } from './time-field';
 // Number of candidates to show before the "Show all" button appears
 const NUM_CANDIDATES = 3;
 
+export type PresenceDecision = 'COMING' | 'CANNOT_COME';
+
+interface PresenceResponse {
+  slotId: string;
+  presenceStatus: PresenceStatus;
+  slotStatus: string;
+  slotFreed: boolean;
+}
+
+export interface AssignedPersonView {
+  id: string;
+  name: string;
+  slotId?: string;
+  presenceStatus?: PresenceStatus | null;
+  canConfirm: boolean;
+}
+
 interface RoleSection {
   role: SlotRole;
   name: string;
   required: number;
   state: RoleState; // Ex: "1 of 1 · Full", "2 of 3 · Needs 1"
   pill: string;
-  people: { id: string; name: string }[];
+  people: AssignedPersonView[];
   check: 'checking' | 'done' | 'failed'; // The eligibility worker's answer about who can take the role
   shown: Candidate[];
   hidden: number;
@@ -62,6 +82,8 @@ interface RoleSection {
   host: { class: 'flex min-h-0 flex-col' },
 })
 export class ShiftPanel {
+  private readonly http = inject(HttpClient);
+  protected readonly auth = inject(AuthService);
   private readonly draft = inject(ScheduleDraftService);
   private readonly directory = inject(ScheduleDirectory);
   private readonly checks = inject(CandidateChecks);
@@ -76,6 +98,11 @@ export class ShiftPanel {
 
   readonly closed = output<void>();
   readonly deleteRequested = output<void>();
+  readonly presenceUpdated = output<void>();
+
+  protected readonly updatingPresenceId = signal<string | null>(null);
+  protected readonly presenceError = signal<string | null>(null);
+  protected readonly presenceOverrides = signal<Record<string, PresenceStatus>>({});
 
   private readonly heading = viewChild<ElementRef<HTMLElement>>('heading');
 
@@ -153,15 +180,32 @@ export class ShiftPanel {
   /** Only the roles the shift needs get a section. */
   protected readonly sections = computed<RoleSection[]>(() => {
     const shift = this.shift();
+    const currentMemberId = this.auth.session()?.memberId ?? null;
+    const isSupervisor = this.auth.isSupervisor();
+    const overrides = this.presenceOverrides();
+
     return rolesOf(shift.crew).map((role) => {
       const required = shift.crew[role];
-      const people = shift.assigned[role].map((id) => ({ id, name: this.directory.name(id) }));
+      const people: AssignedPersonView[] = shift.assigned[role].map((id, index) => {
+        const matchingSlot = shift.slots.find((slot) => slot.role === role && slot.memberId === id);
+        const key = matchingSlot?.id ?? `${shift.id}-${role}-${index}`;
+        const presenceStatus = overrides[key] ?? matchingSlot?.presenceStatus ?? null;
+        return {
+          id,
+          name: this.directory.name(id),
+          slotId: matchingSlot?.id,
+          presenceStatus,
+          canConfirm: Boolean(matchingSlot?.id) && (isSupervisor || id === currentMemberId),
+        };
+      });
       const state = roleState(required, people.length);
       const question = this.questions().get(role);
       const check = question ? this.checks.checks()[question.key] : undefined;
       const eligible = new Set(
         check?.state === 'done'
-          ? check.answers.filter((answer) => answer.result === 'ELIGIBLE').map((answer) => answer.memberId)
+          ? check.answers
+              .filter((answer) => answer.result === 'ELIGIBLE')
+              .map((answer) => answer.memberId)
           : [],
       );
       const all = candidates(shift, role, this.directory.members(), this.weekShifts(), eligible);
@@ -186,7 +230,9 @@ export class ShiftPanel {
     for (const question of this.questions().values()) {
       const check = this.checks.checks()[question.key];
       if (check?.state === 'done') {
-        check.answers.filter((answer) => answer.rules.includes('RN06')).forEach((answer) => ids.add(answer.memberId));
+        check.answers
+          .filter((answer) => answer.rules.includes('RN06'))
+          .forEach((answer) => ids.add(answer.memberId));
       }
     }
     return [...ids].map((id) => this.directory.name(id)).sort((a, b) => a.localeCompare(b));
@@ -205,9 +251,34 @@ export class ShiftPanel {
       shiftId();
       untracked(() => {
         this.expanded.set(new Set());
+        this.presenceError.set(null);
         afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
       });
     });
+  }
+
+  protected confirmPresence(person: AssignedPersonView, decision: PresenceDecision): void {
+    if (!person.slotId || this.updatingPresenceId() === person.slotId) {
+      return;
+    }
+    this.presenceError.set(null);
+    this.updatingPresenceId.set(person.slotId);
+
+    this.http
+      .post<PresenceResponse>(`/api/v1/slots/${person.slotId}/presence`, { decision })
+      .pipe(finalize(() => this.updatingPresenceId.set(null)))
+      .subscribe({
+        next: (res) => {
+          this.presenceOverrides.update((prev) => ({
+            ...prev,
+            [person.slotId!]: res.presenceStatus,
+          }));
+          this.presenceUpdated.emit();
+        },
+        error: () => {
+          this.presenceError.set('Could not update shift confirmation.');
+        },
+      });
   }
 
   /** Adds a role the shift needs, for 1 person, or takes it off with the people assigned to it (not its only role). */

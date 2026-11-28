@@ -1,10 +1,6 @@
 package pt.isep.escala.escalaapi.piquete;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.*;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -52,7 +48,6 @@ class PiqueteService {
 	});
 
 	private static final Logger log = LoggerFactory.getLogger(PiqueteService.class);
-
 	// The fields and the code of a refused shift (ErrorResponse of the contract)
 	private static final String DUTY_DATE = "dutyDate";
 	private static final String ENDS_AT = "endsAt";
@@ -83,17 +78,25 @@ class PiqueteService {
 	 */
 	@Transactional
 	PiqueteResponse create(PiqueteRequest request) {
-		if (request == null || request.dutyDate() == null && request.onlyDutyDate()) {
-			throw new InvalidRequestException(List.of(new InvalidField("dutyDate", "required")));
+		if (request == null) {
+			throw new InvalidRequestException(List.of(new InvalidField(DUTY_DATE, REQUIRED)));
 		}
+		Instant shiftStartsAt = request.startsAt() != null
+				? request.startsAt().toInstant()
+				: request.dutyDate() != null
+				? request.dutyDate().atTime(LocalTime.MIDNIGHT).atZone(LISBON).toInstant()
+				: null;
 		Piquete piquete = new Piquete(UUID.randomUUID(), request.dutyDate());
 		List<Slot> added = new ArrayList<>();
 		if (request.onlyDutyDate()) {
-			added.addAll(addSlots(piquete, SlotRole.CREW_MEMBER, 1));
+			if (request.dutyDate() == null) {
+				throw new InvalidRequestException(List.of(new InvalidField(DUTY_DATE, REQUIRED)));
+			}
+			added.addAll(addSlots(piquete, SlotRole.CREW_MEMBER, 1, shiftStartsAt));
 		} else {
 			checkShift(request);
 			schedule(piquete, request);
-			crew(request).forEach((role, count) -> added.addAll(addSlots(piquete, role, count)));
+			crew(request).forEach((role, count) -> added.addAll(addSlots(piquete, role, count, shiftStartsAt)));
 		}
 		piquetes.save(piquete);
 		queueEvaluations(added, piquete.getDutyDate());
@@ -131,7 +134,7 @@ class PiqueteService {
 			List<Slot> current = piquete.getSlots().stream().filter(slot -> slot.getRole() == role).toList();
 			int wanted = crew.getOrDefault(role, 0);
 			if (wanted > current.size()) {
-				added.addAll(addSlots(piquete, role, wanted - current.size()));
+				added.addAll(addSlots(piquete, role, wanted - current.size(), request.startsAt().toInstant()));
 			} else {
 				current.stream().sorted(FIRST_TO_REMOVE).limit((long) current.size() - wanted).forEach(piquete::removeSlot);
 			}
@@ -258,10 +261,10 @@ class PiqueteService {
 		}
 	}
 
-	private static List<Slot> addSlots(Piquete piquete, SlotRole role, int count) {
+	private static List<Slot> addSlots(Piquete piquete, SlotRole role, int count, Instant shiftStartsAt) {
 		List<Slot> added = new ArrayList<>();
 		for (int i = 0; i < count; i++) {
-			Slot slot = new Slot(UUID.randomUUID(), role, SlotStatus.PENDING, UUID.randomUUID());
+			Slot slot = new Slot(UUID.randomUUID(), role, SlotStatus.PENDING, UUID.randomUUID(), shiftStartsAt);
 			piquete.addSlot(slot);
 			added.add(slot);
 		}

@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -95,9 +96,12 @@ final class MessagingTestSupport {
 	static UUID insertPendingSlot(JdbcTemplate jdbc) {
 		UUID piqueteId = UUID.randomUUID();
 		UUID assignmentId = UUID.randomUUID();
-		jdbc.update("INSERT INTO piquete (id, duty_date) VALUES (?, ?)", piqueteId, LocalDate.of(2031, 8, 1));
-		jdbc.update("INSERT INTO slot (id, assignment_id, role, status, piquete_id) VALUES (?, ?, 'CREW_MEMBER', 'PENDING', ?)",
-				UUID.randomUUID(), assignmentId, piqueteId);
+		LocalDate dutyDate = LocalDate.of(2031, 8, 1);
+		OffsetDateTime shiftStartsAt = OffsetDateTime.parse("2031-08-01T00:00:00Z");
+		jdbc.update("INSERT INTO piquete (id, duty_date) VALUES (?, ?)", piqueteId, dutyDate);
+		jdbc.update(
+				"INSERT INTO slot (id, assignment_id, role, status, piquete_id, shift_starts_at) VALUES (?, ?, 'CREW_MEMBER', 'PENDING', ?, ?)",
+				UUID.randomUUID(), assignmentId, piqueteId, shiftStartsAt);
 		return assignmentId;
 	}
 

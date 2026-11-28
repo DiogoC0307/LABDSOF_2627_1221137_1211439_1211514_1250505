@@ -305,6 +305,7 @@ export function fromPiquete(piquete: Piquete): DraftShift | null {
     end: endMinutes,
     crew,
     assigned,
+    slots: piquete.slots,
     change: 'published',
   };
 }

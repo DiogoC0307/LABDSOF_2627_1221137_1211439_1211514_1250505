@@ -27,6 +27,7 @@ function shift(overrides: Partial<DraftShift> = {}): DraftShift {
     end: 20 * Hour,
     crew: { CREW_CHIEF: 1, DRIVER: 1, CREW_MEMBER: 3 },
     assigned: emptyAssigned(),
+    slots: [],
     change: 'published',
     ...overrides,
   };

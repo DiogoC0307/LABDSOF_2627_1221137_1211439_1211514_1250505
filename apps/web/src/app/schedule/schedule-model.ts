@@ -1,4 +1,4 @@
-import { SlotRole } from './piquete';
+import { Slot, SlotRole } from './piquete';
 
 export type ShiftChange = 'new' | 'edited' | 'published';
 export type Crew = Record<SlotRole, number>;
@@ -11,6 +11,7 @@ export interface DraftShift {
   end: number;
   crew: Crew; // How many people each role needs.
   assigned: Assigned; // The members assigned to the shift
+  slots: Slot[];
   change: ShiftChange;
 }
 

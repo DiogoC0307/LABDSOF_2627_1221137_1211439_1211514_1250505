@@ -15,6 +15,7 @@ function published(id: string, dutyDate = '2026-12-01'): DraftShift {
     end: 20 * 60,
     crew: { CREW_CHIEF: 1, DRIVER: 1, CREW_MEMBER: 3 },
     assigned: emptyAssigned(),
+    slots: [],
     change: 'published',
   };
 }
