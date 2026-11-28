@@ -364,8 +364,8 @@ class CoverRequestIT {
 				.map(each -> each.path("reason").asString()).toList()).containsExactly("NO_ACCEPTANCE");
 
 		// The check keeps running, and does not alert twice nor too early
-		Thread.sleep(1500);
-		assertThat(coverOf(early.slot()).get("escalation")).isNull();
+		await().during(Duration.ofMillis(1500)).atMost(Duration.ofSeconds(5))
+				.until(() -> coverOf(early.slot()).get("escalation") == null);
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM notification WHERE cover_request_id = ? AND type = 'COVER_ESCALATED'",
 				Integer.class, late.coverId())).isOne();
 	}

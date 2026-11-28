@@ -109,8 +109,10 @@ class CoverRequestService {
 				.filter(member -> !member.getId().equals(vacated))
 				.toList();
 		candidates.forEach(member -> check(request, member));
-		log.info("cover request opened id={} slotId={} role={} reason={} candidates={} traceId={}", request.getId(),
-				slot.getId(), slot.getRole(), reason, candidates.size(), TraceId.current());
+		if (log.isInfoEnabled()) {
+			log.info("cover request opened id={} slotId={} role={} reason={} candidates={} traceId={}", request.getId(),
+					slot.getId(), slot.getRole(), reason, candidates.size(), TraceId.current());
+		}
 		if (candidates.isEmpty()) {
 			escalate(request, CoverRequest.Escalation.NO_CANDIDATES);
 		}

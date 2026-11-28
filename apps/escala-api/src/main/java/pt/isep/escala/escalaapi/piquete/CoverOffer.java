@@ -94,6 +94,16 @@ class CoverOffer {
 		return status;
 	}
 
+	// When the answer (or the failure) came back
+	Instant getEvaluatedAt() {
+		return evaluatedAt;
+	}
+
+	// When the member was asked: the start of their time to answer (SCRUM-73)
+	Instant getOfferedAt() {
+		return offeredAt;
+	}
+
 	boolean isChecking() {
 		return status == Status.CHECKING;
 	}
