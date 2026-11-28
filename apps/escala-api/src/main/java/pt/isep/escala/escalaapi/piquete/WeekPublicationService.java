@@ -6,7 +6,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -74,7 +73,7 @@ class WeekPublicationService {
 	private final OutboxEventRepository outbox;
 	private final EvaluationMetrics metrics;
 	private final Notifications notifications;
-	private final PiqueteService shifts;
+	private final PiqueteService piqueteService;
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 
@@ -82,7 +81,7 @@ class WeekPublicationService {
 	WeekPublicationService(PiqueteRepository piquetes, AssignmentRepository assignments,
 			WeekPublicationRepository publications, MemberRepository members, UnavailabilityPeriods unavailabilities,
 			AvaliacaoPedidaFactory pedidos, OutboxEventRepository outbox, EvaluationMetrics metrics,
-			Notifications notifications, PiqueteService shifts, ObjectMapper objectMapper, Clock clock) {
+			Notifications notifications, PiqueteService piqueteService, ObjectMapper objectMapper, Clock clock) {
 		this.piquetes = piquetes;
 		this.assignments = assignments;
 		this.publications = publications;
@@ -92,7 +91,7 @@ class WeekPublicationService {
 		this.outbox = outbox;
 		this.metrics = metrics;
 		this.notifications = notifications;
-		this.shifts = shifts;
+		this.piqueteService = piqueteService;
 		this.objectMapper = objectMapper;
 		this.clock = clock;
 	}
@@ -103,7 +102,7 @@ class WeekPublicationService {
 	@Transactional
 	PublicationResponse publish(PublicationRequest request, UUID supervisorId) {
 		IsoWeek week = week(request);
-		LocalDate today = shifts.today();
+		LocalDate today = piqueteService.today();
 		Map<UUID, Piquete> changeable = piquetes
 				.findByDutyDateBetweenOrderByDutyDateAsc(week.monday(), week.sunday()).stream()
 				.filter(piquete -> !piquete.getDutyDate().isBefore(today))
@@ -346,48 +345,72 @@ class WeekPublicationService {
 		if (request.shifts() == null) {
 			throw new InvalidRequestException(List.of(new InvalidField(SHIFTS, REQUIRED)));
 		}
-		Set<UUID> known = request.shifts().stream()
-				.filter(Objects::nonNull)
-				.flatMap(shift -> shift.assigned() == null ? Stream.empty() : shift.assigned().stream())
-				.filter(Objects::nonNull)
-				.map(AssignedMember::memberId)
-				.filter(Objects::nonNull)
+		Set<UUID> existingMembers = members.findAllById(assignedMemberIds(request)).stream()
+				.map(Member::getId)
 				.collect(Collectors.toSet());
-		Set<UUID> existingMembers = members.findAllById(known).stream().map(Member::getId).collect(Collectors.toSet());
 		List<InvalidField> errors = new ArrayList<>();
 		Set<String> keys = new HashSet<>();
 		Set<UUID> ids = new HashSet<>();
 		for (int i = 0; i < request.shifts().size(); i++) {
-			String prefix = SHIFTS + "[" + i + "].";
 			PublishedShift shift = request.shifts().get(i);
 			if (shift == null) {
 				errors.add(new InvalidField(SHIFTS + "[" + i + "]", REQUIRED));
 				continue;
 			}
-			if (shift.key() == null || shift.key().isBlank()) {
-				errors.add(new InvalidField(prefix + "key", REQUIRED));
-			} else if (!keys.add(shift.key())) {
-				errors.add(new InvalidField(prefix + "key", DUPLICATE));
-			}
+			String prefix = SHIFTS + "[" + i + "].";
+			keyError(shift, prefix, keys).ifPresent(errors::add);
 			List<InvalidField> shiftErrors = PiqueteService.shiftErrors(shift.asPiqueteRequest(), prefix, today);
 			errors.addAll(shiftErrors);
-			if (shift.dutyDate() != null && (shift.dutyDate().isBefore(week.monday())
-					|| shift.dutyDate().isAfter(week.sunday()))) {
-				errors.add(new InvalidField(prefix + "dutyDate", "not_in_week"));
-			}
-			if (shift.id() != null) {
-				if (!changeable.containsKey(shift.id())) {
-					errors.add(new InvalidField(prefix + "id", "unknown_shift"));
-				} else if (!ids.add(shift.id())) {
-					errors.add(new InvalidField(prefix + "id", DUPLICATE));
-				}
-			}
+			weekError(shift, prefix, week).ifPresent(errors::add);
+			idError(shift, prefix, changeable, ids).ifPresent(errors::add);
 			boolean crewValid = shiftErrors.stream().noneMatch(error -> error.field().equals(prefix + "crew"));
 			errors.addAll(assignedErrors(shift, prefix, crewValid, existingMembers));
 		}
 		if (!errors.isEmpty()) {
 			throw new InvalidRequestException(errors);
 		}
+	}
+
+	// Every member sent on any shift, to look them all up at once
+	private static Set<UUID> assignedMemberIds(PublicationRequest request) {
+		return request.shifts().stream()
+				.filter(Objects::nonNull)
+				.map(PublishedShift::assigned)
+				.filter(Objects::nonNull)
+				.flatMap(List::stream)
+				.filter(Objects::nonNull)
+				.map(AssignedMember::memberId)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+	}
+
+	// A key is required and unique in the week
+	private static Optional<InvalidField> keyError(PublishedShift shift, String prefix, Set<String> keys) {
+		if (shift.key() == null || shift.key().isBlank()) {
+			return Optional.of(new InvalidField(prefix + "key", REQUIRED));
+		}
+		return keys.add(shift.key()) ? Optional.empty() : Optional.of(new InvalidField(prefix + "key", DUPLICATE));
+	}
+
+	// The shift's day is in the week being published
+	private static Optional<InvalidField> weekError(PublishedShift shift, String prefix, IsoWeek week) {
+		LocalDate day = shift.dutyDate();
+		if (day != null && (day.isBefore(week.monday()) || day.isAfter(week.sunday()))) {
+			return Optional.of(new InvalidField(prefix + "dutyDate", "not_in_week"));
+		}
+		return Optional.empty();
+	}
+
+	// An existing shift is one of this week that can still change, sent once
+	private static Optional<InvalidField> idError(PublishedShift shift, String prefix, Map<UUID, Piquete> changeable,
+			Set<UUID> ids) {
+		if (shift.id() == null) {
+			return Optional.empty();
+		}
+		if (!changeable.containsKey(shift.id())) {
+			return Optional.of(new InvalidField(prefix + "id", "unknown_shift"));
+		}
+		return ids.add(shift.id()) ? Optional.empty() : Optional.of(new InvalidField(prefix + "id", DUPLICATE));
 	}
 
 	private static List<InvalidField> assignedErrors(PublishedShift shift, String prefix, boolean crewValid,
@@ -397,7 +420,7 @@ class WeekPublicationService {
 			return errors;
 		}
 		Map<SlotRole, Integer> needed = crewValid ? PiqueteService.crew(shift.asPiqueteRequest()) : Map.of();
-		Map<SlotRole, Integer> onRole = new HashMap<>();
+		Map<SlotRole, Integer> onRole = new EnumMap<>(SlotRole.class);
 		Set<UUID> onShift = new HashSet<>();
 		for (int j = 0; j < shift.assigned().size(); j++) {
 			String field = prefix + "assigned[" + j + "]";
@@ -429,30 +452,51 @@ class WeekPublicationService {
 			Piquete existing = shift.id() == null ? null : changeable.get(shift.id());
 			UUID piqueteId = existing == null ? UUID.randomUUID() : existing.getId();
 			kept.add(piqueteId);
-			Map<SlotRole, Integer> crew = PiqueteService.crew(shift.asPiqueteRequest());
-			List<PlannedSlot> slots = new ArrayList<>();
-			for (SlotRole role : SlotRole.values()) {
-				int count = crew.getOrDefault(role, 0);
-				List<UUID> reused = existing == null ? List.of() : existing.getSlots().stream()
-						.filter(slot -> slot.getRole() == role)
-						.map(Slot::getId)
-						.sorted()
-						.limit(count)
-						.toList();
-				List<UUID> onRole = shift.assigned() == null ? List.of() : shift.assigned().stream()
-						.filter(assigned -> assigned.role() == role)
-						.map(AssignedMember::memberId)
-						.toList();
-				for (int i = 0; i < count; i++) {
-					UUID slotId = i < reused.size() ? reused.get(i) : UUID.randomUUID();
-					slots.add(new PlannedSlot(slotId, role, i < onRole.size() ? onRole.get(i) : null));
-				}
-			}
 			planned.add(new PlannedShift(shift.key(), piqueteId, existing == null, shift.dutyDate(), shift.period(),
-					shift.startsAt().toInstant(), shift.endsAt().toInstant(), slots));
+					shift.startsAt().toInstant(), shift.endsAt().toInstant(), plannedSlots(shift, existing)));
 		}
 		List<UUID> deleted = changeable.keySet().stream().filter(id -> !kept.contains(id)).toList();
 		return new PublicationPlan(planned, deleted);
+	}
+
+	// A slot for each person of each role: the shift's own slots first, then new ones; the members in the order sent
+	private static List<PlannedSlot> plannedSlots(PublishedShift shift, Piquete existing) {
+		Map<SlotRole, Integer> crew = PiqueteService.crew(shift.asPiqueteRequest());
+		List<PlannedSlot> slots = new ArrayList<>();
+		for (SlotRole role : SlotRole.values()) {
+			int count = crew.getOrDefault(role, 0);
+			List<UUID> reused = reusedSlots(existing, role, count);
+			List<UUID> onRole = membersOn(shift, role);
+			for (int i = 0; i < count; i++) {
+				UUID slotId = i < reused.size() ? reused.get(i) : UUID.randomUUID();
+				slots.add(new PlannedSlot(slotId, role, i < onRole.size() ? onRole.get(i) : null));
+			}
+		}
+		return slots;
+	}
+
+	// The existing shift's slots of that role, as many as are still needed
+	private static List<UUID> reusedSlots(Piquete existing, SlotRole role, int count) {
+		if (existing == null) {
+			return List.of();
+		}
+		return existing.getSlots().stream()
+				.filter(slot -> slot.getRole() == role)
+				.map(Slot::getId)
+				.sorted()
+				.limit(count)
+				.toList();
+	}
+
+	// The members sent for that role, in the order sent
+	private static List<UUID> membersOn(PublishedShift shift, SlotRole role) {
+		if (shift.assigned() == null) {
+			return List.of();
+		}
+		return shift.assigned().stream()
+				.filter(assigned -> assigned.role() == role)
+				.map(AssignedMember::memberId)
+				.toList();
 	}
 
 	private PublicationPlan plan(WeekPublication publication) {

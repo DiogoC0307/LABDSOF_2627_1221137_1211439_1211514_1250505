@@ -12,11 +12,11 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 public class Notifications {
-	private final NotificationRepository notifications;
+	private final NotificationRepository repository;
 	private final Clock clock;
 
-	Notifications(NotificationRepository notifications, Clock clock) {
-		this.notifications = notifications;
+	Notifications(NotificationRepository repository, Clock clock) {
+		this.repository = repository;
 		this.clock = clock;
 	}
 
@@ -43,7 +43,7 @@ public class Notifications {
 	// Gets member notifications
 	@Transactional(readOnly = true)
 	List<NotificationResponse> mine(UUID memberId) {
-		return notifications.findTop50ByMemberIdOrderByCreatedAtDesc(memberId).stream()
+		return repository.findTop50ByMemberIdOrderByCreatedAtDesc(memberId).stream()
 				.map(Notifications::toResponse)
 				.toList();
 	}
@@ -51,22 +51,22 @@ public class Notifications {
 	// Marks member notifications as read
 	@Transactional
 	void markAllRead(UUID memberId) {
-		notifications.markAllRead(memberId, clock.instant());
+		repository.markAllRead(memberId, clock.instant());
 	}
 
 	// Marks one of the member's own notifications as read; false when the member has no notification with that id
 	@Transactional
 	boolean markRead(UUID memberId, UUID id) {
-		if (!notifications.existsByIdAndMemberId(id, memberId)) {
+		if (!repository.existsByIdAndMemberId(id, memberId)) {
 			return false;
 		}
-		notifications.markRead(id, memberId, clock.instant());
+		repository.markRead(id, memberId, clock.instant());
 		return true;
 	}
 
 	// Saves a notification to the database
 	private void save(Notification notification) {
-		notifications.save(notification);
+		repository.save(notification);
 	}
 
 	// Converts a notification to a response object	

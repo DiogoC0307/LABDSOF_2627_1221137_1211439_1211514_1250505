@@ -53,8 +53,11 @@ export function notificationCopy(notification: AppNotification): NotificationCop
     case 'WEEKLY_SCHEDULE_PUBLISHED': {
       const range = weekRange(mondayOfIsoWeek(notification.week));
       const count = notification.shiftCount;
-      const shifts = count == null ? '' : ` You are on ${count} ${count === 1 ? 'shift' : 'shifts'}.`;
-      return { title: 'Schedule published', detail: `${range} is ready.${shifts}` };
+      if (count == null) {
+        return { title: 'Schedule published', detail: `${range} is ready.` };
+      }
+      const shifts = count === 1 ? 'shift' : 'shifts';
+      return { title: 'Schedule published', detail: `${range} is ready. You are on ${count} ${shifts}.` };
     }
     case 'SHIFT_TIMES_CHANGED':
       return {

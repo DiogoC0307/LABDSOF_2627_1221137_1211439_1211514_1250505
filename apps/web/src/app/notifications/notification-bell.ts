@@ -236,7 +236,7 @@ export class NotificationBell {
     // No layout (as in unit tests) measures 0: then only the screen limits the list
     list.style.maxHeight =
       rows.length > ROWS_SHOWN && last.offsetHeight > 0
-        ? `${last.offsetTop + last.offsetHeight + parseFloat(getComputedStyle(list).paddingBottom)}px`
+        ? `${last.offsetTop + last.offsetHeight + Number.parseFloat(getComputedStyle(list).paddingBottom)}px`
         : '';
   });
 

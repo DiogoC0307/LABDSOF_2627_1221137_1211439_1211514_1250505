@@ -78,8 +78,12 @@ class Assignment {
 	@Column(nullable = false)
 	private Instant proposedAt;
 
+	// When the answer (or the failure) came back
+	@Column
 	private Instant evaluatedAt;
 
+	// When the week was published with this assignment
+	@Column
 	private Instant confirmedAt;
 
 	protected Assignment() {

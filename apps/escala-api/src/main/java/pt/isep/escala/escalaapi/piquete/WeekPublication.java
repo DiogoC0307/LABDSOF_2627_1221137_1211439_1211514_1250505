@@ -47,6 +47,8 @@ class WeekPublication {
 	@Column(nullable = false)
 	private Instant createdAt;
 
+	// When it was published, blocked or superseded
+	@Column
 	private Instant completedAt;
 
 	protected WeekPublication() {

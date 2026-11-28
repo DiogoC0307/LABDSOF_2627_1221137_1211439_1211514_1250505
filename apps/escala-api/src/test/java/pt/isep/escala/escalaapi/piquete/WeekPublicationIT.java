@@ -356,48 +356,68 @@ class WeekPublicationIT {
 		}
 	}
 
+	/** Publishes the week and waits until every member on it is checked and it is published. */
+	private void publishedAfterChecks(String body) throws Exception {
+		UUID id = publish(body);
+		everyoneEligible(id);
+		published(id, "PUBLISHED");
+	}
+
 	@Test
-	@DisplayName("A later publication tells only the members whose own shifts changed: added, removed, times changed or cancelled")
+	@DisplayName("A later publication tells only the members whose own shifts changed: added, removed or times changed")
 	void aLaterPublicationTellsOnlyTheMembersItChangesFor() throws Exception {
 		Week week = nextWeek();
 		UUID stays = member("Helena Fica");
 		UUID removed = member("Ivo Sai");
 		UUID untouched = member("Joana Igual");
 		UUID added = member("Luis Entra");
-		UUID first = publish(week(week,
+		publishedAfterChecks(week(week,
 				shift("w", null, week.wednesday(), "08:00", "20:00", crew(0, 0, 2),
 						"CREW_MEMBER:" + stays, "CREW_MEMBER:" + removed),
 				shift("t", null, week.thursday(), "08:00", "20:00", crew(0, 0, 2), "CREW_MEMBER:" + untouched)));
-		everyoneEligible(first);
-		published(first, "PUBLISHED");
 		UUID wednesday = onlyShiftId(week, week.wednesday());
 		UUID thursday = onlyShiftId(week, week.thursday());
 
 		// Wednesday now starts at 09:00 without Ivo; Luis joins Joana on Thursday
-		UUID second = publish(week(week,
+		publishedAfterChecks(week(week,
 				shift("w", wednesday, week.wednesday(), "09:00", "20:00", crew(0, 0, 2), "CREW_MEMBER:" + stays),
 				shift("t", thursday, week.thursday(), "08:00", "20:00", crew(0, 0, 2),
 						"CREW_MEMBER:" + untouched, "CREW_MEMBER:" + added)));
-		everyoneEligible(second);
-		published(second, "PUBLISHED");
 
-		assertThat(typesOf(stays)).containsExactly("SHIFT_TIMES_CHANGED", "WEEKLY_SCHEDULE_PUBLISHED");
+		assertThat(Map.of("stays", typesOf(stays), "removed", typesOf(removed), "added", typesOf(added),
+				"untouched", typesOf(untouched))).isEqualTo(Map.of(
+						"stays", List.of("SHIFT_TIMES_CHANGED", "WEEKLY_SCHEDULE_PUBLISHED"),
+						"removed", List.of("REMOVED_FROM_SHIFT", "WEEKLY_SCHEDULE_PUBLISHED"),
+						"added", List.of("ADDED_TO_SHIFT"),
+						"untouched", List.of("WEEKLY_SCHEDULE_PUBLISHED")));
 		JsonNode changed = notificationsOf(stays).getFirst();
-		assertThat(changed.path("shiftId").asString()).isEqualTo(wednesday.toString());
-		assertThat(changed.path("previousStartsAt").asString()).isEqualTo(instant(week.wednesday(), "08:00").toString());
-		assertThat(changed.path("startsAt").asString()).isEqualTo(instant(week.wednesday(), "09:00").toString());
-		assertThat(typesOf(removed)).containsExactly("REMOVED_FROM_SHIFT", "WEEKLY_SCHEDULE_PUBLISHED");
-		assertThat(typesOf(added)).containsExactly("ADDED_TO_SHIFT");
-		assertThat(typesOf(untouched)).containsExactly("WEEKLY_SCHEDULE_PUBLISHED");
+		assertThat(List.of(changed.path("shiftId").asString(), changed.path("previousStartsAt").asString(),
+				changed.path("startsAt").asString())).containsExactly(wednesday.toString(),
+						instant(week.wednesday(), "08:00").toString(), instant(week.wednesday(), "09:00").toString());
+	}
 
-		// Thursday is deleted: both of its members are told it is cancelled
-		UUID third = publish(week(week,
-				shift("w", wednesday, week.wednesday(), "09:00", "20:00", crew(0, 0, 2), "CREW_MEMBER:" + stays)));
-		everyoneEligible(third);
-		published(third, "PUBLISHED");
-		assertThat(typesOf(untouched).getFirst()).isEqualTo("SHIFT_CANCELLED");
-		assertThat(typesOf(added).getFirst()).isEqualTo("SHIFT_CANCELLED");
-		assertThat(typesOf(stays)).hasSize(2);
+	@Test
+	@DisplayName("A later publication that deletes a shift tells its members it is cancelled, and nobody else")
+	void aDeletedShiftIsCancelledForItsMembers() throws Exception {
+		Week week = nextWeek();
+		UUID stays = member("Paula Fica");
+		UUID first = member("Quim Quinta");
+		UUID second = member("Sara Quinta");
+		publishedAfterChecks(week(week,
+				shift("w", null, week.wednesday(), "08:00", "20:00", crew(0, 0, 1), "CREW_MEMBER:" + stays),
+				shift("t", null, week.thursday(), "08:00", "20:00", crew(0, 0, 2),
+						"CREW_MEMBER:" + first, "CREW_MEMBER:" + second)));
+		UUID wednesday = onlyShiftId(week, week.wednesday());
+
+		// Thursday is deleted; Wednesday is sent as it was
+		publishedAfterChecks(week(week,
+				shift("w", wednesday, week.wednesday(), "08:00", "20:00", crew(0, 0, 1), "CREW_MEMBER:" + stays)));
+
+		assertThat(Map.of("stays", typesOf(stays), "first", typesOf(first), "second", typesOf(second)))
+				.isEqualTo(Map.of(
+						"stays", List.of("WEEKLY_SCHEDULE_PUBLISHED"),
+						"first", List.of("SHIFT_CANCELLED", "WEEKLY_SCHEDULE_PUBLISHED"),
+						"second", List.of("SHIFT_CANCELLED", "WEEKLY_SCHEDULE_PUBLISHED")));
 		assertThat(weekAsMembersSeeIt(week)).hasSize(1);
 	}
 
