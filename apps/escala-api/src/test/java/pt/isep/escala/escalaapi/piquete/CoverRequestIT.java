@@ -185,12 +185,14 @@ class CoverRequestIT {
 				new Message(body.getBytes(StandardCharsets.UTF_8), properties));
 	}
 
-	// The member's notifications about this cover request, as GET /api/v1/notifications answers them.
+	// The member's notifications about this cover request, as GET /api/v1/notifications answers them (and the spec says).
 	private List<JsonNode> notified(UUID memberId, String role, UUID coverId) throws Exception {
-		JsonNode all = objectMapper.readTree(mockMvc.perform(get("/api/v1/notifications")
+		String body = mockMvc.perform(get("/api/v1/notifications")
 						.header(HttpHeaders.AUTHORIZATION, MockTokens.bearer(memberId, role)))
 				.andExpect(status().isOk())
-				.andReturn().getResponse().getContentAsString());
+				.andReturn().getResponse().getContentAsString();
+		assertThat(Contracts.responseErrors("GET", "/api/v1/notifications", 200, "application/json", body)).isEmpty();
+		JsonNode all = objectMapper.readTree(body);
 		List<JsonNode> found = new ArrayList<>();
 		all.forEach(each -> {
 			if (coverId.toString().equals(each.path("coverRequestId").asString(""))) {

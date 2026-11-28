@@ -25,14 +25,17 @@ class ShiftConfirmationService {
 	private final SlotRepository slots;
 	private final Clock clock;
 	private final long advanceHours;
+	private final CoverRequestService covers;
 
 	ShiftConfirmationService(
 			SlotRepository slots,
 			Clock clock,
-			@Value("${escala.shift-confirmation.advance-hours:24}") long advanceHours) {
+			@Value("${escala.shift-confirmation.advance-hours:24}") long advanceHours,
+			CoverRequestService covers) {
 		this.slots = slots;
 		this.clock = clock;
 		this.advanceHours = advanceHours;
+		this.covers = covers;
 	}
 
 	@Scheduled(fixedDelayString = "${escala.shift-confirmation.poll-ms:60000}")
@@ -63,6 +66,8 @@ class ShiftConfirmationService {
 		slots.save(slot);
 		if (freed) {
 			log.info("Slot freed due to CANNOT_COME slotId={} assignmentId={}", slot.getId(), slot.getAssignmentId());
+			// SCRUM-71 AC1: the slot is open, a cover request is made and the supervisor is told (SCRUM-72)
+			covers.open(slot.getId(), CoverRequest.Reason.CANNOT_COME, clock.instant());
 		}
 		return new PresenceResponse(slot.getId(), slot.getPresenceStatus(), slot.getStatus(), freed);
 	}

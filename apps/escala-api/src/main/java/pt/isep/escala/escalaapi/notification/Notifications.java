@@ -40,6 +40,17 @@ public class Notifications {
 				previousStartsAt, previousEndsAt, null, clock.instant()));
 	}
 
+	/**
+	 * A notification about a cover request (SCRUM-72): the slot's shift and function, and, when the supervisor is
+	 * alerted, why nobody covers it.
+	 */
+	@SuppressWarnings("java:S107") // The member, the request, its shift and function, and the reason
+	public void cover(UUID memberId, NotificationType type, String week, UUID piqueteId, Instant startsAt,
+			Instant endsAt, UUID coverRequestId, String role, String reason) {
+		save(new Notification(memberId, type, week, piqueteId, startsAt, endsAt, null, null, null, clock.instant())
+				.aboutCover(coverRequestId, role, reason));
+	}
+
 	// Gets member notifications
 	@Transactional(readOnly = true)
 	List<NotificationResponse> mine(UUID memberId) {
@@ -74,6 +85,7 @@ public class Notifications {
 		return new NotificationResponse(notification.getId(), notification.getType(), notification.getWeek(),
 				notification.getPiqueteId(), notification.getStartsAt(), notification.getEndsAt(),
 				notification.getPreviousStartsAt(), notification.getPreviousEndsAt(), notification.getShiftCount(),
+				notification.getCoverRequestId(), notification.getRole(), notification.getReason(),
 				notification.getCreatedAt(), notification.getReadAt() != null);
 	}
 }

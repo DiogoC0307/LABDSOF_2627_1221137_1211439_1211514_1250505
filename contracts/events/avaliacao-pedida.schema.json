@@ -24,7 +24,7 @@
     "purpose": {
       "type": "string",
       "enum": ["SWAP", "COVER", "ASSIGNMENT", "CANDIDATE"],
-      "description": "CANDIDATE: a member is checked for a shift the supervisor is building, before anyone is assigned (SCRUM-171); slot.slotId is then the ID of the check request, and no assignment exists."
+      "description": "CANDIDATE: a member is checked for a shift the supervisor is building, before anyone is assigned (SCRUM-171); slot.slotId is then the ID of the check request, and no assignment exists. COVER: a member is checked for a slot someone can't come to, before they are asked to cover it (SCRUM-72); assignmentId is then the ID of the cover offer."
     },
     "assignmentId": { "type": "string", "format": "uuid" },
     "slot": {

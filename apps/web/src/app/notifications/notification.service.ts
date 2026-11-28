@@ -3,13 +3,20 @@ import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } f
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { EMPTY, Subscription, catchError, switchMap, timer } from 'rxjs';
 import { AuthService } from '../auth/auth.service';
+import { SlotRole } from '../schedule/piquete';
 
 export type NotificationType =
   | 'WEEKLY_SCHEDULE_PUBLISHED'
   | 'ADDED_TO_SHIFT'
   | 'REMOVED_FROM_SHIFT'
   | 'SHIFT_TIMES_CHANGED'
-  | 'SHIFT_CANCELLED';
+  | 'SHIFT_CANCELLED'
+  | 'SLOT_OPENED'
+  | 'COVER_REQUESTED'
+  | 'COVER_ESCALATED';
+
+/** Why nobody covers a slot yet (SCRUM-72): nobody is free and qualified, or nobody accepted in time. */
+export type CoverEscalation = 'NO_CANDIDATES' | 'NO_ACCEPTANCE';
 
 // A notification as GET /api/v1/notifications answers it
 export interface AppNotification {
@@ -22,6 +29,9 @@ export interface AppNotification {
   previousStartsAt?: string | null;
   previousEndsAt?: string | null;
   shiftCount?: number | null;
+  coverRequestId?: string | null;
+  role?: SlotRole | null;
+  reason?: CoverEscalation | null;
   createdAt: string;
   read: boolean;
 }

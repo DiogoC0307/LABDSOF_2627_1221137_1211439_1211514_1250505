@@ -16,6 +16,9 @@ record NotificationResponse(
 		Instant previousStartsAt,
 		Instant previousEndsAt,
 		Integer shiftCount,
+		UUID coverRequestId,
+		String role,
+		String reason,
 		Instant createdAt,
 		boolean read) {
 }

@@ -22,6 +22,9 @@ class AvaliacaoPedidaFactory {
 	// A member is checked for a shift, before anyone is assigned
 	static final String PURPOSE_CANDIDATE = "CANDIDATE";
 
+	// A member is checked for a slot someone can't come to, before they are asked to cover it (SCRUM-72)
+	static final String PURPOSE_COVER = "COVER";
+
 	static final UUID SKELETON_MEMBER_ID = UUID.fromString("00000000-0000-4000-8000-000000000001");
 
 	record Period(Instant start, Instant end) {

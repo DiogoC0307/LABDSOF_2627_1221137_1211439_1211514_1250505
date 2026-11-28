@@ -31,13 +31,16 @@ class AvaliacaoConcluidaListener {
 	private final EvaluationMetrics metrics;
 	private final CandidateCheckService candidateChecks;
 	private final WeekPublicationService publications;
+	private final CoverRequestService covers;
 
 	AvaliacaoConcluidaListener(
 			ObjectMapper objectMapper, ProcessedEventRepository processed, SlotRepository slots,
-			EvaluationMetrics metrics, CandidateCheckService candidateChecks, WeekPublicationService publications) {
+			EvaluationMetrics metrics, CandidateCheckService candidateChecks, WeekPublicationService publications,
+			CoverRequestService covers) {
 		this.metrics = metrics;
 		this.candidateChecks = candidateChecks;
 		this.publications = publications;
+		this.covers = covers;
 		this.objectMapper = objectMapper;
 		this.processed = processed;
 		this.slots = slots;
@@ -57,7 +60,8 @@ class AvaliacaoConcluidaListener {
 			}
 			UUID assignmentId = EventFields.uuid(body, "assignmentId");
 			String result = body.path("result").asText();
-			// A walking-skeleton check of a new slot, a member checked for a shift being built (SCRUM-171), or a member
+			// A walking-skeleton check of a new slot, a member checked for a shift being built (SCRUM-171), a member of a
+			// week being published (SCRUM-66), or a member checked before being asked to cover (SCRUM-72)
 			boolean applied = slots.findByAssignmentId(assignmentId).map(slot -> {
 				boolean changed = switch (result) {
 					case "ELIGIBLE" -> slot.markEligible();
@@ -78,10 +82,11 @@ class AvaliacaoConcluidaListener {
 		}
 	}
 
-	// The answer for a candidate check, else for an assignment of a week being published
+	// The answer for a candidate check, else for an assignment of a week being published, else for a cover offer
 	private boolean answered(UUID assignmentId, String result, List<String> violatedRules, String engineVersion) {
 		return candidateChecks.onEvaluated(assignmentId, result, violatedRules, engineVersion)
-				|| publications.onEvaluated(assignmentId, result, violatedRules, engineVersion);
+				|| publications.onEvaluated(assignmentId, result, violatedRules, engineVersion)
+				|| covers.onEvaluated(assignmentId, result, violatedRules, engineVersion);
 	}
 
 	// List of codes of the rules that were violated. Empty when ELIGIBLE.

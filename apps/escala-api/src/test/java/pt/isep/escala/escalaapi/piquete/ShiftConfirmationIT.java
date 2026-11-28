@@ -51,6 +51,9 @@ class ShiftConfirmationIT {
 	@Autowired
 	SlotRepository slots;
 
+	@Autowired
+	CoverRequestService covers;
+
 	@BeforeEach
 	void clean() {
 		piquetes.deleteAll();
@@ -71,7 +74,7 @@ class ShiftConfirmationIT {
 		Instant nowTodayAt2000 = Instant.parse("2026-11-25T20:00:00Z");
 		Slot slot = saveShiftSlot(shiftTomorrowAt2000);
 
-		var service = new ShiftConfirmationService(slots, Clock.fixed(nowTodayAt2000, ZoneOffset.UTC), 24);
+		var service = new ShiftConfirmationService(slots, Clock.fixed(nowTodayAt2000, ZoneOffset.UTC), 24, covers);
 		List<PresencePrompt> prompts = service.dispatchDuePrompts();
 
 		assertThat(prompts).hasSize(1);
@@ -87,11 +90,11 @@ class ShiftConfirmationIT {
 		saveShiftSlot(shiftTomorrowAt2000);
 
 		var at24h = new ShiftConfirmationService(
-				slots, Clock.fixed(Instant.parse("2026-11-25T20:00:00Z"), ZoneOffset.UTC), 12);
+				slots, Clock.fixed(Instant.parse("2026-11-25T20:00:00Z"), ZoneOffset.UTC), 12, covers);
 		assertThat(at24h.dispatchDuePrompts()).isEmpty();
 
 		var at12h = new ShiftConfirmationService(
-				slots, Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), 12);
+				slots, Clock.fixed(Instant.parse("2026-11-26T08:00:00Z"), ZoneOffset.UTC), 12, covers);
 		assertThat(at12h.dispatchDuePrompts()).hasSize(1);
 	}
 

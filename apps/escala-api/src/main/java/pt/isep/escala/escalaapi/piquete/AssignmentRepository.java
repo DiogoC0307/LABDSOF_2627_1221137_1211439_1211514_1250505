@@ -14,6 +14,8 @@ interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
 	List<Assignment> findByPiqueteIdInAndStatus(Collection<UUID> piqueteIds, Assignment.Status status);
 
+	List<Assignment> findBySlotIdAndStatus(UUID slotId, Assignment.Status status);
+
 	List<Assignment> findByMemberIdAndStatusAndStartsAtBeforeAndEndsAtAfter(UUID memberId, Assignment.Status status,
 			Instant to, Instant from);
 }
