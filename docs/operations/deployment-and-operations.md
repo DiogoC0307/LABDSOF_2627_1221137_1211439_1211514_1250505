@@ -186,12 +186,13 @@ flowchart LR
 | tests | Unit and integration tests ([Test Strategy](../testing/test-strategy.md)) | JUnit with Testcontainers, JaCoCo; Vitest with coverage | Artefacts `escala-api-reports`, `elegibilidade-worker-reports`, `web-reports` on each run |
 | static analysis | Code quality and coverage | SonarQube | SonarQube [TODO: links to the SonarQube projects, once the project-key problem in the [workflows README](../../.github/workflows/README.md#sonarqube-configuration) is fixed, Diogo Costa] |
 | dependency check and secret scan | `npm audit`, OSV-Scanner on the lockfile and on the Maven SBOMs, gitleaks; CycloneDX SBOMs; reports only | `security` job of `build.yml` | Job summary and artefacts `security-reports` and `sbom` |
+| end-to-end | The principal journey in a browser against the Compose stack, synthetic data only (SCRUM-100) | `e2e` job of `build.yml`, Playwright | Artefact `e2e-report`; `e2e-compose-logs` when it fails |
 | image | Builds and pushes one image per component to GHCR, tagged with the commit SHA | `build-images.yml` (Docker Buildx) | Image tags in GHCR |
 | deploy | Renders the manifests of the environment and publishes them to the branch `deploy/<env>`, which Argo CD applies | `deploy.yml`, Kustomize, Argo CD | The commit on `deploy/<env>`: `deploy(<env>): <tag> (source <sha>)` |
 
 - Workflow files and their triggers: [`.github/workflows/README.md`](../../.github/workflows/README.md)
 - The *Build* workflow is a required status check on `main`: its jobs `escala-api`, `elegibilidade-worker` and `web` (build, test, sonarqube) must pass before a pull request is merged.
-- The end-to-end tests do not run in the pipeline yet [TODO: end-to-end tests in the pipeline, Diogo Sousa, see the Test Strategy].
+- The end-to-end test runs in the job `e2e (Playwright on Docker Compose)` of *Build*. A failure fails the workflow run, but it does not block a merge until the job is a required status check [TODO: add `e2e (Playwright on Docker Compose)` to the required checks of the `main` ruleset, Diogo Costa].
 
 ## Deploy
 
