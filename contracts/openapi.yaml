@@ -10,7 +10,7 @@ info:
     Implemented in escala-api today: GET and POST /api/v1/piquetes, GET and PUT /api/v1/piquetes/{id}, the two mocked sign-in endpoints
     under /api/v1/auth, the members and certification types under /api/v1/members and
     /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
-    (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
+    (SCRUM-64), the candidate checks under /api/v1/candidate-checks (SCRUM-171), and the three Actuator health endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -630,11 +630,56 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /slots/{id}/candidates:
+  /api/v1/candidate-checks:
+    post:
+      tags: [assignments]
+      summary: Check who can take a role on a shift (SCRUM-171)
+      description: >
+        The supervisor sends a shift they are building (its start, end and the role) and the other shifts of the
+        week as they have them now, with who is on each (RN05). Every member with that function is checked by the
+        eligibility rules in elegibilidade-worker (AvaliacaoPedida, purpose CANDIDATE; ADR 0007), and the answer is
+        202 with the check CHECKING. The PWA asks GET at the Location until it is DONE, and offers only the members
+        found ELIGIBLE. Times required, the end after the start, at most a day (400 with a code per field).
+        SUPERVISOR only: MEMBER and ADMIN get 403.
+      operationId: startCandidateCheck
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CandidateCheckRequest"
+      responses:
+        "202":
+          description: Checking started; follow it at the Location
+          headers:
+            Location:
+              description: /api/v1/candidate-checks/{id} of the check
+              schema:
+                type: string
+              example: /api/v1/candidate-checks/7c2f1d4a-3b8e-4f5a-9c6d-1e2f3a4b5c6d
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateCheck"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/candidate-checks/{id}:
     get:
       tags: [assignments]
-      summary: Eligible and ineligible candidates with rule codes
-      operationId: listSlotCandidates
+      summary: A candidate check and the answer for each member, the Location of POST /api/v1/candidate-checks (SCRUM-171)
+      description: >
+        CHECKING while any member is still PENDING, then DONE. A check with nobody who has the role is DONE in
+        the answer to POST, with no candidates, and is not kept. Checks are deleted a day after they are made.
+        SUPERVISOR only.
+      operationId: getCandidateCheck
       parameters:
         - name: id
           in: path
@@ -642,13 +687,26 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/TraceId"
       responses:
         "200":
-          description: Candidate list
+          description: The check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateCheck"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No candidate check with that ID, or it was deleted (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /assignments/{id}/confirm:
     post:
       tags: [assignments]
@@ -1316,6 +1374,66 @@ components:
           $ref: "#/components/schemas/SlotRole"
         status:
           $ref: "#/components/schemas/SlotStatus"
+    CandidateCheckRequest:
+      type: object
+      required: [startsAt, endsAt, role]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        otherShifts:
+          type: array
+          description: The other shifts of the week in the supervisor's draft, one entry per member on each
+          items:
+            type: object
+            required: [memberId, startsAt, endsAt]
+            properties:
+              memberId:
+                type: string
+                format: uuid
+              startsAt:
+                type: string
+                format: date-time
+              endsAt:
+                type: string
+                format: date-time
+    CandidateCheck:
+      type: object
+      required: [id, status, candidates]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CHECKING, DONE]
+        candidates:
+          type: array
+          description: One entry per member with the role
+          items:
+            type: object
+            required: [memberId, result, rules]
+            properties:
+              memberId:
+                type: string
+                format: uuid
+              result:
+                type: string
+                description: >
+                  PENDING until the worker answers; INELIGIBLE with the codes of the rules broken (RN01 not on the
+                  active roster, RN05 on another shift at the same time, RN06 said they can't come); NOT_CHECKED when
+                  the worker could not evaluate them after its retries.
+                enum: [PENDING, ELIGIBLE, INELIGIBLE, NOT_CHECKED]
+              rules:
+                type: array
+                items:
+                  type: string
+                  enum: [RN01, RN05, RN06]
     SlotRole:
       type: string
       description: >

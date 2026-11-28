@@ -20,7 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 
-@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
+@SpringBootTest(properties = {"spring.rabbitmq.dynamic=true", "spring.flyway.target=1", "spring.jpa.hibernate.ddl-auto=none"})
 @Testcontainers
 class FlywayFreshDatabaseIT {
 

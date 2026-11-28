@@ -8,7 +8,6 @@ import {
   missingCount,
   missingLabel,
   newShiftRange,
-  overlaps,
   MAXIMUM_PER_ROLE,
   parseTime,
   rangeLabel,
@@ -216,89 +215,42 @@ describe('schedule-rules', () => {
       { id: 'joao', name: 'João Pereira', roles: ['CREW_CHIEF'] },
       { id: 'marta', name: 'Marta Silva', roles: ['CREW_CHIEF'] },
     ];
+    const everyone = new Set(members.map((member) => member.id));
 
     it('keeps only members who can fill the role, with all their functions', () => {
-      const list = candidates(shift(), 'DRIVER', members, [], new Set());
+      const list = candidates(shift(), 'DRIVER', members, [], everyone);
       expect(list.map((each) => each.member.name)).toEqual(['Rui Almeida']);
-      expect(candidates(shift(), 'CREW_MEMBER', members, [], new Set())[0].functions).toBe(
+      expect(candidates(shift(), 'CREW_MEMBER', members, [], everyone)[0].functions).toBe(
         'Crew chief · Crew member',
       );
     });
 
+    it('offers only the members the eligibility worker found ELIGIBLE (SCRUM-171)', () => {
+      const names = candidates(shift(), 'CREW_CHIEF', members, [], new Set(['ana', 'marta'])).map(
+        (each) => each.member.id,
+      );
+      expect(names).toEqual(['ana', 'marta']);
+      expect(candidates(shift(), 'CREW_CHIEF', members, [], new Set())).toEqual([]);
+    });
+
     it('leaves out members already on this shift, in any role', () => {
       const onIt = shift({ assigned: { ...emptyAssigned(), CREW_MEMBER: ['ana'] } });
-      const names = candidates(onIt, 'CREW_CHIEF', members, [onIt], new Set()).map(
+      const names = candidates(onIt, 'CREW_CHIEF', members, [onIt], everyone).map(
         (each) => each.member.id,
       );
       expect(names).toEqual(['joao', 'marta']);
     });
 
-    it("leaves out members who can't come that day", () => {
-      const names = candidates(shift(), 'CREW_CHIEF', members, [], new Set(['joao'])).map(
-        (each) => each.member.id,
-      );
-      expect(names).toEqual(['ana', 'marta']);
-    });
-
-    it('keeps members on another shift that day, with its times', () => {
+    it('says when a member is on another shift that day, with its times', () => {
       const morning = shift({
         id: 'm',
         start: 0,
         end: 8 * Hour,
         assigned: { ...emptyAssigned(), CREW_CHIEF: ['marta'] },
       });
-      const list = candidates(shift(), 'CREW_CHIEF', members, [morning, shift()], new Set());
+      const list = candidates(shift(), 'CREW_CHIEF', members, [morning, shift()], everyone);
       expect(list.find((each) => each.member.id === 'marta')?.alreadyOn).toBe('00:00 – 08:00');
       expect(list.find((each) => each.member.id === 'ana')?.alreadyOn).toBeNull();
-    });
-
-    it('leaves out members on another shift at any of its time, also across midnight (TC-SCRUM-65-17, -19)', () => {
-      // Friday 20:00 to Saturday 08:00, and Saturday 06:00 to 14:00
-      const fridayNight = shift({
-        id: 'fri',
-        dutyDate: '2026-11-27',
-        start: 20 * Hour,
-        end: 32 * Hour,
-        assigned: { ...emptyAssigned(), CREW_CHIEF: ['marta'] },
-      });
-      const saturday = shift({
-        id: 'sat',
-        dutyDate: '2026-11-28',
-        start: 6 * Hour,
-        end: 14 * Hour,
-      });
-      const sameTime = shift({
-        id: 'same',
-        assigned: { ...emptyAssigned(), CREW_CHIEF: ['joao'] },
-      });
-
-      const ids = (list: { member: ScheduleMember }[]) => list.map((each) => each.member.id);
-      expect(
-        ids(candidates(saturday, 'CREW_CHIEF', members, [fridayNight, saturday], new Set())),
-      ).toEqual(['ana', 'joao']);
-      expect(
-        ids(candidates(shift(), 'CREW_CHIEF', members, [sameTime, shift()], new Set())),
-      ).toEqual(['ana', 'marta']);
-    });
-
-    it('keeps a member whose other shift ends exactly when this one starts (TC-SCRUM-65-18)', () => {
-      const fridayNight = shift({
-        id: 'fri',
-        dutyDate: '2026-11-27',
-        start: 20 * Hour,
-        end: 32 * Hour,
-      });
-      const saturday = shift({
-        id: 'sat',
-        dutyDate: '2026-11-28',
-        start: 8 * Hour,
-        end: 20 * Hour,
-      });
-      expect(overlaps(saturday, fridayNight)).toBe(false);
-      expect(overlaps(fridayNight, saturday)).toBe(false);
-      expect(overlaps({ ...saturday, start: 7 * Hour }, fridayNight)).toBe(true);
-      // On different days, with no time in common (TC-SCRUM-65-16)
-      expect(overlaps(shift({ dutyDate: '2026-11-25' }), shift())).toBe(false);
     });
   });
 

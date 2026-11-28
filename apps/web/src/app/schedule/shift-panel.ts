@@ -14,6 +14,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
+import { CandidateChecks, CandidateQuestion, candidateQuestion } from './candidate-checks';
 import { longDay } from './iso-week';
 import { ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
 import { ScheduleDirectory } from './schedule-directory';
@@ -44,6 +45,7 @@ interface RoleSection {
   state: RoleState; // Ex: "1 of 1 · Full", "2 of 3 · Needs 1"
   pill: string;
   people: { id: string; name: string }[];
+  check: 'checking' | 'done' | 'failed'; // The eligibility worker's answer about who can take the role
   shown: Candidate[];
   hidden: number;
 }
@@ -62,7 +64,8 @@ interface RoleSection {
 export class ShiftPanel {
   private readonly draft = inject(ScheduleDraftService);
   private readonly directory = inject(ScheduleDirectory);
-  protected readonly directoryError = this.directory.error; // The members or who can't come could not be loaded
+  private readonly checks = inject(CandidateChecks);
+  protected readonly directoryError = this.directory.error; // The members could not be loaded
   private readonly injector = inject(Injector);
 
   readonly monday = input.required<string>();
@@ -134,15 +137,34 @@ export class ShiftPanel {
     }));
   });
 
+  /**
+   * What the eligibility worker is asked for each role the shift needs, while it can be changed (SCRUM-171): the
+   * shift's times and who is on the week's other shifts. A new question is asked when either changes.
+   */
+  private readonly questions = computed(() => {
+    if (!this.editable()) {
+      return new Map<SlotRole, CandidateQuestion>();
+    }
+    const shift = this.shift();
+    const week = this.weekShifts();
+    return new Map(rolesOf(shift.crew).map((role) => [role, candidateQuestion(shift, role, week)]));
+  });
+
   /** Only the roles the shift needs get a section. */
   protected readonly sections = computed<RoleSection[]>(() => {
     const shift = this.shift();
-    const unavailable = this.directory.unavailableFor(shift);
     return rolesOf(shift.crew).map((role) => {
       const required = shift.crew[role];
       const people = shift.assigned[role].map((id) => ({ id, name: this.directory.name(id) }));
       const state = roleState(required, people.length);
-      const all = candidates(shift, role, this.directory.members(), this.weekShifts(), unavailable);
+      const question = this.questions().get(role);
+      const check = question ? this.checks.checks()[question.key] : undefined;
+      const eligible = new Set(
+        check?.state === 'done'
+          ? check.answers.filter((answer) => answer.result === 'ELIGIBLE').map((answer) => answer.memberId)
+          : [],
+      );
+      const all = candidates(shift, role, this.directory.members(), this.weekShifts(), eligible);
       const shown = this.expanded().has(role) ? all : all.slice(0, NUM_CANDIDATES);
       return {
         role,
@@ -151,20 +173,32 @@ export class ShiftPanel {
         state,
         pill: pill(state, required, people.length),
         people,
+        check: check?.state ?? 'checking',
         shown,
         hidden: all.length - shown.length,
       };
     });
   });
 
-  // Who can't come for some or all of the shift's time, from "When I can't"
-  protected readonly cantCome = computed(() =>
-    [...this.directory.unavailableFor(this.shift())]
-      .map((id) => this.directory.name(id))
-      .sort((a, b) => a.localeCompare(b)),
-  );
+  // Who the worker found can't come for some or all of the shift's time (RN06, from "When I can't")
+  protected readonly cantCome = computed(() => {
+    const ids = new Set<string>();
+    for (const question of this.questions().values()) {
+      const check = this.checks.checks()[question.key];
+      if (check?.state === 'done') {
+        check.answers.filter((answer) => answer.rules.includes('RN06')).forEach((answer) => ids.add(answer.memberId));
+      }
+    }
+    return [...ids].map((id) => this.directory.name(id)).sort((a, b) => a.localeCompare(b));
+  });
 
   constructor() {
+    // Each question goes to the worker once
+    effect(() => {
+      const questions = [...this.questions().values()];
+      untracked(() => questions.forEach((question) => this.checks.ask(question)));
+    });
+
     // A newly selected shift starts with short candidate lists and takes the focus, so the panel is read from its top.
     const shiftId = computed(() => this.shift().id);
     effect(() => {
@@ -209,6 +243,14 @@ export class ShiftPanel {
 
   protected unassign(role: SlotRole, memberId: string): void {
     this.draft.unassign(this.monday(), this.shift().id, role, memberId);
+  }
+
+  /** Asks the worker again about a role whose check failed. */
+  protected checkAgain(role: SlotRole): void {
+    const question = this.questions().get(role);
+    if (question) {
+      this.checks.retry(question);
+    }
   }
 
   protected showAll(role: SlotRole): void {
