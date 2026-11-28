@@ -141,9 +141,12 @@ class CandidateCheckIT {
 				new Message(body.getBytes(StandardCharsets.UTF_8), properties));
 	}
 
-	@Test
-	@DisplayName("Every member with the role is checked with their own facts, and the answers are read once all are back")
-	void everyMemberWithTheRoleIsCheckedByTheWorker() throws Exception {
+	// A DRIVER check for four drivers (free, busy on another shift, in reserve, away) and one crew member.
+	private record DriverCheck(UUID id, Map<UUID, UUID> checks, UUID free, UUID busy, UUID reserve, UUID away,
+			UUID notADriver) {
+	}
+
+	private DriverCheck askForADriver() throws Exception {
 		UUID free = member("Rita Livre", "ACTIVE_ROSTER", "CREW_CHIEF", "DRIVER");
 		UUID busy = member("Tiago Ocupado", "ACTIVE_ROSTER", "DRIVER");
 		UUID reserve = member("Ulisses Reserva", "RESERVE_ROSTER", "DRIVER");
@@ -156,18 +159,38 @@ class CandidateCheckIT {
 
 		UUID id = start(request("DRIVER", """
 				{"memberId":"%s","startsAt":"%sT06:00:00Z","endsAt":"%sT10:00:00Z"}""".formatted(busy, DAY, DAY)));
+		return new DriverCheck(id, checksOf(id), free, busy, reserve, away, notADriver);
+	}
 
-		Map<UUID, UUID> checks = checksOf(id);
-		assertThat(checks).containsKeys(free, busy, reserve, away).doesNotContainKey(notADriver);
-		JsonNode pedido = pedidoOf(checks.get(busy));
+	@Test
+	@DisplayName("Every member with the role is checked with their own facts, and the check waits for the answers")
+	void everyMemberWithTheRoleIsCheckedByTheWorker() throws Exception {
+		DriverCheck driver = askForADriver();
+		Map<UUID, UUID> checks = driver.checks();
+
+		assertThat(checks).containsKeys(driver.free(), driver.busy(), driver.reserve(), driver.away())
+				.doesNotContainKey(driver.notADriver());
+		JsonNode pedido = pedidoOf(checks.get(driver.busy()));
 		assertThat(pedido.path("purpose").asString()).isEqualTo("CANDIDATE");
 		assertThat(pedido.path("slot").path("start").asString()).isEqualTo(START);
 		assertThat(pedido.path("candidate").path("otherAssignments")).hasSize(1);
-		assertThat(pedidoOf(checks.get(free)).path("candidate").path("otherAssignments")).isEmpty();
-		assertThat(pedidoOf(checks.get(reserve)).path("candidate").path("inActiveRoster").asBoolean()).isFalse();
-		assertThat(pedidoOf(checks.get(away)).path("candidate").path("unavailabilities")).hasSize(1);
-		assertThat(read(id).path("status").asString()).isEqualTo("CHECKING");
-		assertThat(read(id).path("candidates").get(0).path("result").asString()).isEqualTo("PENDING");
+		assertThat(pedidoOf(checks.get(driver.free())).path("candidate").path("otherAssignments")).isEmpty();
+		assertThat(pedidoOf(checks.get(driver.reserve())).path("candidate").path("inActiveRoster").asBoolean()).isFalse();
+		assertThat(pedidoOf(checks.get(driver.away())).path("candidate").path("unavailabilities")).hasSize(1);
+		assertThat(read(driver.id()).path("status").asString()).isEqualTo("CHECKING");
+		assertThat(read(driver.id()).path("candidates").get(0).path("result").asString()).isEqualTo("PENDING");
+	}
+
+	@Test
+	@DisplayName("The answers are read once all are back, with the rules each member broke")
+	void theAnswersAreReadOnceAllAreBack() throws Exception {
+		DriverCheck driver = askForADriver();
+		Map<UUID, UUID> checks = driver.checks();
+		UUID id = driver.id();
+		UUID free = driver.free();
+		UUID busy = driver.busy();
+		UUID reserve = driver.reserve();
+		UUID away = driver.away();
 
 		answer(checks.get(free), "ELIGIBLE");
 		answer(checks.get(busy), "INELIGIBLE", "RN05");

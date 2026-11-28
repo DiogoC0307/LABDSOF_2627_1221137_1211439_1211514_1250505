@@ -705,7 +705,7 @@ describe('WeekSchedule', () => {
       const fixture = await nextWeek();
       await addShiftUnchecked(fixture, 1);
 
-      expect(panel(fixture)?.querySelector('[role="status"].candidate-check')?.textContent).toContain('Checking who can come…');
+      expect(panel(fixture)?.querySelector('output.candidate-check')?.textContent).toContain('Checking who can come…');
       expect(panel(fixture)?.querySelector('[aria-label^="Assign "]')).toBeNull();
       const check = http().expectOne(isCandidateCheck);
       expect(check.request.body).toEqual({
