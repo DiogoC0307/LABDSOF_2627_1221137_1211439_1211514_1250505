@@ -33,27 +33,39 @@ export function http(): HttpTestingController {
   return TestBed.inject(HttpTestingController);
 }
 
-export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+/** Whether a request is the Schedule page's: GET /api/v1/piquetes?week= (SCRUM-65). */
+export function isWeekRequest(req: { url: string; params: { has(name: string): boolean } }): boolean {
+  return req.url === '/api/v1/piquetes' && req.params.has('week');
 }
 
-export function todaysPiquete(status = 'ELIGIBLE') {
-  return {
-    id: 'today',
-    dutyDate: todayIso(),
-    slots: [{ id: 's-today', role: 'CREW_MEMBER', status }],
-  };
+/** The one request the Schedule page makes for its week. */
+export function weekRequest() {
+  return http().expectOne(isWeekRequest);
+}
+
+/**
+ * Answers, with an empty week, any request the Schedule page made for its week. Specs that open the Schedule page
+ * for something else call it before http().verify(); week-schedule.spec.ts tests the week view itself.
+ */
+export function flushWeekRequests(): void {
+  http()
+    .match(isWeekRequest)
+    .forEach((request) => request.flush([]));
+}
+
+/**
+ * Answers, with no notifications, any request the Schedule page made for its notifications
+ */
+export function flushNotificationRequests(): void {
+  http()
+    .match('/api/v1/notifications')
+    .forEach((request) => request.flush([]));
 }
 
 export const pending = {
   id: 'p1',
   dutyDate: '2026-11-05',
   slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'PENDING' }],
-};
-
-export const eligible = {
-  ...pending,
-  slots: [{ id: 's1', role: 'CREW_MEMBER', status: 'ELIGIBLE' }],
 };
 
 /** Types an input or select value the way a user does, so ngModel sees it. */

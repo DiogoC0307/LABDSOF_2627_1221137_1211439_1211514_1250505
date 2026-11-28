@@ -1,0 +1,264 @@
+<section
+  class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#D9D7D2] bg-white"
+  aria-label="Shift details"
+>
+  <!-- Shift side panel header (day, time and delete button) -->
+  <header class="flex items-start justify-between gap-3 border-b border-[#D9D7D2] px-5 py-4">
+    <div class="min-w-0">
+      <p class="m-0 text-[15px] text-[#57554F]">{{ day() }}</p>
+      <h2 #heading tabindex="-1" class="m-0 text-[24px] font-bold leading-tight text-[#1C1B19] outline-none">
+        {{ time() }}
+      </h2>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      @if (editable()) {
+        <button mat-stroked-button type="button" class="btn-destructive" (click)="deleteRequested.emit()">
+          Delete
+        </button>
+      }
+      <button mat-icon-button type="button" class="btn-close" aria-label="Close shift details" (click)="closed.emit()">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Shift details content -->
+  <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+    <!-- Note for shifts that have already happened -->
+    @if (!editable() && note()) {
+      <p class="m-0 rounded-xl bg-[#ECEBE7] px-4 py-3 text-[16px] text-[#33312D]">{{ note() }}</p>
+    }
+
+    <!-- End and start times input fields -->
+    <div class="grid grid-cols-2 items-start gap-3">
+      <app-time-field
+        label="Start"
+        example="08:30"
+        [value]="startShown()"
+        [options]="startOptions"
+        [disabled]="!editable()"
+        [accept]="takeStart"
+      />
+      <app-time-field
+        label="End"
+        example="20:30"
+        [value]="endShown()"
+        [options]="endOptions()"
+        [disabled]="!editable()"
+        [accept]="takeEnd"
+      />
+    </div>
+
+    <!-- Choose the roles for this shift -->
+    @if (editable()) {
+      <fieldset class="roles-fieldset flex flex-col gap-2">
+        <legend class="mb-2 p-0 text-[16px] font-bold text-[#33312D]">Roles this shift needs</legend>
+        <div class="flex flex-wrap gap-2">
+          @for (choice of roleChoices(); track choice.role) {
+            <button
+              type="button"
+              class="role-choice"
+              [class.role-choice--on]="choice.chosen"
+              [attr.aria-pressed]="choice.chosen"
+              [disabled]="choice.locked"
+              (click)="toggleRole(choice.role)"
+            >
+              @if (choice.chosen) {
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5L19 7" /></svg>
+              }
+              {{ choice.name }}
+            </button>
+          }
+        </div>
+        @if (oneRole()) {
+          <p class="m-0 text-[14px] text-[#57554F]">A shift needs at least one role.</p>
+        }
+      </fieldset>
+    }
+
+    <!-- The members could not be loaded -->
+    @if (directoryError(); as error) {
+      <p class="error m-0" role="alert">{{ error }}</p>
+    }
+
+    @if (presenceError(); as pError) {
+      <p class="error m-0" role="alert">{{ pError }}</p>
+    }
+
+    <!-- Role sections with required number input and assigned people -->
+    @for (section of sections(); track section.role) {
+      <section
+        class="role-section flex flex-col gap-3 rounded-[14px] border border-[#D9D7D2] p-[14px]"
+        [attr.aria-labelledby]="'role-' + section.role"
+      >
+        <!-- Role name and required number input -->
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex flex-col items-start gap-1.5">
+            <h3 [id]="'role-' + section.role" class="m-0 text-[19px] font-bold text-[#1C1B19]">{{ section.name }}</h3>
+            <span
+              class="role-pill rounded-full px-2.5 py-0.5 text-[13px] font-bold"
+              [class.role-pill--full]="section.state === 'full'"
+              [class.role-pill--short]="section.state === 'short'"
+            >{{ section.pill }}</span
+            >
+          </div>
+
+          <!-- Needed number input field -->
+          @if (editable()) {
+            <div class="flex items-center gap-2 text-[16px] text-[#33312D]">
+              Needed
+              <input
+                #needed
+                class="needed-input"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="2"
+                autocomplete="off"
+                [attr.aria-label]="section.name + ' needed'"
+                [value]="section.required"
+                (input)="setNeeded(section.role, needed)"
+                (blur)="showNeeded(section.role, needed)"
+              />
+            </div>
+          } @else {
+            <p class="m-0 text-[16px] text-[#33312D]">{{ section.required }} needed</p>
+          }
+        </div>
+
+        <!-- Assigned people list -->
+        <div class="flex flex-col gap-2">
+          <h4 class="m-0 text-[14px] font-bold text-[#57554F]">On this shift</h4>
+          @for (person of section.people; track person.id) {
+            <div
+              class="flex min-h-[52px] flex-wrap items-center justify-between gap-2 rounded-xl bg-[#EEF5FC] px-3 py-2"
+            >
+              <div class="flex flex-col">
+                <span class="text-[17px] font-bold text-[#1C1B19]">{{ person.name }}</span>
+                @if (person.presenceStatus) {
+                  <span class="text-[13px] text-[#57554F]">Presence: {{ person.presenceStatus }}</span>
+                }
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                @if (person.canConfirm) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="confirm-coming"
+                    [disabled]="updatingPresenceId() === person.slotId"
+                    (click)="confirmPresence(person, 'COMING')"
+                  >
+                    I'm coming
+                  </button>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="confirm-cannot-come"
+                    [disabled]="updatingPresenceId() === person.slotId"
+                    (click)="confirmPresence(person, 'CANNOT_COME')"
+                  >
+                    I can't come
+                  </button>
+                }
+                @if (editable()) {
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="btn-remove"
+                    [attr.aria-label]="'Remove ' + person.name + ' as ' + section.name"
+                    (click)="unassign(section.role, person.id)"
+                  >
+                    Remove
+                  </button>
+                }
+              </div>
+            </div>
+          } @empty {
+            <p class="m-0 text-[16px] text-[#57554F]">Nobody yet.</p>
+          }
+        </div>
+
+        <!-- Candidates list: the members the eligibility worker found can take the role (SCRUM-171) -->
+        @if (editable()) {
+          <div class="flex flex-col gap-2">
+            <h4 class="m-0 text-[14px] font-bold text-[#57554F]">Can be assigned</h4>
+            @if (section.check === 'checking') {
+              <output class="candidate-check m-0 text-[16px] text-[#57554F]">Checking who can come…</output>
+            } @else if (section.check === 'failed') {
+              <div class="flex flex-wrap items-center gap-2" role="alert">
+                <p class="error m-0">Couldn't check who can come.</p>
+                <button
+                  mat-button
+                  type="button"
+                  class="btn-more"
+                  [attr.aria-label]="'Check again who can be ' + section.name"
+                  (click)="checkAgain(section.role)"
+                >
+                  Check again
+                </button>
+              </div>
+            } @else {
+              @for (candidate of section.shown; track candidate.member.id) {
+                <div
+                  class="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-[#ECEBE7] px-3 py-1"
+                >
+                  <div class="flex min-w-0 flex-col">
+                    <span class="text-[17px] text-[#1C1B19]">{{ candidate.member.name }}</span>
+                    <span class="text-[13px] text-[#57554F]">{{ candidate.functions }}</span>
+                    @if (candidate.alreadyOn) {
+                      <span class="text-[13px] text-[#6E4300]">Already on {{ candidate.alreadyOn }}</span>
+                    }
+                  </div>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="btn-assign"
+                    [attr.aria-label]="'Assign ' + candidate.member.name + ' as ' + section.name"
+                    (click)="assign(section.role, candidate.member.id)"
+                  >
+                    Assign
+                  </button>
+                </div>
+              } @empty {
+                <p class="m-0 text-[16px] text-[#57554F]">Nobody else with this role is free.</p>
+              }
+              @if (section.hidden > 0) {
+                <button
+                  mat-button
+                  type="button"
+                  class="btn-more self-start"
+                  [attr.aria-label]="'Show ' + section.hidden + ' more who can be ' + section.name"
+                  (click)="showAll(section.role)"
+                >
+                  Show {{ section.hidden }} more
+                </button>
+              }
+            }
+          </div>
+        }
+      </section>
+    } @empty {
+      <p class="m-0 text-[16px] text-[#57554F]">
+        {{ editable() ? 'Choose the roles this shift needs.' : 'No roles chosen for this shift.' }}
+      </p>
+    }
+
+    <!-- List of people who can't come for some or all of the shift's time -->
+    @if (cantCome().length > 0) {
+      <section class="flex flex-col gap-2" aria-labelledby="cant-come-title">
+        <h3 id="cant-come-title" class="m-0 text-[16px] font-bold text-[#33312D]">Can't come during this shift</h3>
+        <ul class="m-0 flex list-none flex-col gap-1.5 p-0">
+          @for (name of cantCome(); track name) {
+            <li class="flex items-center gap-2 text-[16px] text-[#57554F]">
+              <svg class="icon shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 6h16v14H4zM4 10h16M8 3v5M16 3v5M10 13l4 4M14 13l-4 4" />
+              </svg>
+              {{ name }}
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  </div>
+</section>

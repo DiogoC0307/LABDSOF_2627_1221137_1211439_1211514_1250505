@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from '../app';
-import { http, setValue, signInAs, testProviders } from '../testing/test-support';
+import { flushNotificationRequests, http, setValue, signInAs, testProviders } from '../testing/test-support';
 import { formatLisbon, lisbonToUtc } from './lisbon-time';
 
 const period = {
@@ -39,6 +39,7 @@ describe('Unavailability', () => {
   });
 
   afterEach(() => {
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
   });
@@ -167,7 +168,7 @@ describe('Unavailability', () => {
       fixture.detectChanges();
       http().expectOne('/api/v1/unavailabilities').flush([]);
       http().expectOne(SETTINGS).flush({ aiEnabled: true });
-      expect(page(fixture).querySelector('.menu a[href="/unavailability"]')).not.toBeNull();
+      expect(page(fixture).querySelector('nav[aria-label="Main"] a[href="/unavailability"]')).not.toBeNull();
     }
   });
 });

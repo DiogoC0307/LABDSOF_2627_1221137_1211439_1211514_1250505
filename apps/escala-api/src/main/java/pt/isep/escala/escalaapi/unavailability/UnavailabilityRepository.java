@@ -14,6 +14,12 @@ interface UnavailabilityRepository extends JpaRepository<Unavailability, UUID> {
 
 	Optional<Unavailability> findByIdAndMemberId(UUID id, UUID memberId);
 
+	// Finds all unavailabilities that overlap with the given period
+	List<Unavailability> findByStartsAtBeforeAndEndsAtAfterOrderByStartsAt(Instant to, Instant from);
+
+	// One member's periods that overlap with the given period
+	List<Unavailability> findByMemberIdAndStartsAtBeforeAndEndsAtAfterOrderByStartsAt(UUID memberId, Instant to, Instant from);
+
 	@Modifying
 	@Query("DELETE FROM Unavailability u WHERE u.endsAt < :cutoff")
 	int deleteEndedBefore(Instant cutoff);

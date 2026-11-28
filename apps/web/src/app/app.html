@@ -1,19 +1,10 @@
-<main class="page">
-  @if (auth.session(); as session) {
-    <nav class="menu" aria-label="Menu">
-      <a routerLink="/">Schedule</a>
-      <a routerLink="/unavailability">When I can't</a>
-      @if (seesMembers()) {
-        <a routerLink="/members">Members</a>
-      }
-      <span class="session">{{ session.fullName }} · {{ session.role }}</span>
-      @if (canInstall()) {
-        <button type="button" class="install" (click)="install()">Install Escala</button>
-      }
-      <button type="button" class="sign-out" (click)="signOut()">Sign out</button>
-    </nav>
+@if (auth.session()) {
+  <app-navbar [canInstall]="canInstall()" (install)="install()" (signOut)="signOut()" />
+  <main class="page">
     <router-outlet />
-  } @else {
+  </main>
+} @else {
+  <main class="page">
     <app-sign-in (signedIn)="onSignedIn()" />
-  }
-</main>
+  </main>
+}

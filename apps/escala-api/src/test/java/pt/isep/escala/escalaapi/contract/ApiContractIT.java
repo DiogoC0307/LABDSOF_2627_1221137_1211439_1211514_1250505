@@ -176,6 +176,61 @@ class ApiContractIT {
 	}
 
 	@Test
+	@DisplayName("SCRUM-171 the candidate checks answer as the spec says: 202, 200, 400, 401, 403 and 404")
+	void candidateChecks() throws Exception {
+		String checks = "/api/v1/candidate-checks";
+		String body = """
+				{"startsAt":"2026-12-09T08:00:00Z","endsAt":"2026-12-09T20:00:00Z","role":"CREW_CHIEF",
+				 "otherShifts":[{"memberId":"%s","startsAt":"2026-12-09T06:00:00Z","endsAt":"2026-12-09T10:00:00Z"}]}
+				""".formatted(MockTokens.ADMIN_ID);
+		HttpResponse<String> started = call("POST", checks, checks, MockTokens.supervisor(), body);
+		assertThat(started.statusCode()).isEqualTo(202);
+		assertThat(call("GET", checks + "/{id}", checks + "/" + id(started), MockTokens.supervisor(), null).statusCode())
+				.isEqualTo(200);
+		assertThat(call("POST", checks, checks, MockTokens.supervisor(), "{}", false).statusCode()).isEqualTo(400);
+		assertThat(call("POST", checks, checks, MockTokens.member(), body).statusCode()).isEqualTo(403);
+		assertThat(call("POST", checks, checks, null, body).statusCode()).isEqualTo(401);
+		assertThat(call("GET", checks + "/{id}", checks + "/" + UUID.randomUUID(), MockTokens.supervisor(), null)
+				.statusCode()).isEqualTo(404);
+	}
+
+	@Test
+	@DisplayName("SCRUM-66 publishing a week and the member's notifications answer as the spec says: 202, 200, 204, 400, 401, 403 and 404")
+	void publicationsAndNotifications() throws Exception {
+		String publications = "/api/v1/schedule-publications";
+		String shift = """
+				{"key":"%s","id":null,"dutyDate":"2026-12-09","period":"DAY","startsAt":"2026-12-09T08:00:00Z",
+				 "endsAt":"2026-12-09T20:00:00Z","crew":[{"role":"CREW_MEMBER","count":1}],"assigned":[%s]}""";
+		String checking = "{\"week\":\"2026-W50\",\"shifts\":[" + shift.formatted("with-someone",
+				"{\"role\":\"CREW_MEMBER\",\"memberId\":\"" + MockTokens.MEMBER_ID + "\"}") + "]}";
+		HttpResponse<String> started = call("POST", publications, publications, MockTokens.supervisor(), checking);
+		assertThat(started.statusCode()).isEqualTo(202);
+		assertThat(call("GET", publications + "/{id}", publications + "/" + id(started), MockTokens.supervisor(), null)
+				.statusCode()).isEqualTo(200);
+
+		// A shift with nobody on it is blocked at once, with its conflict
+		String empty = "{\"week\":\"2026-W51\",\"shifts\":[" + shift.formatted("nobody", "")
+				.replace("2026-12-09", "2026-12-16") + "]}";
+		HttpResponse<String> blocked = call("POST", publications, publications, MockTokens.supervisor(), empty);
+		assertThat(objectMapper.readTree(blocked.body()).path("status").asString()).isEqualTo("BLOCKED");
+
+		assertThat(call("POST", publications, publications, MockTokens.supervisor(), "{}", false).statusCode())
+				.isEqualTo(400);
+		assertThat(call("POST", publications, publications, MockTokens.member(), checking).statusCode()).isEqualTo(403);
+		assertThat(call("POST", publications, publications, null, checking).statusCode()).isEqualTo(401);
+		assertThat(call("GET", publications + "/{id}", publications + "/" + UUID.randomUUID(), MockTokens.supervisor(),
+				null).statusCode()).isEqualTo(404);
+
+		String notifications = "/api/v1/notifications";
+		assertThat(call("GET", notifications, notifications, MockTokens.member(), null).statusCode()).isEqualTo(200);
+		assertThat(call("POST", notifications + "/read", notifications + "/read", MockTokens.member(), null)
+				.statusCode()).isEqualTo(204);
+		assertThat(call("POST", notifications + "/{id}/read", notifications + "/" + UUID.randomUUID() + "/read",
+				MockTokens.member(), null).statusCode()).isEqualTo(404);
+		assertThat(call("GET", notifications, notifications, null, null).statusCode()).isEqualTo(401);
+	}
+
+	@Test
 	@DisplayName("TC-SCRUM-96-03 the members and certification types endpoints answer as the spec says")
 	void members() throws Exception {
 		String member = """
@@ -226,6 +281,13 @@ class ApiContractIT {
 		assertThat(call("DELETE", all + "/{id}", one, MockTokens.member(), null).statusCode()).as("already removed")
 				.isEqualTo(404);
 		assertThat(call("GET", all, all, null, null).statusCode()).isEqualTo(401);
+
+		// SCRUM-65: every member's periods of a week, for the supervisor
+		String team = all + "/team";
+		assertThat(call("GET", team, team + "?week=2026-W49", MockTokens.supervisor(), null).statusCode()).isEqualTo(200);
+		assertThat(call("GET", team, team + "?week=2025-W54", MockTokens.supervisor(), null).statusCode()).isEqualTo(400);
+		assertThat(call("GET", team, team + "?week=2026-W49", MockTokens.member(), null).statusCode()).isEqualTo(403);
+		assertThat(call("GET", team, team + "?week=2026-W49", null, null).statusCode()).isEqualTo(401);
 	}
 
 	@Test

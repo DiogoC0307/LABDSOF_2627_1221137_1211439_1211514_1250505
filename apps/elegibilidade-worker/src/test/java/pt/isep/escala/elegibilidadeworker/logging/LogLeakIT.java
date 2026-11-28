@@ -58,7 +58,7 @@ class LogLeakIT {
 		LogLeakSupport.send(rabbitTemplate, "avaliacao.pedida", pedido);
 
 		await().atMost(Duration.ofSeconds(15))
-				.until(() -> output.getAll().contains("SEMPRE_ELEGIVEL written requestEventId=" + eventId));
+				.until(() -> output.getAll().contains("evaluation written requestEventId=" + eventId));
 		assertThat(output.getAll()).doesNotContain(marker);
 	}
 

@@ -7,10 +7,11 @@ info:
     Authentication is a mocked bearer token carrying memberId and role (ADR 0006).
 
 
-    Implemented in escala-api today: GET and POST /api/v1/piquetes, the two mocked sign-in endpoints
+    Implemented in escala-api today: GET and POST /api/v1/piquetes, GET and PUT /api/v1/piquetes/{id}, the two mocked sign-in endpoints
     under /api/v1/auth, the members and certification types under /api/v1/members and
     /api/v1/certification-types (SCRUM-77), the member's own unavailability under /api/v1/unavailabilities
-    (SCRUM-64), and the three Actuator health endpoints under /actuator/health. Every other path
+    (SCRUM-64), the candidate checks under /api/v1/candidate-checks (SCRUM-171), publishing a week under /api/v1/schedule-publications and the member's own notifications
+    under /api/v1/notifications (SCRUM-66), and the three Actuator health endpoints under /actuator/health. Every other path
     is the planned product API and does not exist yet; escala-api answers 401 or 403 on it.
 
 
@@ -47,6 +48,8 @@ tags:
     description: Piquetes and their slots
   - name: assignments
     description: Assigning a member to a slot (planned)
+  - name: notifications
+    description: The signed-in member's own notifications (SCRUM-66)
   - name: unavailabilities
     description: The signed-in member's own unavailability (SCRUM-64)
   - name: swaps
@@ -193,13 +196,24 @@ paths:
   /api/v1/piquetes:
     get:
       tags: [piquetes]
-      summary: List piquetes (walking skeleton, SCRUM-45)
+      summary: List piquetes, or the piquetes of one week (SCRUM-45, SCRUM-65)
       description: >
-        All piquetes with their slots, in the order the database returns them. Any signed-in role
+        With week, the piquetes from that week's Monday to its Sunday, in date order (SCRUM-65). Without it,
+        all piquetes in the order the database returns them (walking skeleton, SCRUM-45). Any signed-in role
         (MEMBER, SUPERVISOR, ADMIN).
       operationId: listPiquetes
       parameters:
         - $ref: "#/components/parameters/TraceId"
+        - name: week
+          in: query
+          required: false
+          description: >
+            An ISO 8601 week, YYYY-Www: Monday to Sunday, the week of RN12. Week 1 is the week with the year's first
+            Thursday, so 2026-W01 starts on 2025-12-29. A week that does not exist (e.g. 2025-W53) answers 400.
+          schema:
+            type: string
+            pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W48"
       responses:
         "200":
           description: Piquetes with their slots (an empty array when there are none)
@@ -212,15 +226,24 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/PiqueteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
       tags: [piquetes]
-      summary: Create a piquete for a date with one slot
+      summary: Create a piquete (a shift) with a slot for each person its crew needs
       description: >
-        The new slot has role CREW_MEMBER and status PENDING; escala-api queues AvaliacaoPedida and the
-        slot becomes ELIGIBLE after the worker answers (a few seconds). Fields other than dutyDate are
-        ignored. SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
+        A shift the supervisor defines (SCRUM-65, D1): dutyDate, period, startsAt, endsAt and crew, how many
+        people of each role it needs. When any of the last four is sent, all are required and checked (400 with
+        a code per field): the day is today or later in Lisbon (in_the_past), the shift starts on that day in
+        Lisbon (not_on_duty_date), ends after it starts (ends_before_start) and lasts at most 24 hours
+        (too_long); crew lists each role at most once (duplicate) with a count of 0 or more (invalid), and its
+        counts add up to 1 to 50 (too_small, too_large). The piquete gets one slot per person, in the order
+        CREW_CHIEF, DRIVER, CREW_MEMBER, and minimumCrew is their number. A body with only dutyDate still creates
+        a piquete with no times and one CREW_MEMBER slot (walking skeleton, SCRUM-45). Every new slot has status
+        PENDING; escala-api queues one AvaliacaoPedida per slot and each becomes ELIGIBLE after the worker answers
+        (a few seconds). SUPERVISOR only (build the schedule, access-control matrix on 09): MEMBER and ADMIN get
         403 and nothing is created.
       operationId: createPiquete
       parameters:
@@ -237,7 +260,8 @@ paths:
           headers:
             Location:
               description: >
-                /api/v1/piquetes/{id} of the new piquete; GET /api/v1/piquetes/{id} answers it (SCRUM-88).
+                /api/v1/piquetes/{id} of the new piquete; GET /api/v1/piquetes/{id} answers it (SCRUM-88) and
+                PUT on it changes the shift (SCRUM-65).
               schema:
                 type: string
                 example: /api/v1/piquetes/9f6456d9-0df5-46db-9adc-6c412207a4df
@@ -296,6 +320,60 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           description: No piquete with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags: [piquetes]
+      summary: Change a shift's day, period, times and crew (SCRUM-65)
+      description: >
+        Every field is required and checked as on create (400 with a code per field). A piquete whose day has
+        passed in Lisbon cannot change (409), nor can a shift be moved to such a day (400, in_the_past). A role
+        that needs more people gets new PENDING slots, each with its AvaliacaoPedida; a role that needs fewer
+        loses the slots furthest from being filled (OPEN, then EVALUATION_FAILED, PENDING, ELIGIBLE). A slot
+        someone was proposed for or holds (PROPOSED, FILLED) is never removed: a count below their number for its
+        role is refused (400, crew below_filled) and nothing changes. The other slots are kept as they are.
+        SUPERVISOR only: MEMBER and ADMIN get 403 and nothing changes.
+      operationId: updatePiquete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePiqueteRequest"
+      responses:
+        "200":
+          description: The changed piquete
+          headers:
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PiqueteResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No piquete with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: The piquete's day has passed in Lisbon, so it cannot change here (the JSON error body)
           content:
             application/json:
               schema:
@@ -528,11 +606,61 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /piquetes/{id}/publish:
+  /api/v1/schedule-publications:
     post:
       tags: [piquetes]
-      summary: Publish the schedule and notify members of their shifts
-      operationId: publishPiquete
+      summary: Publish a week in one action (SCRUM-66)
+      description: >
+        The supervisor sends every shift of the week on a day that has not passed, as it should be, with who is on
+        it. A shift of the week left out is deleted; shifts on days that have passed are never changed nor deleted.
+        Each shift is checked as on create (400 with a code per field, the field named after its place, e.g.
+        shifts[2].endsAt); an id must be a shift of this week on a day that has not passed (unknown_shift), a key is
+        unique in the request, each member exists (unknown_member), is on the shift once, and a role has no more
+        members than the shift needs (too_many). Nothing on the schedule changes yet: members still see the week
+        as it was. Each member on a shift is then checked by the eligibility rules in elegibilidade-worker
+        (AvaliacaoPedida, purpose ASSIGNMENT; ADR 0007), and the answer is 202 with the publication CHECKING. When
+        every check is back the week is PUBLISHED (applied as it was checked, and the members notified) or BLOCKED
+        with its conflicts (nothing changes). A shift that is short of people is published; one with nobody on it
+        is a conflict. A week with nobody to check is published or blocked at once. A publication of the same week
+        still CHECKING is SUPERSEDED. SUPERVISOR only: MEMBER and ADMIN get 403.
+      operationId: publishWeek
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationRequest"
+      responses:
+        "202":
+          description: Publishing started; follow it at the Location
+          headers:
+            Location:
+              description: /api/v1/schedule-publications/{id} of the publication
+              schema:
+                type: string
+              example: /api/v1/schedule-publications/3b8a9d0e-4f6e-4b7c-9d4e-2a1b0c9e8f7d
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publication"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/schedule-publications/{id}:
+    get:
+      tags: [piquetes]
+      summary: A publication and its conflicts, the Location of POST /api/v1/schedule-publications (SCRUM-66)
+      description: >
+        The PWA asks this until the status is no longer CHECKING. conflicts is empty unless it is BLOCKED.
+        SUPERVISOR only.
+      operationId: getPublication
       parameters:
         - name: id
           in: path
@@ -540,13 +668,91 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/TraceId"
       responses:
         "200":
-          description: Published
+          description: The publication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Publication"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No publication with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/notifications:
+    get:
+      tags: [notifications]
+      summary: The signed-in member's own notifications, newest first, at most 50 (SCRUM-66, RF20)
+      description: >
+        Any signed-in role, only their own. Written when a week is published: the first publication of a week
+        tells each member on it how many shifts they have (WEEKLY_SCHEDULE_PUBLISHED); a later one tells only the members
+        whose own shifts changed (ADDED_TO_SHIFT, REMOVED_FROM_SHIFT, SHIFT_TIMES_CHANGED, SHIFT_CANCELLED). The
+        PWA asks every 30 seconds and writes the text itself.
+      operationId: listNotifications
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "200":
+          description: The notifications (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Notification"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/notifications/read:
+    post:
+      tags: [notifications]
+      summary: Mark all the signed-in member's notifications as read (SCRUM-66)
+      description: Any signed-in role, only their own; when they choose "Mark all as read".
+      operationId: markNotificationsRead
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "204":
+          description: Marked as read
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/notifications/{id}/read:
+    post:
+      tags: [notifications]
+      summary: Mark one of the signed-in member's notifications as read (SCRUM-66)
+      description: >
+        Any signed-in role, only their own; when they open that notification. Marking one that is already read
+        answers 204 too.
+      operationId: markNotificationRead
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/TraceId"
+      responses:
+        "204":
+          description: Marked as read
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: The member has no notification with that ID (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /assignments:
     post:
       tags: [assignments]
@@ -559,11 +765,56 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
-  /slots/{id}/candidates:
+  /api/v1/candidate-checks:
+    post:
+      tags: [assignments]
+      summary: Check who can take a role on a shift (SCRUM-171)
+      description: >
+        The supervisor sends a shift they are building (its start, end and the role) and the other shifts of the
+        week as they have them now, with who is on each (RN05). Every member with that function is checked by the
+        eligibility rules in elegibilidade-worker (AvaliacaoPedida, purpose CANDIDATE; ADR 0007), and the answer is
+        202 with the check CHECKING. The PWA asks GET at the Location until it is DONE, and offers only the members
+        found ELIGIBLE. Times required, the end after the start, at most a day (400 with a code per field).
+        SUPERVISOR only: MEMBER and ADMIN get 403.
+      operationId: startCandidateCheck
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CandidateCheckRequest"
+      responses:
+        "202":
+          description: Checking started; follow it at the Location
+          headers:
+            Location:
+              description: /api/v1/candidate-checks/{id} of the check
+              schema:
+                type: string
+              example: /api/v1/candidate-checks/7c2f1d4a-3b8e-4f5a-9c6d-1e2f3a4b5c6d
+            X-Trace-Id:
+              $ref: "#/components/headers/TraceId"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateCheck"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/candidate-checks/{id}:
     get:
       tags: [assignments]
-      summary: Eligible and ineligible candidates with rule codes
-      operationId: listSlotCandidates
+      summary: A candidate check and the answer for each member, the Location of POST /api/v1/candidate-checks (SCRUM-171)
+      description: >
+        CHECKING while any member is still PENDING, then DONE. A check with nobody who has the role is DONE in
+        the answer to POST, with no candidates, and is not kept. Checks are deleted a day after they are made.
+        SUPERVISOR only.
+      operationId: getCandidateCheck
       parameters:
         - name: id
           in: path
@@ -571,13 +822,26 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/TraceId"
       responses:
         "200":
-          description: Candidate list
+          description: The check
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CandidateCheck"
+        "400":
+          $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          description: No candidate check with that ID, or it was deleted (the JSON error body)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /assignments/{id}/confirm:
     post:
       tags: [assignments]
@@ -654,6 +918,42 @@ paths:
           $ref: "#/components/responses/ValidationError"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/unavailabilities/team:
+    get:
+      tags: [unavailabilities]
+      summary: Every member's unavailability in a week, to build the schedule (SCRUM-65)
+      description: >
+        Supervisor only. The periods of any member that overlap the week, from Monday 00:00 in Lisbon to the Tuesday
+        after it (so a night shift that starts on Sunday is covered until it ends), ordered by start. Who and when only:
+        no ID, no source, never a reason (09).
+      operationId: listTeamUnavailabilities
+      parameters:
+        - $ref: "#/components/parameters/TraceId"
+        - name: week
+          in: query
+          required: true
+          description: >
+            An ISO 8601 week, YYYY-Www, as for GET /api/v1/piquetes. A missing week or one that does not exist
+            answers 400 (invalid_week).
+          schema:
+            type: string
+            pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W48"
+      responses:
+        "200":
+          description: The periods (an empty array when there are none)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamUnavailability"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/unavailabilities/{id}:
     parameters:
       - name: id
@@ -1124,14 +1424,80 @@ components:
           $ref: "#/components/schemas/AccessRole"
         fullName:
           type: string
+    ShiftPeriod:
+      type: string
+      description: The period of a shift, chosen by the supervisor (SCRUM-65, D1)
+      enum: [DAY, NIGHT]
     CreatePiqueteRequest:
       type: object
       required: [dutyDate]
+      description: >
+        With period, startsAt, endsAt or crew, all five fields are required (as in UpdatePiqueteRequest).
+        With only dutyDate, a piquete with no times (walking skeleton).
       properties:
         dutyDate:
           type: string
           format: date
-          example: "2026-11-01"
+          example: "2026-12-01"
+        period:
+          $ref: "#/components/schemas/ShiftPeriod"
+        startsAt:
+          type: string
+          format: date-time
+          description: ISO 8601 with an offset or Z; on dutyDate in Europe/Lisbon.
+          example: "2026-12-01T08:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          description: Exclusive; after startsAt and at most 24 hours later. A night shift ends the next day.
+          example: "2026-12-01T20:00:00Z"
+        crew:
+          $ref: "#/components/schemas/Crew"
+    UpdatePiqueteRequest:
+      type: object
+      required: [dutyDate, period, startsAt, endsAt, crew]
+      properties:
+        dutyDate:
+          type: string
+          format: date
+          example: "2026-12-01"
+        period:
+          $ref: "#/components/schemas/ShiftPeriod"
+        startsAt:
+          type: string
+          format: date-time
+          example: "2026-12-01T20:00:00Z"
+        endsAt:
+          type: string
+          format: date-time
+          example: "2026-12-02T08:00:00Z"
+        crew:
+          $ref: "#/components/schemas/Crew"
+    Crew:
+      type: array
+      description: >
+        How many people of each role the shift needs (SCRUM-65): each role at most once; a role left out needs
+        nobody. The counts add up to 1 to 50.
+      minItems: 1
+      items:
+        $ref: "#/components/schemas/CrewNeed"
+      example:
+        - role: CREW_CHIEF
+          count: 1
+        - role: DRIVER
+          count: 1
+        - role: CREW_MEMBER
+          count: 3
+    CrewNeed:
+      type: object
+      required: [role, count]
+      properties:
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        count:
+          type: integer
+          minimum: 0
+          maximum: 50
     PiqueteResponse:
       type: object
       required: [id, dutyDate, slots]
@@ -1142,6 +1508,24 @@ components:
         dutyDate:
           type: string
           format: date
+        period:
+          type: string
+          nullable: true
+          enum: [DAY, NIGHT]
+          description: The ShiftPeriod of the shift; null on a piquete created without shift times
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: In UTC (ADR 0012); null on a piquete created without shift times
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        minimumCrew:
+          type: integer
+          nullable: true
+          description: The number of people the crew needs (the sum of its counts); null on a piquete without times
         slots:
           type: array
           items:
@@ -1157,9 +1541,227 @@ components:
           $ref: "#/components/schemas/SlotRole"
         status:
           $ref: "#/components/schemas/SlotStatus"
+        memberId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who holds the slot once its week is published (SCRUM-66); null when nobody does
+    PublicationRequest:
+      type: object
+      required: [week, shifts]
+      properties:
+        week:
+          type: string
+          pattern: "^\\d{4}-W\\d{2}$"
+          example: "2026-W49"
+        shifts:
+          type: array
+          description: Every shift of the week on a day that has not passed
+          items:
+            $ref: "#/components/schemas/PublishedShift"
+    PublishedShift:
+      type: object
+      required: [key, dutyDate, period, startsAt, endsAt, crew, assigned]
+      properties:
+        key:
+          type: string
+          description: The supervisor's own name for the shift, unique in the request, given back on each conflict
+          example: new-1
+        id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The shift to change; null or left out for a new one
+        dutyDate:
+          type: string
+          format: date
+        period:
+          $ref: "#/components/schemas/ShiftPeriod"
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        crew:
+          $ref: "#/components/schemas/Crew"
+        assigned:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignedMember"
+    AssignedMember:
+      type: object
+      required: [role, memberId]
+      properties:
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        memberId:
+          type: string
+          format: uuid
+    Publication:
+      type: object
+      required: [id, week, status, conflicts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        week:
+          type: string
+          example: "2026-W49"
+        status:
+          type: string
+          description: >
+            CHECKING while the members on it are checked; PUBLISHED (members see it and were notified); BLOCKED
+            (nothing changed, see conflicts); SUPERSEDED by a later publication of the same week.
+          enum: [CHECKING, PUBLISHED, BLOCKED, SUPERSEDED]
+        conflicts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicationConflict"
+    PublicationConflict:
+      type: object
+      required: [type, shiftKey, shiftId, dutyDate]
+      description: >
+        Why the week cannot be published. EMPTY_SHIFT, a shift with nobody on it (memberId, role and rules are
+        null); INELIGIBLE, the eligibility rules refused a member (rules has the codes: RN01 not on the active
+        roster, RN05 on another shift at the same time, RN06 said they can't come); NOT_CHECKED, the member could
+        not be checked after the retries (publishing again checks them again).
+      properties:
+        type:
+          type: string
+          enum: [EMPTY_SHIFT, INELIGIBLE, NOT_CHECKED]
+        shiftKey:
+          type: string
+        shiftId:
+          type: string
+          format: uuid
+        dutyDate:
+          type: string
+          format: date
+        memberId:
+          type: string
+          format: uuid
+          nullable: true
+        role:
+          type: string
+          nullable: true
+          enum: [CREW_CHIEF, DRIVER, CREW_MEMBER, null]
+        rules:
+          type: array
+          nullable: true
+          items:
+            type: string
+            enum: [RN01, RN05, RN06]
+    Notification:
+      type: object
+      required: [id, type, week, createdAt, read]
+      description: >
+        About the member's own shifts only; the PWA writes the text. shiftId and the times are null on
+        WEEKLY_SCHEDULE_PUBLISHED; previousStartsAt and previousEndsAt are set only on SHIFT_TIMES_CHANGED, shiftCount only on
+        WEEKLY_SCHEDULE_PUBLISHED.
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [WEEKLY_SCHEDULE_PUBLISHED, ADDED_TO_SHIFT, REMOVED_FROM_SHIFT, SHIFT_TIMES_CHANGED, SHIFT_CANCELLED]
+        week:
+          type: string
+          example: "2026-W49"
+        shiftId:
+          type: string
+          format: uuid
+          nullable: true
+        startsAt:
+          type: string
+          format: date-time
+          nullable: true
+        endsAt:
+          type: string
+          format: date-time
+          nullable: true
+        previousStartsAt:
+          type: string
+          format: date-time
+          nullable: true
+        previousEndsAt:
+          type: string
+          format: date-time
+          nullable: true
+        shiftCount:
+          type: integer
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    CandidateCheckRequest:
+      type: object
+      required: [startsAt, endsAt, role]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        role:
+          $ref: "#/components/schemas/SlotRole"
+        otherShifts:
+          type: array
+          description: The other shifts of the week in the supervisor's draft, one entry per member on each
+          items:
+            type: object
+            required: [memberId, startsAt, endsAt]
+            properties:
+              memberId:
+                type: string
+                format: uuid
+              startsAt:
+                type: string
+                format: date-time
+              endsAt:
+                type: string
+                format: date-time
+    CandidateCheck:
+      type: object
+      required: [id, status, candidates]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [CHECKING, DONE]
+        candidates:
+          type: array
+          description: One entry per member with the role
+          items:
+            type: object
+            required: [memberId, result, rules]
+            properties:
+              memberId:
+                type: string
+                format: uuid
+              result:
+                type: string
+                description: >
+                  PENDING until the worker answers; INELIGIBLE with the codes of the rules broken (RN01 not on the
+                  active roster, RN05 on another shift at the same time, RN06 said they can't come); NOT_CHECKED when
+                  the worker could not evaluate them after its retries.
+                enum: [PENDING, ELIGIBLE, INELIGIBLE, NOT_CHECKED]
+              rules:
+                type: array
+                items:
+                  type: string
+                  enum: [RN01, RN05, RN06]
     SlotRole:
       type: string
-      description: SlotRole in escala-api. A new piquete has one slot, CREW_MEMBER.
+      description: >
+        SlotRole in escala-api. A shift has one slot per person of its crew; a walking-skeleton piquete has one,
+        CREW_MEMBER.
       enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
     SlotStatus:
       type: string
@@ -1339,7 +1941,7 @@ components:
                     example: certifications[0].expiresOn
                   code:
                     type: string
-                    enum: [required, invalid, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off]
+                    enum: [required, invalid, invalid_week, not_readable, too_long, expires_before_issued, unknown_certification_type, duplicate, driver_without_licence, ends_before_start, in_the_past, too_far_ahead, no_days, too_many, ai_off, not_on_duty_date, too_small, too_large, below_filled, not_in_week, unknown_shift, unknown_member]
     UnavailabilityRequest:
       type: object
       required: [startsAt, endsAt]
@@ -1373,6 +1975,21 @@ components:
           type: string
           enum: [FORM, FREE_TEXT]
           description: FREE_TEXT when confirmed from a message (SCRUM-75)
+    TeamUnavailability:
+      type: object
+      required: [memberId, startsAt, endsAt]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        startsAt:
+          type: string
+          format: date-time
+          description: In UTC (ADR 0012)
+        endsAt:
+          type: string
+          format: date-time
+          description: In UTC, exclusive
     UnavailabilityMessageSettings:
       type: object
       required: [aiEnabled]

@@ -1,0 +1,118 @@
+<!-- Top bar for Phones below 768px -->
+<header class="box-border border-b border-line bg-white pt-[env(safe-area-inset-top)] md:hidden">
+  <div
+    class="box-border flex h-[68px] items-center justify-between gap-3 pr-[max(16px,env(safe-area-inset-right))] pl-[max(16px,env(safe-area-inset-left))] [--mat-button-outlined-container-height:44px] [--mat-button-text-container-height:44px]"
+  >
+    <!-- The app name and icon -->
+    <span class="flex min-w-0 items-center gap-2">
+      <span class="flex text-fire-600">
+        <mat-icon fontSet="material-symbols-outlined" class="icon-30"
+          >local_fire_department</mat-icon
+        >
+      </span>
+      <span class="truncate text-[22px] font-bold">Escala</span>
+    </span>
+
+    <!-- Notifications and sign out button -->
+    <div class="flex shrink-0 items-center gap-1">
+      <app-notification-bell />
+      <button matButton="outlined" type="button" class="sign-out" (click)="signOut.emit()">
+        Sign out
+      </button>
+    </div>
+  
+  </div>
+  @if (canInstall()) {
+    <!-- Install button; Own row, since in smaller phones (360px) it doesn't fit beside Sign out button -->
+    <div class="flex justify-center border-t border-line px-4 py-1">
+      <button matButton type="button" class="install" (click)="install.emit()">
+        Install Escala
+      </button>
+    </div>
+  }
+</header>
+
+<!-- Tab bar for phones on the bottom of the screen -->
+<nav
+  aria-label="Main"
+  class="tab-bar fixed inset-x-0 bottom-0 z-20 box-border grid min-h-[calc(var(--app-tab-bar-height)+env(safe-area-inset-bottom))] auto-cols-fr grid-flow-col border-t border-line bg-white pt-2 pr-[env(safe-area-inset-right)] pb-[calc(12px+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] md:hidden"
+>
+  <!-- Icon and name for each navigation link -->
+  @for (link of links(); track link.path) {
+    <a
+      class="group box-border flex min-h-12 min-w-0 flex-col items-center justify-center gap-1.5 border-b-4 border-transparent pb-1 text-ink-muted no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire-600 aria-[current=page]:border-b-brand aria-[current=page]:text-ink"
+      [routerLink]="link.path"
+      routerLinkActive
+      #rla="routerLinkActive"
+      [routerLinkActiveOptions]="{ exact: link.path === '/' }"
+      [attr.aria-current]="rla.isActive ? 'page' : null"
+    >
+      <span class="flex h-9 w-16 items-center justify-center">
+        <mat-icon fontSet="material-symbols-outlined" class="icon-28">{{ link.icon }}</mat-icon>
+      </span>
+      <span
+        class="text-[17px] leading-tight font-normal whitespace-nowrap group-aria-[current=page]:font-bold"
+        >{{ link.label }}</span
+      >
+    </a>
+  }
+</nav>
+
+<!-- A single top bar for desktops and tables above 768px -->
+<header class="hidden border-b border-line bg-white md:block">
+  <div
+    class="mx-auto flex max-w-[1200px] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-6"
+  >
+    <!-- App icon and name-->
+    <span class="flex flex-1 basis-0 items-center gap-2">
+      <span class="flex text-fire-600">
+        <mat-icon fontSet="material-symbols-outlined" class="icon-32"
+          >local_fire_department</mat-icon
+        >
+      </span>
+      <span class="text-2xl font-bold">Escala</span>
+    </span>
+
+    <!-- App navigation links-->
+    <nav aria-label="Main" class="flex items-center gap-1">
+      @for (link of links(); track link.path) {
+        <a
+          class="box-border flex h-[72px] items-center gap-2.5 border-y-4 border-transparent px-5 text-[19px] font-bold text-ink-muted no-underline hover:border-b-line hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-fire-600 aria-[current=page]:border-b-brand aria-[current=page]:text-ink"
+          [routerLink]="link.path"
+          routerLinkActive
+          #rla="routerLinkActive"
+          [routerLinkActiveOptions]="{ exact: link.path === '/' }"
+          [attr.aria-current]="rla.isActive ? 'page' : null"
+        >
+          <mat-icon fontSet="material-symbols-outlined" class="icon-26">{{ link.icon }}</mat-icon>
+          {{ link.label }}
+        </a>
+      }
+    </nav>
+
+    <!-- Install button (when offered), logged user and sign out button -->
+    <div
+      class="toolbar-end flex min-w-max flex-1 basis-0 items-center justify-end gap-2 py-2 [--mat-button-outlined-container-height:44px] [--mat-button-text-container-height:44px]"
+    >
+      @if (canInstall()) {
+        <button matButton type="button" class="install" (click)="install.emit()">
+          Install Escala
+        </button>
+      }
+
+      <app-notification-bell />
+
+      @if (auth.session(); as session) {
+        <span class="session -me-1 max-w-24 min-w-0 text-base leading-tight wrap-break-word text-on-surface-variant">{{
+          session.fullName
+        }}</span>
+      }
+      
+      <div class="shrink-0">
+        <button matButton="outlined" type="button" class="sign-out" (click)="signOut.emit()">
+          Sign out
+        </button>
+      </div>
+    </div>
+  </div>
+</header>

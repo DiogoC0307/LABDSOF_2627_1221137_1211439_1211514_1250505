@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -96,7 +97,7 @@ final class MessagingTestSupport {
 		UUID piqueteId = UUID.randomUUID();
 		UUID assignmentId = UUID.randomUUID();
 		LocalDate dutyDate = LocalDate.of(2031, 8, 1);
-		Instant shiftStartsAt = Instant.parse("2031-08-01T00:00:00Z");
+		OffsetDateTime shiftStartsAt = OffsetDateTime.parse("2031-08-01T00:00:00Z");
 		jdbc.update("INSERT INTO piquete (id, duty_date) VALUES (?, ?)", piqueteId, dutyDate);
 		jdbc.update(
 				"INSERT INTO slot (id, assignment_id, role, status, piquete_id, shift_starts_at) VALUES (?, ?, 'CREW_MEMBER', 'PENDING', ?, ?)",

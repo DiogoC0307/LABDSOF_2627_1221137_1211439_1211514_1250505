@@ -1,0 +1,336 @@
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { MatButton, MatIconButton } from '@angular/material/button';
+import { finalize } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
+import { CandidateChecks, CandidateQuestion, candidateQuestion } from './candidate-checks';
+import { longDay } from './iso-week';
+import { PresenceStatus, ROLE_LABELS, SLOT_ROLES, SlotRole } from './piquete';
+import { ScheduleDirectory } from './schedule-directory';
+import { ScheduleDraftService } from './schedule-draft.service';
+import { DraftShift } from './schedule-model';
+import {
+  Candidate,
+  MINUTES_IN_DAY,
+  RoleState,
+  candidates,
+  endAfter,
+  parseTime,
+  rangeLabel,
+  readNeeded,
+  roleState,
+  rolesOf,
+  timeLabel,
+} from './schedule-rules';
+import { TimeField, WHOLE_HOURS, endHours, endLabel } from './time-field';
+
+// Number of candidates to show before the "Show all" button appears
+const NUM_CANDIDATES = 3;
+
+export type PresenceDecision = 'COMING' | 'CANNOT_COME';
+
+interface PresenceResponse {
+  slotId: string;
+  presenceStatus: PresenceStatus;
+  slotStatus: string;
+  slotFreed: boolean;
+}
+
+export interface AssignedPersonView {
+  id: string;
+  name: string;
+  slotId?: string;
+  presenceStatus?: PresenceStatus | null;
+  canConfirm: boolean;
+}
+
+interface RoleSection {
+  role: SlotRole;
+  name: string;
+  required: number;
+  state: RoleState; // Ex: "1 of 1 · Full", "2 of 3 · Needs 1"
+  pill: string;
+  people: AssignedPersonView[];
+  check: 'checking' | 'done' | 'failed'; // The eligibility worker's answer about who can take the role
+  shown: Candidate[];
+  hidden: number;
+}
+
+/**
+ * A selected shift side panel component with its date, time, roles, assigned people, and candidates
+ */
+@Component({
+  selector: 'app-shift-panel',
+  imports: [MatButton, MatIconButton, TimeField],
+  templateUrl: './shift-panel.html',
+  styleUrl: './shift-panel.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'flex min-h-0 flex-col' },
+})
+export class ShiftPanel {
+  private readonly http = inject(HttpClient);
+  protected readonly auth = inject(AuthService);
+  private readonly draft = inject(ScheduleDraftService);
+  private readonly directory = inject(ScheduleDirectory);
+  private readonly checks = inject(CandidateChecks);
+  protected readonly directoryError = this.directory.error; // The members could not be loaded
+  private readonly injector = inject(Injector);
+
+  readonly monday = input.required<string>();
+  readonly shift = input.required<DraftShift>();
+  readonly weekShifts = input.required<DraftShift[]>(); // For who is already on a shift at the same time
+  readonly editable = input.required<boolean>();
+  readonly note = input<string | null>(null); // For shifts that have already happened
+
+  readonly closed = output<void>();
+  readonly deleteRequested = output<void>();
+  readonly presenceUpdated = output<void>();
+
+  protected readonly updatingPresenceId = signal<string | null>(null);
+  protected readonly presenceError = signal<string | null>(null);
+  protected readonly presenceOverrides = signal<Record<string, PresenceStatus>>({});
+
+  private readonly heading = viewChild<ElementRef<HTMLElement>>('heading');
+
+  protected readonly day = computed(() => longDay(this.shift().dutyDate));
+  protected readonly time = computed(() => rangeLabel(this.shift().start, this.shift().end));
+
+  // Start and end time input fields values and dropdown options
+  protected readonly startShown = computed(() => timeLabel(this.shift().start));
+  protected readonly endShown = computed(() => endLabel(this.shift().end));
+  protected readonly startOptions = WHOLE_HOURS;
+  protected readonly endOptions = computed(() => endHours(this.shift().start));
+
+  // A new start keeps the end time; when the end is then at or before the start, it is the next day's.
+  protected readonly takeStart = (text: string): string | null => {
+    const start = parseTime(text);
+    if (start === null || start >= MINUTES_IN_DAY) {
+      return null;
+    }
+
+    const shift = this.shift();
+    if (start !== shift.start) {
+      this.draft.setTimes(
+        this.monday(),
+        shift.id,
+        start,
+        endAfter(start, shift.end % MINUTES_IN_DAY),
+      );
+    }
+    return timeLabel(start);
+  };
+
+  /** An end at or before the start is on the next day: 20:00 to 08:00 is a night shift. */
+  protected readonly takeEnd = (text: string): string | null => {
+    const time = parseTime(text);
+    if (time === null) {
+      return null;
+    }
+    const shift = this.shift();
+    const end = endAfter(shift.start, time);
+    if (end !== shift.end) {
+      this.draft.setTimes(this.monday(), shift.id, shift.start, end);
+    }
+    return endLabel(end);
+  };
+
+  private readonly expanded = signal<ReadonlySet<SlotRole>>(new Set());
+
+  /** The shift needs only one role: its button can't take it off, as a shift keeps at least one role. */
+  protected readonly oneRole = computed(() => rolesOf(this.shift().crew).length === 1);
+
+  /** Every role, and whether the shift needs it: the role buttons on top of the panel. */
+  protected readonly roleChoices = computed(() => {
+    const crew = this.shift().crew;
+    return SLOT_ROLES.map((role) => ({
+      role,
+      name: ROLE_LABELS[role],
+      chosen: crew[role] > 0,
+      locked: crew[role] > 0 && this.oneRole(),
+    }));
+  });
+
+  /**
+   * What the eligibility worker is asked for each role the shift needs, while it can be changed (SCRUM-171): the
+   * shift's times and who is on the week's other shifts. A new question is asked when either changes.
+   */
+  private readonly questions = computed(() => {
+    if (!this.editable()) {
+      return new Map<SlotRole, CandidateQuestion>();
+    }
+    const shift = this.shift();
+    const week = this.weekShifts();
+    return new Map(rolesOf(shift.crew).map((role) => [role, candidateQuestion(shift, role, week)]));
+  });
+
+  /** Only the roles the shift needs get a section. */
+  protected readonly sections = computed<RoleSection[]>(() => {
+    const shift = this.shift();
+    const currentMemberId = this.auth.session()?.memberId ?? null;
+    const isSupervisor = this.auth.isSupervisor();
+    const overrides = this.presenceOverrides();
+
+    return rolesOf(shift.crew).map((role) => {
+      const required = shift.crew[role];
+      const people: AssignedPersonView[] = shift.assigned[role].map((id, index) => {
+        const matchingSlot = shift.slots.find((slot) => slot.role === role && slot.memberId === id);
+        const key = matchingSlot?.id ?? `${shift.id}-${role}-${index}`;
+        const presenceStatus = overrides[key] ?? matchingSlot?.presenceStatus ?? null;
+        return {
+          id,
+          name: this.directory.name(id),
+          slotId: matchingSlot?.id,
+          presenceStatus,
+          canConfirm: Boolean(matchingSlot?.id) && (isSupervisor || id === currentMemberId),
+        };
+      });
+      const state = roleState(required, people.length);
+      const question = this.questions().get(role);
+      const check = question ? this.checks.checks()[question.key] : undefined;
+      const eligible = new Set(
+        check?.state === 'done'
+          ? check.answers
+              .filter((answer) => answer.result === 'ELIGIBLE')
+              .map((answer) => answer.memberId)
+          : [],
+      );
+      const all = candidates(shift, role, this.directory.members(), this.weekShifts(), eligible);
+      const shown = this.expanded().has(role) ? all : all.slice(0, NUM_CANDIDATES);
+      return {
+        role,
+        name: ROLE_LABELS[role],
+        required,
+        state,
+        pill: pill(state, required, people.length),
+        people,
+        check: check?.state ?? 'checking',
+        shown,
+        hidden: all.length - shown.length,
+      };
+    });
+  });
+
+  // Who the worker found can't come for some or all of the shift's time (RN06, from "When I can't")
+  protected readonly cantCome = computed(() => {
+    const ids = new Set<string>();
+    for (const question of this.questions().values()) {
+      const check = this.checks.checks()[question.key];
+      if (check?.state === 'done') {
+        check.answers
+          .filter((answer) => answer.rules.includes('RN06'))
+          .forEach((answer) => ids.add(answer.memberId));
+      }
+    }
+    return [...ids].map((id) => this.directory.name(id)).sort((a, b) => a.localeCompare(b));
+  });
+
+  constructor() {
+    // Each question goes to the worker once
+    effect(() => {
+      const questions = [...this.questions().values()];
+      untracked(() => questions.forEach((question) => this.checks.ask(question)));
+    });
+
+    // A newly selected shift starts with short candidate lists and takes the focus, so the panel is read from its top.
+    const shiftId = computed(() => this.shift().id);
+    effect(() => {
+      shiftId();
+      untracked(() => {
+        this.expanded.set(new Set());
+        this.presenceError.set(null);
+        afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
+      });
+    });
+  }
+
+  protected confirmPresence(person: AssignedPersonView, decision: PresenceDecision): void {
+    if (!person.slotId || this.updatingPresenceId() === person.slotId) {
+      return;
+    }
+    this.presenceError.set(null);
+    this.updatingPresenceId.set(person.slotId);
+
+    this.http
+      .post<PresenceResponse>(`/api/v1/slots/${person.slotId}/presence`, { decision })
+      .pipe(finalize(() => this.updatingPresenceId.set(null)))
+      .subscribe({
+        next: (res) => {
+          this.presenceOverrides.update((prev) => ({
+            ...prev,
+            [person.slotId!]: res.presenceStatus,
+          }));
+          this.presenceUpdated.emit();
+        },
+        error: () => {
+          this.presenceError.set('Could not update shift confirmation.');
+        },
+      });
+  }
+
+  /** Adds a role the shift needs, for 1 person, or takes it off with the people assigned to it (not its only role). */
+  protected toggleRole(role: SlotRole): void {
+    const crew = this.shift().crew;
+    if (crew[role] > 0 && this.oneRole()) {
+      return;
+    }
+    const count = crew[role] > 0 ? 0 : 1;
+    this.draft.setNeeded(this.monday(), this.shift().id, role, count);
+  }
+
+  /**
+   * Digits only, 1 to 20. An empty box or 0 changes nothing, so the role stays while its number is rewritten; the
+   * role's button takes it off the shift.
+   */
+  protected setNeeded(role: SlotRole, field: HTMLInputElement): void {
+    const { shown, count } = readNeeded(field.value);
+    field.value = shown;
+    if (count > 0) {
+      this.draft.setNeeded(this.monday(), this.shift().id, role, count);
+    }
+  }
+
+  /** Puts the count back in a box left empty or at 0. */
+  protected showNeeded(role: SlotRole, field: HTMLInputElement): void {
+    field.value = String(this.shift().crew[role]);
+  }
+
+  protected assign(role: SlotRole, memberId: string): void {
+    this.draft.assign(this.monday(), this.shift().id, role, memberId);
+  }
+
+  protected unassign(role: SlotRole, memberId: string): void {
+    this.draft.unassign(this.monday(), this.shift().id, role, memberId);
+  }
+
+  /** Asks the worker again about a role whose check failed. */
+  protected checkAgain(role: SlotRole): void {
+    const question = this.questions().get(role);
+    if (question) {
+      this.checks.retry(question);
+    }
+  }
+
+  protected showAll(role: SlotRole): void {
+    this.expanded.update((roles) => new Set([...roles, role]));
+  }
+}
+
+function pill(state: RoleState, required: number, assigned: number): string {
+  return state === 'full'
+    ? `${assigned} of ${required} · Full`
+    : `${assigned} of ${required} · Needs ${required - assigned}`;
+}

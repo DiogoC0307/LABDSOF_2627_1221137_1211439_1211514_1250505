@@ -1,6 +1,7 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
+import { Router, RouterOutlet } from '@angular/router';
 import { AuthService } from './auth/auth.service';
+import { Navbar } from './navbar/navbar';
 import { SignIn } from './sign-in/sign-in';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -8,12 +9,12 @@ interface BeforeInstallPromptEvent extends Event {
 }
 
 /**
- * The shell: the sign-in screen without a session; with one, the menu by role and the router outlet (SCRUM-63,
- * SCRUM-77). The menu and the route guards are convenience only: the API checks the role of every request.
+ * The shell: the sign-in screen without a session; with one, the navbar at the top and the router outlet (SCRUM-63,
+ * SCRUM-77). The navbar's links and the route guards are convenience only: the API checks the role of every request.
  */
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet, RouterLink, SignIn],
+  imports: [RouterOutlet, Navbar, SignIn],
   templateUrl: './app.html',
   changeDetection: ChangeDetectionStrategy.Eager,
 })
@@ -24,10 +25,6 @@ export class App implements OnInit, OnDestroy {
   private readonly onBeforeInstall = (event: Event) => this.captureInstallPrompt(event);
 
   protected readonly canInstall = signal(false);
-  protected readonly seesMembers = computed(() => {
-    const role = this.auth.session()?.role;
-    return role === 'SUPERVISOR' || role === 'ADMIN';
-  });
 
   ngOnInit(): void {
     window.addEventListener('beforeinstallprompt', this.onBeforeInstall);

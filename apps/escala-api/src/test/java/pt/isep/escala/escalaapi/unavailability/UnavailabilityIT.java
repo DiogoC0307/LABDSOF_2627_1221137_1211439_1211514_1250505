@@ -241,6 +241,47 @@ class UnavailabilityIT {
 		assertThat(exists(recent)).isTrue();
 	}
 
+	@Test
+	@DisplayName("SCRUM-65 the supervisor reads every member's periods that overlap the week, with who and when only")
+	void supervisorReadsTheTeamsPeriodsOfAWeek() throws Exception {
+		// Week 2027-W02: Monday 11 to Sunday 17 January 2027 (Lisbon is on UTC in winter)
+		insertPeriod("2027-01-12T08:00:00Z", "2027-01-12T20:00:00Z"); // inside the week
+		insertPeriod(OTHER_MEMBER_ID, "2027-01-17T22:00:00Z", "2027-01-18T06:00:00Z"); // Sunday night into Monday
+		insertPeriod(OTHER_MEMBER_ID, "2027-01-19T00:00:00Z", "2027-01-20T00:00:00Z"); // after the Monday that follows
+		insertPeriod("2027-01-09T00:00:00Z", "2027-01-11T00:00:00Z"); // ends as the week starts
+
+		mockMvc.perform(get("/api/v1/unavailabilities/team").param("week", "2027-W02")
+						.header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(2))
+				.andExpect(jsonPath("$[0].memberId").value(MockTokens.MEMBER_ID.toString()))
+				.andExpect(jsonPath("$[0].startsAt").value("2027-01-12T08:00:00Z"))
+				.andExpect(jsonPath("$[0].endsAt").value("2027-01-12T20:00:00Z"))
+				.andExpect(jsonPath("$[1].memberId").value(OTHER_MEMBER_ID.toString()))
+				.andExpect(jsonPath("$[1].startsAt").value("2027-01-17T22:00:00Z"))
+				.andExpect(jsonPath("$[0].id").doesNotExist())
+				.andExpect(jsonPath("$[0].source").doesNotExist());
+	}
+
+	@Test
+	@DisplayName("SCRUM-65 only the supervisor reads the team's periods (403 for a member and the admin), for a week that exists (400)")
+	void onlyTheSupervisorReadsTheTeamsPeriods() throws Exception {
+		mockMvc.perform(get("/api/v1/unavailabilities/team").param("week", "2027-W02")
+						.header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/unavailabilities/team").param("week", "2027-W02")
+						.header(HttpHeaders.AUTHORIZATION, MockTokens.admin()))
+				.andExpect(status().isForbidden());
+		mockMvc.perform(get("/api/v1/unavailabilities/team").param("week", "2025-W54")
+						.header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor()))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.errors[0].field").value("week"));
+		mockMvc.perform(get("/api/v1/unavailabilities/team").header(HttpHeaders.AUTHORIZATION, MockTokens.supervisor()))
+				.andExpect(status().isBadRequest());
+		mockMvc.perform(get("/api/v1/unavailabilities/team").param("week", "2027-W02"))
+				.andExpect(status().isUnauthorized());
+	}
+
 	private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder declare(String token,
 			String startsAt, String endsAt) {
 		return post("/api/v1/unavailabilities")
@@ -250,9 +291,13 @@ class UnavailabilityIT {
 	}
 
 	private UUID insertPeriod(String startsAt, String endsAt) {
+		return insertPeriod(MockTokens.MEMBER_ID, startsAt, endsAt);
+	}
+
+	private UUID insertPeriod(UUID memberId, String startsAt, String endsAt) {
 		UUID id = UUID.randomUUID();
 		jdbc.update("INSERT INTO unavailability (id, member_id, starts_at, ends_at) VALUES (?, ?, ?::timestamptz, ?::timestamptz)",
-				id, MockTokens.MEMBER_ID, startsAt, endsAt);
+				id, memberId, startsAt, endsAt);
 		return id;
 	}
 

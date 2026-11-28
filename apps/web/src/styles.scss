@@ -3,8 +3,10 @@
 /*
  * Angular Material theme (ADR 0020, SCRUM-165). mat.theme() only defines the --mat-sys-* tokens
  * (colour, typography, shape) on <html>; Tailwind's colours point to the same tokens (src/tailwind.css).
- * The font is the app's current system font, so no web font is loaded from a third party and the
- * PWA keeps working offline (RNF06). The page's own background, colour and font sizes are unchanged.
+ * The font is the app's current system font. No web font is loaded for text; the page's own background,
+ * colour and font sizes are unchanged. 
+ *
+ * Navbar's icons come fron GoogleFonts (in index.html)
  */
 html {
   color-scheme: light;
@@ -35,6 +37,14 @@ body {
   background: #f4f6f8;
 }
 
+/*
+ * The app's font on body, not only app-root: CDK overlays (menus, dialogs, the notifications list) are added to
+ * body outside app-root, and would otherwise show in the browser's default serif font.
+ */
+body {
+  font-family: system-ui, sans-serif;
+}
+
 /* Shared by every view (moved from app.scss with the router, SCRUM-77). */
 app-root {
   display: block;
@@ -51,6 +61,254 @@ app-root {
   padding: 1rem 1rem 2rem;
 }
 
+/*
+ * Phones (below Tailwind's md, 768px): the navbar's tab bar is fixed to the bottom of the screen (SCRUM-167), so the
+ * page leaves room for it and for the iPhone home indicator under its content.
+ */
+:root {
+  --app-tab-bar-height: 92px;
+}
+
+@media not (width >= 48rem) {
+  app-navbar ~ .page {
+    padding-bottom: calc(2rem + var(--app-tab-bar-height) + env(safe-area-inset-bottom));
+  }
+}
+
+/*
+ * Schedule page
+ * 
+ * On a desktop the page is a column as tall as the screen that never scrolls. Smaller screens scroll as usual.
+ */
+app-root:has(app-week-schedule) {
+  background: #f5f4f1;
+}
+
+@media (min-width: 64rem) {
+  .page:has(app-week-schedule) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding-bottom: 0;
+  }
+}
+
+.schedule-theme {
+  --mat-sys-primary: #0b5cab; // Blue as the app primary color
+  --mat-sys-on-primary: #fff;
+
+  // Material buttons
+  --mat-button-filled-container-height: 48px;
+  --mat-button-filled-container-shape: 12px;
+  --mat-button-filled-label-text-size: 16px;
+  --mat-button-filled-label-text-weight: 700;
+  --mat-button-filled-horizontal-padding: 20px;
+  --mat-button-outlined-container-height: 44px;
+  --mat-button-outlined-container-shape: 12px;
+  --mat-button-outlined-label-text-size: 16px;
+  --mat-button-outlined-label-text-weight: 700;
+  --mat-button-outlined-label-text-color: #1c1b19;
+  --mat-button-outlined-outline-color: #8a8780;
+  --mat-button-outlined-horizontal-padding: 16px;
+  --mat-button-text-container-height: 44px;
+  --mat-button-text-label-text-size: 16px;
+  --mat-button-text-label-text-weight: 700;
+  --mat-button-text-label-text-color: #0b5cab;
+
+  // Material form fields, time lists and labels
+  --mat-form-field-container-height: 52px;
+  --mat-select-trigger-text-size: 18px;
+  --mat-form-field-container-text-size: 18px;
+  --mat-autocomplete-background-color: #fff;
+  --mat-option-label-text-size: 17px;
+  --mat-sys-on-surface-variant: #57554f;
+
+  // Button icons and focus ring
+  .mat-mdc-button-base {
+    gap: 8px;
+  }
+
+  .mat-mdc-button-base:focus-visible {
+    outline: 2px solid #0b5cab;
+    outline-offset: 2px;
+  }
+
+  .mat-mdc-button-base .icon {
+    width: 22px;
+    height: 22px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  // Edit, Delete and Publish buttons
+
+  .btn-outline-primary,
+  .btn-assign {
+    --mat-button-outlined-label-text-color: #0b5cab;
+    --mat-button-outlined-outline-color: #0b5cab;
+    --mat-button-outlined-outline-width: 2px;
+  }
+
+  .btn-destructive,
+  .dialog-destructive {
+    --mat-button-outlined-label-text-color: #b3261e;
+    --mat-button-outlined-outline-color: #b3261e;
+    --mat-button-outlined-outline-width: 2px;
+    --mat-button-filled-container-color: #b3261e;
+    --mat-button-filled-label-text-color: #fff;
+  }
+
+  // Close button of the shift side panel
+  .btn-close {
+    --mat-icon-button-state-layer-size: 44px;
+    --mat-icon-button-icon-color: #1c1b19;
+
+    width: 44px;
+    height: 44px;
+    padding: 0;
+  }
+
+  .btn-remove {
+    --mat-button-outlined-outline-color: #8a8780;
+  }
+}
+
+// Role buttons (Add shift dialog and shift side panel), blue with a tick when chosen
+.role-choice {
+  box-sizing: border-box;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1c1b19;
+  background: #fff;
+  border: 1px solid #8a8780;
+  border-radius: 999px;
+  cursor: pointer;
+
+  &:hover {
+    background: #f5f4f1;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #0b5cab;
+    outline-offset: 2px;
+  }
+
+  svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+}
+
+.role-choice--on,
+.role-choice--on:hover {
+  color: #fff;
+  background: #0b5cab;
+  border-color: #0b5cab;
+}
+
+// Roles group, without the box of the global fieldset rule
+.roles-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+// "Needed" number box, digits only and without spinner arrows
+.needed-input {
+  box-sizing: border-box;
+  width: 64px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  color: #1c1b19;
+  background: #fff;
+  border: 1px solid #8a8780;
+  border-radius: 10px;
+
+  &:focus-visible {
+    outline: 2px solid #0b5cab;
+    outline-offset: 2px;
+  }
+}
+
+// Schedule page's dialogs
+.schedule-dialog {
+  --mat-dialog-container-shape: 20px;
+  --mat-dialog-headline-padding: 28px 28px 8px;
+  --mat-dialog-content-padding: 0 28px;
+  --mat-dialog-with-actions-content-padding: 0 28px;
+  --mat-dialog-actions-padding: 16px 28px 28px;
+  --mat-dialog-subhead-size: 22px;
+  --mat-dialog-subhead-weight: 700;
+  --mat-dialog-subhead-color: #1c1b19;
+  --mat-dialog-supporting-text-size: 17px;
+  --mat-dialog-supporting-text-line-height: 1.5;
+  --mat-dialog-supporting-text-color: #33312d;
+
+  .mat-mdc-dialog-actions {
+    gap: 12px;
+  }
+
+  // Dialog title, focused when a dialog opens, without a focus ring
+  .mat-mdc-dialog-title:focus {
+    outline: none;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  // The conflicts that keep a week from being published, each with its "Show shift" button
+  .conflict-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .conflict {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #fff0d1;
+    border: 1px solid #f0cf85;
+    border-left: 6px solid #c77700;
+    border-radius: 10px;
+  }
+
+  .conflict-text {
+    display: flex;
+    flex: 1 1 220px;
+    flex-direction: column;
+    gap: 2px;
+    color: #33312d;
+  }
+}
+
 .top {
   display: flex;
   align-items: flex-start;
@@ -58,18 +316,20 @@ app-root {
   gap: 0.75rem;
 }
 
-h1,
-h2 {
-  margin: 0 0 0.5rem;
-}
+@layer base {
+  h1,
+  h2 {
+    margin: 0 0 0.5rem;
+  }
 
-h1 {
-  font-size: 1.375rem;
-}
+  h1 {
+    font-size: 1.375rem;
+  }
 
-h2 {
-  font-size: 1rem;
-  margin-top: 1.5rem;
+  h2 {
+    font-size: 1rem;
+    margin-top: 1.5rem;
+  }
 }
 
 .lead {
@@ -127,25 +387,21 @@ label {
   font-size: 0.875rem;
 }
 
-input,
-button {
-  font: inherit;
-  min-height: 2.75rem;
-  padding: 0.5rem 0.75rem;
-}
+// Plain input and button style, not on Angular Material buttons and menu items (SCRUM-167)
+@layer base {
+  input,
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
+    font: inherit;
+    min-height: 2.75rem;
+    padding: 0.5rem 0.75rem;
+  }
 
-button {
-  background: #0b5cab;
-  color: #fff;
-  border: 0;
-  border-radius: 0.25rem;
-}
-
-.install {
-  flex-shrink: 0;
-  min-height: 2.5rem;
-  padding: 0.4rem 0.7rem;
-  font-size: 0.875rem;
+  button:where(:not(.mat-mdc-button-base, .mat-mdc-menu-item)) {
+    background: #0b5cab;
+    color: #fff;
+    border: 0;
+    border-radius: 0.25rem;
+  }
 }
 
 .list {
@@ -177,27 +433,6 @@ button {
 }
 
 .notice {
-  color: #0b5cab;
-}
-
-.menu {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin: 0 0 1rem;
-  font-size: 0.875rem;
-}
-
-.sign-out {
-  min-height: 2.5rem;
-  padding: 0.4rem 0.7rem;
-  background: #fff;
-  color: #0b5cab;
-  border: 1px solid #0b5cab;
-}
-
-.menu a {
   color: #0b5cab;
 }
 

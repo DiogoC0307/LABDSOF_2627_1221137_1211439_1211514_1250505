@@ -4,6 +4,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,9 +27,6 @@ class AvaliacaoPedidaListener {
 	static final String ROUTING_AVALIACAO_CONCLUIDA = "avaliacao.concluida";
 
 	private static final Logger log = LoggerFactory.getLogger(AvaliacaoPedidaListener.class);
-
-	/** The only result while the engine is SEMPRE_ELEGIVEL. */
-	private static final String ELIGIBLE = "ELIGIBLE";
 
 	private final ObjectMapper objectMapper;
 	private final ProcessedEventRepository processed;
@@ -63,27 +61,34 @@ class AvaliacaoPedidaListener {
 				return;
 			}
 			UUID assignmentId = EventFields.uuid(body, "assignmentId");
+			List<String> violated = EligibilityRules.violated(body.path("slot"), body.path("candidate"));
+			String result = EligibilityRules.result(violated);
 			evaluations.save(new Evaluation(
 					UUID.randomUUID(),
 					requestEventId,
 					assignmentId,
-					ELIGIBLE,
-					Evaluation.ENGINE_SEMPRE_ELEGIVEL,
+					result,
+					violated,
+					EligibilityRules.ENGINE_VERSION,
 					traceId,
 					Instant.now()));
 			UUID resultEventId = UUID.randomUUID();
 			outbox.save(new OutboxEvent(
 					resultEventId,
 					ROUTING_AVALIACAO_CONCLUIDA,
-					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, ELIGIBLE),
+					AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, result,
+							violated),
 					Instant.now()));
 			processed.save(new ProcessedEvent(requestEventId, Instant.now()));
-			metrics.completed(ELIGIBLE, EvaluationMetrics.LISTENER);
+			metrics.completed(result, EvaluationMetrics.LISTENER);
 			metrics.processed(Duration.ofNanos(System.nanoTime() - started));
+			// Rule codes only: no member, slot times nor periods in the log (T-07)
 			log.info(
-					"SEMPRE_ELEGIVEL written requestEventId={} assignmentId={} resultEventId={} traceId={}",
+					"evaluation written requestEventId={} assignmentId={} result={} violatedRules={} resultEventId={} traceId={}",
 					requestEventId,
 					assignmentId,
+					result,
+					violated,
 					resultEventId,
 					traceId);
 		} finally {

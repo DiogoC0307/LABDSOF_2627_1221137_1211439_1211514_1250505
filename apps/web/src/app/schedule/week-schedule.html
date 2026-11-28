@@ -1,0 +1,341 @@
+<section class="week flex flex-col lg:min-h-0 lg:flex-1" aria-labelledby="week-relative week-range">
+  <!-- Page header (week selector, status label, Edit / Discard and Publish buttons), one per line on a phone -->
+  <div
+    class="flex flex-col items-center gap-3 px-4 py-3 lg:flex-row lg:flex-wrap lg:justify-between lg:px-6"
+  >
+    <!-- Week selector -->
+    <app-week-selector
+      [monday]="monday()"
+      [currentMonday]="currentMonday"
+      [today]="today"
+      (weekChange)="goTo($event)"
+    />
+
+    <div class="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap">
+      <!-- Status label (an output is announced like role="status") -->
+      <output
+        class="week-status text-[16px] font-semibold rounded-full"
+        [class.week-status--green]="status().tone === 'green'"
+        [class.week-status--amber]="status().tone === 'amber'"
+      >
+        <span
+          class="status-dot"
+          [class.status-dot--green]="status().tone === 'green'"
+          [class.status-dot--amber]="status().tone === 'amber'"
+          aria-hidden="true"
+        ></span>
+        {{ status().text }}
+      </output>
+
+      <!-- Edit schedule / Stop editing / Discard changes, and Publish schedule -->
+      @if (editAction() || auth.isSupervisor()) {
+        <div class="flex flex-wrap justify-center gap-3">
+          @switch (editAction()) {
+            @case ('edit') {
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="startEditing()"
+              >
+                Edit schedule
+              </button>
+            }
+            @case ('stop') {
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="stopEditing()"
+              >
+                Stop editing
+              </button>
+            }
+            @case ('discard') {
+              <button
+                mat-stroked-button
+                type="button"
+                class="btn-outline-primary"
+                (click)="discard()"
+              >
+                Discard changes
+              </button>
+            }
+          }
+
+          @if (auth.isSupervisor()) {
+            <button
+              mat-flat-button
+              type="button"
+              class="btn-publish"
+              [disabled]="!canPublish()"
+              (click)="confirmPublish()"
+            >
+              {{ publishing() ? 'Publishing…' : 'Publish schedule' }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  @if (offline()) {
+    <p class="notice mx-4 mb-2 lg:mx-6">Showing the last loaded roster. You are offline.</p>
+  }
+
+  @if (error()) {
+    <p class="error mx-4 mb-2 lg:mx-6" role="alert">{{ error() }}</p>
+  }
+
+  @if (publishNote()) {
+    <output class="notice mx-4 mb-2 lg:mx-6">{{ publishNote() }}</output>
+  }
+
+  <!-- Page content (week grid and shift side panel; on a phone, the days as a list and the side panel as a drawer) -->
+  <div class="flex flex-col gap-4 px-4 pb-4 lg:min-h-0 lg:flex-1 lg:flex-row lg:px-6">
+    <div #grid tabindex="-1" class="week-grid flex min-w-0 flex-1 flex-col lg:min-h-0">
+      <!-- Desktop: week grid -->
+      @if (wide()) {
+        <div
+          class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-[#D9D7D2] bg-white"
+        >
+          <!-- Grid header (day names and their "+" Add shift buttons) -->
+          <div
+            class="grid-columns min-h-[52px] shrink-0 border-b border-[#D9D7D2]"
+            role="presentation"
+          >
+            <span></span>
+            @for (day of days(); track day.date) {
+              <!-- In a narrow column, the "+" goes under the day name -->
+              <div
+                class="flex flex-wrap items-center justify-center gap-1 border-l border-[#ECEBE7] px-1 py-1"
+              >
+                <span
+                  class="day-header rounded-full px-3 py-1 text-[16px] font-bold"
+                  [class.day-header--today]="day.today"
+                  [class.day-header--past]="day.past"
+                  [attr.aria-current]="day.today ? 'date' : null"
+                >{{ day.header }}</span
+                >
+                @if (day.add; as add) {
+                  <button
+                    type="button"
+                    class="day-add"
+                    [attr.aria-label]="add.label"
+                    [title]="add.label"
+                    (click)="addOnDay(day)"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+                  </button>
+                }
+              </div>
+            }
+          </div>
+
+          <!-- Grid body -->
+          <ul class="grid-columns grid-body m-0 list-none p-0" aria-label="Days of the week">
+            <!-- Hour labels, hidden from screen readers, so the list has only the 7 days -->
+            <li class="relative" aria-hidden="true">
+              @for (hour of hours; track hour.label) {
+                <span class="hour-label" [style.top.%]="hour.top">{{ hour.label }}</span>
+              }
+            </li>
+
+            <!-- Day columns -->
+            @for (day of days(); track day.date) {
+              <li
+                class="day-column"
+                [class.day-column--past]="day.past"
+                [attr.aria-label]="day.header"
+              >
+                <!-- Shift cards -->
+                @for (card of day.cards; track card.key) {
+                  <button
+                    type="button"
+                    class="shift-card"
+                    [class.shift-card--past]="card.state === 'past'"
+                    [class.shift-card--full]="card.state === 'full'"
+                    [class.shift-card--short]="card.state === 'short'"
+                    [class.shift-card--selected]="card.selected"
+                    [attr.data-shift-id]="card.shift.id"
+                    [style.top]="'calc(' + card.top + '% + 2px)'"
+                    [style.height]="'calc(' + card.height + '% - 4px)'"
+                    [style.left]="'calc(' + card.left + '% + 4px)'"
+                    [style.width]="'calc(' + card.width + '% - 8px)'"
+                    [attr.aria-pressed]="card.selected"
+                    [attr.aria-label]="card.label"
+                    (click)="select(card.shift)"
+                  >
+                    <ng-container *ngTemplateOutlet="cardBody; context: { $implicit: card }" />
+                  </button>
+                }
+
+                <!-- Add shift slots in the free times -->
+                @for (slot of day.slots; track slot.key) {
+                  <button
+                    type="button"
+                    class="add-slot"
+                    [style.top]="'calc(' + slot.top + '% + 2px)'"
+                    [style.height]="'calc(' + slot.height + '% - 4px)'"
+                    [attr.aria-label]="slot.label"
+                    (click)="addShift(slot)"
+                  >
+                    <span class="block text-[15px] font-bold">+ Add shift</span>
+                    <span class="block text-[13px]">{{ slot.range }}</span>
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        </div>
+      } @else {
+        <!-- Phone: today first (this week only) -->
+        @if (todayColumn(); as today) {
+          <section class="mb-5 flex flex-col gap-2" aria-labelledby="today-heading">
+            <h2 id="today-heading" class="m-0 text-[20px] font-bold text-[#1C1B19]">Today</h2>
+            <div class="today-card rounded-2xl border-2 border-[#0B5CAB] bg-white p-3">
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <p class="m-0 text-[16px] font-semibold text-[#33312D]">{{ today.title }}</p>
+                <ng-container *ngTemplateOutlet="dayAdd; context: { $implicit: today }" />
+              </div>
+              <ng-container *ngTemplateOutlet="dayEntries; context: { $implicit: today }" />
+            </div>
+          </section>
+          <h2 class="m-0 mb-2 text-[20px] font-bold text-[#1C1B19]">This week</h2>
+        }
+
+        <!-- Phone: one card per day, with its shifts and free times in order -->
+        <ol class="day-list m-0 flex list-none flex-col gap-3 p-0" aria-label="Days of the week">
+          @for (day of days(); track day.date) {
+            <li
+              class="day-list-item rounded-2xl border border-[#D9D7D2] bg-white p-3"
+              [class.day-list-item--past]="day.past"
+              [attr.aria-label]="day.title"
+            >
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <h3 class="m-0 flex items-center gap-2 text-[17px] font-bold">
+                  <span
+                    class="day-header rounded-full px-3 py-1"
+                    [class.day-header--today]="day.today"
+                    [class.day-header--past]="day.past"
+                    [attr.aria-current]="day.today ? 'date' : null"
+                  >{{ day.title }}</span
+                  >
+                  @if (day.today) {
+                    <span class="text-[14px] font-semibold text-[#0B5CAB]">Today</span>
+                  }
+                </h3>
+                <ng-container *ngTemplateOutlet="dayAdd; context: { $implicit: day }" />
+              </div>
+
+              <ng-container *ngTemplateOutlet="dayEntries; context: { $implicit: day }" />
+            </li>
+          }
+        </ol>
+      }
+    </div>
+
+    <!-- Shift side panel, a drawer over the page on a phone (a tap outside or Escape closes it) -->
+    @if (selected(); as shift) {
+      @if (!wide()) {
+        <div
+          class="drawer-backdrop"
+          aria-hidden="true"
+          (click)="closePanel()"
+          (keydown.escape)="closePanel()"
+        ></div>
+      }
+      <aside
+        class="shift-aside flex w-full shrink-0 flex-col lg:min-h-0 lg:w-[420px]"
+        [class.shift-aside--drawer]="!wide()"
+        [cdkTrapFocus]="!wide()"
+        (keydown.escape)="$event.defaultPrevented || closePanel()"
+      >
+        <app-shift-panel
+          class="flex-1"
+          [monday]="monday()"
+          [shift]="shift"
+          [weekShifts]="shifts()"
+          [editable]="selectedEditable()"
+          [note]="selectedNote()"
+          (presenceUpdated)="reloadFromServer()"
+          (closed)="closePanel()"
+          (deleteRequested)="confirmDelete()"
+        />
+      </aside>
+    }
+  </div>
+</section>
+
+<!-- Phone: a day's shifts and free times, in Today and in the week's list -->
+<ng-template #dayEntries let-day>
+  <div class="flex flex-col gap-2">
+    @for (entry of day.entries; track entry.key) {
+      @if (entry.card; as card) {
+        <button
+          type="button"
+          class="shift-card shift-card--row"
+          [class.shift-card--past]="card.state === 'past'"
+          [class.shift-card--full]="card.state === 'full'"
+          [class.shift-card--short]="card.state === 'short'"
+          [class.shift-card--selected]="card.selected"
+          [attr.data-shift-id]="card.shift.id"
+          [attr.aria-pressed]="card.selected"
+          [attr.aria-label]="card.label"
+          (click)="select(card.shift)"
+        >
+          <ng-container *ngTemplateOutlet="cardBody; context: { $implicit: card }" />
+        </button>
+      } @else if (entry.slot; as slot) {
+        <button
+          type="button"
+          class="add-slot add-slot--row"
+          [attr.aria-label]="slot.label"
+          (click)="addShift(slot)"
+        >
+          <span class="text-[15px] font-bold">+ Add shift</span>
+          <span class="text-[14px]">{{ slot.range }}</span>
+        </button>
+      }
+    } @empty {
+      <p class="m-0 text-[15px] text-[#57554F]">No shifts</p>
+    }
+  </div>
+</ng-template>
+
+<!-- Phone: a day's own Add shift button, for any time of the day -->
+<ng-template #dayAdd let-day>
+  @if (day.add; as add) {
+    <button
+      type="button"
+      class="day-add-text"
+      [attr.aria-label]="add.label"
+      (click)="addOnDay(day)"
+    >
+      + Add shift
+    </button>
+  }
+</ng-template>
+
+<!-- Shift card content (times, people and tags), the same in the grid and on a phone -->
+<ng-template #cardBody let-card>
+  <!-- Times on one line, or broken after the dash in a narrow column -->
+  <span class="block text-[15px] font-bold text-[#1C1B19]"
+  ><span class="whitespace-nowrap">{{ card.from }} –</span>&ngsp;<span
+    class="whitespace-nowrap"
+  >{{ card.to }}</span
+  ></span
+  >
+  <span class="block text-[14px] text-[#33312D]">{{ card.people }}</span>
+  <span class="mt-1 flex flex-wrap gap-1">
+    <span
+      class="tag"
+      [class.tag--full]="card.tag === 'Full'"
+      [class.tag--short]="card.tag !== 'Full'"
+    >{{ card.tag }}</span
+    >
+    @if (card.change) {
+      <span class="tag tag--change">{{ card.change }}</span>
+    }
+  </span>
+</ng-template>

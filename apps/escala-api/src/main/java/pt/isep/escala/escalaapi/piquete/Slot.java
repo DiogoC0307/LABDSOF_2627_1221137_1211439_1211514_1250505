@@ -121,6 +121,11 @@ class Slot {
 		return true;
 	}
 
+	/** Someone has been proposed for the slot or holds it: a change to the shift's crew keeps it. */
+	boolean isTaken() {
+		return status == SlotStatus.PROPOSED || status == SlotStatus.FILLED;
+	}
+
 	/** An ELIGIBLE evaluation applies to a slot waiting for it, or to one whose evaluation failed and was replayed. */
 	boolean markEligible() {
 		if (status != SlotStatus.PENDING && status != SlotStatus.EVALUATION_FAILED) {
@@ -137,6 +142,11 @@ class Slot {
 		}
 		this.status = SlotStatus.EVALUATION_FAILED;
 		return true;
+	}
+
+	// Returns the state of a published slot in a shift: FILLED when a member holds it, OPEN otherwise.
+	void published(boolean held) {
+		this.status = held ? SlotStatus.FILLED : SlotStatus.OPEN;
 	}
 
 	void setPiquete(Piquete piquete) {
