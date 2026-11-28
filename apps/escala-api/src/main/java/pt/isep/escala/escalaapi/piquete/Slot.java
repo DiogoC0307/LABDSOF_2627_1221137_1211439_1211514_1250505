@@ -149,6 +149,10 @@ class Slot {
 		this.status = held ? SlotStatus.FILLED : SlotStatus.OPEN;
 	}
 
+	Piquete getPiquete() {
+		return piquete;
+	}
+
 	void setPiquete(Piquete piquete) {
 		this.piquete = piquete;
 	}

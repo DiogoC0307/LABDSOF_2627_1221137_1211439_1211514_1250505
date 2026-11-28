@@ -10,7 +10,8 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Members receive notifications about schedule publication and changes to their own shifts.
+ * Members receive notifications about schedule publication and changes to their own shifts, and about cover requests
+ * (SCRUM-72): the member asked to cover, and the supervisor.
  */
 @Entity
 @Table(name = "notification")
@@ -41,6 +42,15 @@ class Notification {
 
 	private Integer shiftCount;
 
+	// The cover request it is about, the slot's function and why nobody covers it (SCRUM-72)
+	private UUID coverRequestId;
+
+	@Column(length = 11)
+	private String role;
+
+	@Column(length = 13)
+	private String reason;
+
 	@Column(nullable = false)
 	private Instant createdAt;
 
@@ -63,6 +73,14 @@ class Notification {
 		this.previousEndsAt = previousEndsAt;
 		this.shiftCount = shiftCount;
 		this.createdAt = createdAt;
+	}
+
+	/** About a cover request: which one, the slot's function, and why nobody covers it (null unless escalated). */
+	Notification aboutCover(UUID coverRequestId, String role, String reason) {
+		this.coverRequestId = coverRequestId;
+		this.role = role;
+		this.reason = reason;
+		return this;
 	}
 
 	UUID getId() {
@@ -103,6 +121,18 @@ class Notification {
 
 	Integer getShiftCount() {
 		return shiftCount;
+	}
+
+	UUID getCoverRequestId() {
+		return coverRequestId;
+	}
+
+	String getRole() {
+		return role;
+	}
+
+	String getReason() {
+		return reason;
 	}
 
 	Instant getCreatedAt() {

@@ -1656,16 +1656,19 @@ components:
       type: object
       required: [id, type, week, createdAt, read]
       description: >
-        About the member's own shifts only; the PWA writes the text. shiftId and the times are null on
+        About the member's own shifts, or a cover request; the PWA writes the text. shiftId and the times are null on
         WEEKLY_SCHEDULE_PUBLISHED; previousStartsAt and previousEndsAt are set only on SHIFT_TIMES_CHANGED, shiftCount only on
-        WEEKLY_SCHEDULE_PUBLISHED.
+        WEEKLY_SCHEDULE_PUBLISHED. coverRequestId and role are set only on the cover notifications (SCRUM-72), where shiftId
+        and the times are the shift of the open slot: SLOT_OPENED and COVER_ESCALATED go to the supervisor, COVER_REQUESTED
+        to a member the eligibility rules accept. reason is set only on COVER_ESCALATED.
       properties:
         id:
           type: string
           format: uuid
         type:
           type: string
-          enum: [WEEKLY_SCHEDULE_PUBLISHED, ADDED_TO_SHIFT, REMOVED_FROM_SHIFT, SHIFT_TIMES_CHANGED, SHIFT_CANCELLED]
+          enum: [WEEKLY_SCHEDULE_PUBLISHED, ADDED_TO_SHIFT, REMOVED_FROM_SHIFT, SHIFT_TIMES_CHANGED, SHIFT_CANCELLED,
+            SLOT_OPENED, COVER_REQUESTED, COVER_ESCALATED]
         week:
           type: string
           example: "2026-W49"
@@ -1692,6 +1695,23 @@ components:
         shiftCount:
           type: integer
           nullable: true
+        coverRequestId:
+          type: string
+          format: uuid
+          nullable: true
+        role:
+          type: string
+          enum: [CREW_CHIEF, DRIVER, CREW_MEMBER]
+          nullable: true
+          description: The slot's function (SlotRole)
+        reason:
+          type: string
+          enum: [CANNOT_COME, NO_ANSWER, NO_CANDIDATES, NO_ACCEPTANCE]
+          nullable: true
+          description: >-
+            Why. On SLOT_OPENED, why the slot opened: CANNOT_COME when the member said they can't come, NO_ANSWER when
+            they did not confirm in time (SCRUM-71). On COVER_ESCALATED, why nobody covers it: NO_CANDIDATES when nobody
+            is free and qualified (SCRUM-72 AC3), NO_ACCEPTANCE when nobody accepted in time (SCRUM-72 AC4)
         createdAt:
           type: string
           format: date-time
