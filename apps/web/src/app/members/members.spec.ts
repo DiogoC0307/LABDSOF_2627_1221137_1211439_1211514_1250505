@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from '../app';
-import { flushWeekRequests, http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
+import { flushNotificationRequests, flushWeekRequests, http, setValue, signInAs, testProviders, weekRequest } from '../testing/test-support';
 
 const types = [
   { code: 'TAS', name: 'Tripulante de Ambulância de Socorro' },
@@ -36,6 +36,7 @@ describe('Members', () => {
 
   afterEach(() => {
     flushWeekRequests();
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
   });

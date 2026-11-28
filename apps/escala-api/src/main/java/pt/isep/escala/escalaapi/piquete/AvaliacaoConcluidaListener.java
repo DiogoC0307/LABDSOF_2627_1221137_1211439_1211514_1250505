@@ -30,12 +30,14 @@ class AvaliacaoConcluidaListener {
 	private final SlotRepository slots;
 	private final EvaluationMetrics metrics;
 	private final CandidateCheckService candidateChecks;
+	private final WeekPublicationService publications;
 
 	AvaliacaoConcluidaListener(
 			ObjectMapper objectMapper, ProcessedEventRepository processed, SlotRepository slots,
-			EvaluationMetrics metrics, CandidateCheckService candidateChecks) {
+			EvaluationMetrics metrics, CandidateCheckService candidateChecks, WeekPublicationService publications) {
 		this.metrics = metrics;
 		this.candidateChecks = candidateChecks;
+		this.publications = publications;
 		this.objectMapper = objectMapper;
 		this.processed = processed;
 		this.slots = slots;
@@ -55,7 +57,7 @@ class AvaliacaoConcluidaListener {
 			}
 			UUID assignmentId = EventFields.uuid(body, "assignmentId");
 			String result = body.path("result").asText();
-			// A walking-skeleton check of a new slot, or a member checked for a shift being built (SCRUM-171)
+			// A walking-skeleton check of a new slot, a member checked for a shift being built (SCRUM-171), or a member
 			boolean applied = slots.findByAssignmentId(assignmentId).map(slot -> {
 				boolean changed = switch (result) {
 					case "ELIGIBLE" -> slot.markEligible();
@@ -66,7 +68,7 @@ class AvaliacaoConcluidaListener {
 					slots.save(slot);
 				}
 				return changed;
-			}).orElseGet(() -> candidateChecks.onEvaluated(assignmentId, result, violatedRules(body),
+			}).orElseGet(() -> answered(assignmentId, result, violatedRules(body),
 					body.path("engineVersion").asString("")));
 			processed.save(new ProcessedEvent(eventId, Instant.now()));
 			metrics.completed(requestEventId(body), result, applied, Instant.now());
@@ -74,6 +76,12 @@ class AvaliacaoConcluidaListener {
 		} finally {
 			MDC.remove("trace_id");
 		}
+	}
+
+	// The answer for a candidate check, else for an assignment of a week being published
+	private boolean answered(UUID assignmentId, String result, List<String> violatedRules, String engineVersion) {
+		return candidateChecks.onEvaluated(assignmentId, result, violatedRules, engineVersion)
+				|| publications.onEvaluated(assignmentId, result, violatedRules, engineVersion);
 	}
 
 	// List of codes of the rules that were violated. Empty when ELIGIBLE.

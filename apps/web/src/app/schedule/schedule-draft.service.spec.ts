@@ -98,19 +98,31 @@ describe('ScheduleDraftService', () => {
     expect(drafts.week(MONDAY)?.deleted).toEqual(['a']);
   });
 
-  it('discards back to the published week, and publishing clears the count', () => {
+  it('discards back to the published week', () => {
     drafts.remove(MONDAY, 'a');
     drafts.add(MONDAY, '2026-12-02', 8 * 60, 20 * 60, CREW);
     drafts.discard(MONDAY);
     expect(drafts.changes(MONDAY)).toBe(0);
     expect(drafts.shifts(MONDAY).map((shift) => shift.id)).toEqual(['a', 'b']);
+  });
 
+  it('once published, takes the week as the API has it, with no edits left', () => {
     drafts.add(MONDAY, '2026-12-02', 8 * 60, 20 * 60, CREW);
     drafts.remove(MONDAY, 'b');
-    drafts.publish(MONDAY);
+    drafts.replace(MONDAY, [published('a'), published('c', '2026-12-02')]);
+
     expect(drafts.changes(MONDAY)).toBe(0);
-    expect(drafts.shifts(MONDAY).every((shift) => shift.change === 'published')).toBe(true);
-    expect(drafts.week(MONDAY)?.published.map((shift) => shift.id)).toEqual(['a', drafts.shifts(MONDAY)[1].id]);
+    expect(drafts.shifts(MONDAY).map((shift) => shift.id)).toEqual(['a', 'c']);
+    expect(drafts.week(MONDAY)?.published.map((shift) => shift.id)).toEqual(['a', 'c']);
+  });
+
+  it('forgets a week, so it is loaded again from the API', () => {
+    drafts.remove(MONDAY, 'a');
+    drafts.forget(MONDAY);
+    expect(drafts.week(MONDAY)).toBeUndefined();
+
+    drafts.load(MONDAY, [published('a')]);
+    expect(drafts.changes(MONDAY)).toBe(0);
   });
 
   it('keeps each week apart', () => {

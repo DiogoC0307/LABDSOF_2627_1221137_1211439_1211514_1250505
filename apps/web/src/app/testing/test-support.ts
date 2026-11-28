@@ -53,6 +53,15 @@ export function flushWeekRequests(): void {
     .forEach((request) => request.flush([]));
 }
 
+/**
+ * Answers, with no notifications, any request the Schedule page made for its notifications
+ */
+export function flushNotificationRequests(): void {
+  http()
+    .match('/api/v1/notifications')
+    .forEach((request) => request.flush([]));
+}
+
 export const pending = {
   id: 'p1',
   dutyDate: '2026-11-05',

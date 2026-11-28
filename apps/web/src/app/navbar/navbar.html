@@ -13,8 +13,9 @@
       <span class="truncate text-[22px] font-bold">Escala</span>
     </span>
 
-    <!-- Sign out button -->
-    <div class="shrink-0">
+    <!-- Notifications and sign out button -->
+    <div class="flex shrink-0 items-center gap-1">
+      <app-notification-bell />
       <button matButton="outlined" type="button" class="sign-out" (click)="signOut.emit()">
         Sign out
       </button>
@@ -99,8 +100,10 @@
         </button>
       }
 
+      <app-notification-bell />
+
       @if (auth.session(); as session) {
-        <span class="session max-w-48 min-w-0 truncate text-sm text-on-surface-variant">{{
+        <span class="session -me-1 max-w-24 min-w-0 text-base leading-tight wrap-break-word text-on-surface-variant">{{
           session.fullName
         }}</span>
       }

@@ -23,6 +23,8 @@ import { AuthService, LAST_PIQUETES_KEY } from '../auth/auth.service';
 import { addDays, isoWeek, longDay, mondayOf, shortDay, todayInLisbon, weekDays } from './iso-week';
 import { Piquete } from './piquete';
 import {
+  ConflictsData,
+  ConflictsDialog,
   DeleteShiftData,
   DeleteShiftDialog,
   PublishData,
@@ -31,6 +33,12 @@ import {
 } from './schedule-dialogs';
 import { ScheduleDirectory } from './schedule-directory';
 import { ScheduleDraftService } from './schedule-draft.service';
+import {
+  PublicationConflict,
+  SchedulePublisher,
+  conflictLines,
+  publicationRequest,
+} from './schedule-publication';
 import { DraftShift } from './schedule-model';
 import {
   Range,
@@ -139,6 +147,7 @@ export class WeekSchedule implements OnInit, OnDestroy {
   protected readonly auth = inject(AuthService);
   protected readonly drafts = inject(ScheduleDraftService);
   private readonly directory = inject(ScheduleDirectory);
+  private readonly publisher = inject(SchedulePublisher);
   private request?: Subscription;
 
   private readonly grid = viewChild<ElementRef<HTMLElement>>('grid');
@@ -162,6 +171,8 @@ export class WeekSchedule implements OnInit, OnDestroy {
 
   protected readonly editing = signal(false); // This week is read-only until "Edit schedule" is pressed
   protected readonly selectedId = signal<string | null>(null);
+  protected readonly publishing = signal(false); // While the members on the week are checked (SCRUM-66)
+  protected readonly publishNote = signal<string | null>(null);
 
   // The members, loaded for the supervisor when a shift is opened; who can take a role is the worker's (SCRUM-171)
   private readonly loadDirectory = effect(() => {
@@ -209,6 +220,10 @@ export class WeekSchedule implements OnInit, OnDestroy {
       return { text: "Past week · can't be changed", tone: 'grey' };
     }
 
+    if (this.publishing()) {
+      return { text: 'Publishing · checking members', tone: 'amber' };
+    }
+
     if (changes > 0) {
       return {
         text: `${changes} unpublished ${changes === 1 ? 'change' : 'changes'}`,
@@ -249,7 +264,9 @@ export class WeekSchedule implements OnInit, OnDestroy {
     return null;
   });
 
-  protected readonly canPublish = computed(() => this.weekKind() !== 'past' && this.changes() > 0);
+  protected readonly canPublish = computed(
+    () => this.weekKind() !== 'past' && this.changes() > 0 && !this.publishing(),
+  );
 
   // The seven days of the week, with their shift cards and Add shift slots and buttons
   protected readonly days = computed<DayColumn[]>(() => {
@@ -445,15 +462,75 @@ export class WeekSchedule implements OnInit, OnDestroy {
 
   // Publish schedule dialog, then publishes the week's draft
   protected confirmPublish(): void {
-    const data: PublishData = { range: weekRange(this.monday()), changes: this.changes() };
+    const monday = this.monday();
+    const data: PublishData = { range: weekRange(monday), changes: this.changes() };
 
     this.dialog
       .open(PublishDialog, scheduleDialogConfig(data, 'dialog'))
       .afterClosed()
       .subscribe((confirmed) => {
         if (confirmed) {
-          this.drafts.publish(this.monday());
-          this.editing.set(false);
+          this.publish(monday);
+        }
+      });
+  }
+
+  /**
+   * Sends the week to the API and waits while each member on it is checked. 
+   * 
+   * Published: the week is loaded again, as members now see it. 
+   * Blocked: the conflicts dialog, and the draft stays as it is to be fixed.
+   */
+  private publish(monday: string): void {
+    const draft = this.drafts.week(monday);
+    if (!draft) {
+      return;
+    }
+    this.publishing.set(true);
+    this.publishNote.set(null);
+    this.directory.load(); // The members' names, for the conflicts
+
+    this.publisher.publish(publicationRequest(monday, draft.shifts, this.today)).subscribe({
+      next: (outcome) => {
+        this.publishing.set(false);
+        if (outcome.kind === 'published') {
+          if (this.monday() === monday) {
+            this.editing.set(false);
+            this.selectedId.set(null);
+            this.load(true);
+          } else {
+            this.drafts.forget(monday); // Loaded again, as published, when the supervisor comes back to it
+          }
+        } else if (outcome.kind === 'blocked') {
+          this.showConflicts(monday, outcome.conflicts);
+        } else {
+          this.publishNote.set(
+            'Still checking the members on this week. It is published when the checks finish, unless one finds a ' +
+              'conflict; nobody has been told yet. Reload the page in a moment to see it.',
+          );
+        }
+      },
+      error: () => {
+        this.publishing.set(false);
+        this.publishNote.set('Could not publish the week. Nothing was published; try again.');
+      },
+    });
+  }
+
+  // The conflicts that keep the week from being published; "Show shift" opens that shift
+  private showConflicts(monday: string, conflicts: PublicationConflict[]): void {
+    const data: ConflictsData = {
+      lines: conflictLines(conflicts, this.drafts.shifts(monday), this.directory.members()),
+    };
+    this.dialog
+      .open<ConflictsDialog, ConflictsData, string | null>(
+        ConflictsDialog,
+        scheduleDialogConfig(data, 'alertdialog'),
+      )
+      .afterClosed()
+      .subscribe((shiftKey) => {
+        if (shiftKey && this.monday() === monday) {
+          this.selectedId.set(shiftKey);
         }
       });
   }
@@ -512,7 +589,8 @@ export class WeekSchedule implements OnInit, OnDestroy {
     );
   }
 
-  private load(): void {
+  // The week from the API; replace drops the draft, once the week is published
+  private load(replace = false): void {
     const monday = this.monday();
     const week = isoWeek(monday);
     // A newer week replaces a request still on its way, so a slow answer never fills the wrong week.
@@ -523,7 +601,11 @@ export class WeekSchedule implements OnInit, OnDestroy {
         next: (list) => {
           this.error.set(null);
           this.offline.set(false);
-          this.drafts.load(monday, toDraft(list));
+          if (replace) {
+            this.drafts.replace(monday, toDraft(list));
+          } else {
+            this.drafts.load(monday, toDraft(list));
+          }
           writeCache({ week, piquetes: list });
         },
         error: () => {

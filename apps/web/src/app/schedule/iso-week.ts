@@ -66,6 +66,12 @@ export function isoWeek(monday: string): string {
   return `${year}-W${String(isoWeekNumber(monday)).padStart(2, '0')}`;
 }
 
+/** The Monday of an ISO week such as "2026-W48": the week with the year's 4 January is its week 1. */
+export function mondayOfIsoWeek(week: string): string {
+  const [year, number] = week.split('-W').map(Number);
+  return addDays(mondayOf(toIso(new Date(Date.UTC(year, 0, 4)))), (number - 1) * 7);
+}
+
 /** The first day of the date's month. */
 export function firstOfMonth(date: string): string {
   return `${date.slice(0, 7)}-01`;

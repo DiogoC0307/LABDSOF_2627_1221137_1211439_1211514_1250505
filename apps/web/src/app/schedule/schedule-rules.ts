@@ -280,11 +280,15 @@ export function fromPiquete(piquete: Piquete): DraftShift | null {
     return null;
   }
 
-  // Count the roles in the piquete's slots
+  // Count the roles in the piquete's slots, and who holds them once the week is published
   const crew = emptyCrew();
+  const assigned = emptyAssigned();
   for (const slot of piquete.slots) {
     if ((SLOT_ROLES as readonly string[]).includes(slot.role)) {
       crew[slot.role as SlotRole]++;
+      if (slot.memberId) {
+        assigned[slot.role as SlotRole].push(slot.memberId);
+      }
     }
   }
 
@@ -300,7 +304,7 @@ export function fromPiquete(piquete: Piquete): DraftShift | null {
     start: startMinutes,
     end: endMinutes,
     crew,
-    assigned: emptyAssigned(),
+    assigned,
     change: 'published',
   };
 }

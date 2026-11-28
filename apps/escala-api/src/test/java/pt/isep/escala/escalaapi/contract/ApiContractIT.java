@@ -195,6 +195,42 @@ class ApiContractIT {
 	}
 
 	@Test
+	@DisplayName("SCRUM-66 publishing a week and the member's notifications answer as the spec says: 202, 200, 204, 400, 401, 403 and 404")
+	void publicationsAndNotifications() throws Exception {
+		String publications = "/api/v1/schedule-publications";
+		String shift = """
+				{"key":"%s","id":null,"dutyDate":"2026-12-09","period":"DAY","startsAt":"2026-12-09T08:00:00Z",
+				 "endsAt":"2026-12-09T20:00:00Z","crew":[{"role":"CREW_MEMBER","count":1}],"assigned":[%s]}""";
+		String checking = "{\"week\":\"2026-W50\",\"shifts\":[" + shift.formatted("with-someone",
+				"{\"role\":\"CREW_MEMBER\",\"memberId\":\"" + MockTokens.MEMBER_ID + "\"}") + "]}";
+		HttpResponse<String> started = call("POST", publications, publications, MockTokens.supervisor(), checking);
+		assertThat(started.statusCode()).isEqualTo(202);
+		assertThat(call("GET", publications + "/{id}", publications + "/" + id(started), MockTokens.supervisor(), null)
+				.statusCode()).isEqualTo(200);
+
+		// A shift with nobody on it is blocked at once, with its conflict
+		String empty = "{\"week\":\"2026-W51\",\"shifts\":[" + shift.formatted("nobody", "")
+				.replace("2026-12-09", "2026-12-16") + "]}";
+		HttpResponse<String> blocked = call("POST", publications, publications, MockTokens.supervisor(), empty);
+		assertThat(objectMapper.readTree(blocked.body()).path("status").asString()).isEqualTo("BLOCKED");
+
+		assertThat(call("POST", publications, publications, MockTokens.supervisor(), "{}", false).statusCode())
+				.isEqualTo(400);
+		assertThat(call("POST", publications, publications, MockTokens.member(), checking).statusCode()).isEqualTo(403);
+		assertThat(call("POST", publications, publications, null, checking).statusCode()).isEqualTo(401);
+		assertThat(call("GET", publications + "/{id}", publications + "/" + UUID.randomUUID(), MockTokens.supervisor(),
+				null).statusCode()).isEqualTo(404);
+
+		String notifications = "/api/v1/notifications";
+		assertThat(call("GET", notifications, notifications, MockTokens.member(), null).statusCode()).isEqualTo(200);
+		assertThat(call("POST", notifications + "/read", notifications + "/read", MockTokens.member(), null)
+				.statusCode()).isEqualTo(204);
+		assertThat(call("POST", notifications + "/{id}/read", notifications + "/" + UUID.randomUUID() + "/read",
+				MockTokens.member(), null).statusCode()).isEqualTo(404);
+		assertThat(call("GET", notifications, notifications, null, null).statusCode()).isEqualTo(401);
+	}
+
+	@Test
 	@DisplayName("TC-SCRUM-96-03 the members and certification types endpoints answer as the spec says")
 	void members() throws Exception {
 		String member = """
