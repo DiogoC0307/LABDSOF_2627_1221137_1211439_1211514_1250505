@@ -93,6 +93,9 @@ class CoverRequestIT {
 	@Autowired
 	AssignmentRepository assignments;
 
+	@Autowired
+	CoverRequestService covers;
+
 	// A new member with these functions on the active roster, registered by the admin.
 	private UUID member(String name, String... functions) throws Exception {
 		String list = Arrays.stream(functions).map(each -> "\"" + each + "\"").collect(Collectors.joining(","));
@@ -243,12 +246,30 @@ class CoverRequestIT {
 		List<JsonNode> supervisor = notified(MockTokens.SUPERVISOR_ID, "SUPERVISOR", cover.coverId());
 		assertThat(types(supervisor)).containsExactly("SLOT_OPENED");
 		assertThat(supervisor.get(0).path("role").asString()).isEqualTo("DRIVER");
+		assertThat(supervisor.get(0).path("reason").asString()).isEqualTo("CANNOT_COME");
 		assertThat(Instant.parse(supervisor.get(0).path("startsAt").asString())).isEqualTo(SATURDAY_20);
 
 		// A second "I can't come" for the same slot makes no second request
 		cannotCome(cover.slot());
 		assertThat(jdbc.queryForObject("SELECT count(*) FROM cover_request WHERE slot_id = ?", Integer.class,
 				cover.slot().getId())).isOne();
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-72-07 a slot opened because its member did not confirm: the supervisor's SLOT_OPENED says NO_ANSWER")
+	void aSlotOpenedForNoAnswerSaysSo() throws Exception {
+		UUID driver = member("Driver No Answer", "DRIVER");
+		Slot slot = shift(SlotRole.DRIVER, SATURDAY_20, SUNDAY_08);
+		holds(slot, driver, SATURDAY_20, SUNDAY_08);
+
+		// What the 4 h deadline of SCRUM-71 AC2 will call
+		UUID coverId = covers.open(slot.getId(), CoverRequest.Reason.NO_ANSWER, Instant.now());
+
+		assertThat(coverOf(slot)).containsEntry("reason", "NO_ANSWER").containsEntry("vacated_member_id", driver);
+		List<JsonNode> supervisor = notified(MockTokens.SUPERVISOR_ID, "SUPERVISOR", coverId);
+		assertThat(types(supervisor)).contains("SLOT_OPENED");
+		assertThat(supervisor.stream().filter(each -> "SLOT_OPENED".equals(each.path("type").asString()))
+				.map(each -> each.path("reason").asString()).toList()).containsExactly("NO_ANSWER");
 	}
 
 	@Test

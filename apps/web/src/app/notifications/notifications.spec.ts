@@ -75,9 +75,13 @@ describe('Notifications', () => {
 
     it('TC-SCRUM-72-06 tells the supervisor a slot opened, and why nobody covers it yet', () => {
       const slot = { role: 'CREW_CHIEF' as const, startsAt: '2026-12-05T20:00:00Z', endsAt: '2026-12-06T08:00:00Z' };
-      expect(notificationCopy(notification({ type: 'SLOT_OPENED', ...slot }))).toEqual({
+      expect(notificationCopy(notification({ type: 'SLOT_OPENED', reason: 'CANNOT_COME', ...slot }))).toEqual({
         title: 'A slot is open',
         detail: "Crew chief, Sat 5 Dec, 20:00 – 08:00 (next day). The member can't come; others are being asked.",
+      });
+      expect(notificationCopy(notification({ type: 'SLOT_OPENED', reason: 'NO_ANSWER', ...slot }))).toEqual({
+        title: 'A slot is open',
+        detail: "Crew chief, Sat 5 Dec, 20:00 – 08:00 (next day). The member didn't confirm; others are being asked.",
       });
       expect(notificationCopy(notification({ type: 'COVER_ESCALATED', reason: 'NO_CANDIDATES', ...slot }))).toEqual({
         title: 'Nobody can cover',
