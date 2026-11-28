@@ -2,6 +2,7 @@ package pt.isep.escala.elegibilidadeworker.avaliacao;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -17,11 +18,12 @@ import tools.jackson.databind.ObjectMapper;
 class AvaliacaoConcluidaContractTest {
 
 	@ParameterizedTest
-	@ValueSource(strings = { "ELIGIBLE", "FAILED" })
+	@ValueSource(strings = { "ELIGIBLE", "INELIGIBLE", "FAILED" })
 	@DisplayName("TC-SCRUM-96-10 AvaliacaoConcluidaJson writes an AvaliacaoConcluida that matches the schema, for each result the worker sends")
 	void matchesTheSchema(String result) {
 		String json = AvaliacaoConcluidaJson.of(new ObjectMapper(), UUID.randomUUID(), UUID.randomUUID(),
-				UUID.randomUUID(), "contract-96-10", result);
+				UUID.randomUUID(), "contract-96-10", result,
+				"INELIGIBLE".equals(result) ? List.of("RN05", "RN06") : List.of());
 		assertThat(Contracts.eventErrors("avaliacao-concluida.schema.json", json)).as(json).isEmpty();
 	}
 }

@@ -1,6 +1,7 @@
 package pt.isep.escala.elegibilidadeworker.avaliacao;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,7 +53,8 @@ class EvaluationFailedOnExhaustedRetries implements RetriesExhaustedHandler {
 		outbox.save(new OutboxEvent(
 				resultEventId,
 				AvaliacaoPedidaListener.ROUTING_AVALIACAO_CONCLUIDA,
-				AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, "FAILED"),
+				AvaliacaoConcluidaJson.of(objectMapper, resultEventId, requestEventId, assignmentId, traceId, "FAILED",
+						List.of()),
 				Instant.now()));
 		metrics.completed("FAILED", EvaluationMetrics.RETRIES_EXHAUSTED);
 		log.warn("evaluation failed after the retries assignmentId={} resultEventId={}", assignmentId, resultEventId);

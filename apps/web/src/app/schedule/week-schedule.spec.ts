@@ -142,25 +142,78 @@ describe('WeekSchedule', () => {
     { id: 'm-admin', fullName: 'Synthetic Admin', rosterStatus: 'COMMAND_ROSTER', functions: ['CREW_CHIEF'] },
   ].map((member) => ({ active: true, rosterStatus: 'ACTIVE_ROSTER', ...member }));
 
-  // Who can't come in week 2026-W49: Ana all of Tuesday 1 December, Sofia only until 06:00 that day
+  // Who said they can't come, as the worker gets it in each check: Ana all of Tuesday 1 December, Sofia only until 06:00
   const teamUnavailability = [
     { memberId: 'm-ana', startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-02T00:00:00Z' },
     { memberId: 'm-sofia', startsAt: '2026-12-01T00:00:00Z', endsAt: '2026-12-01T06:00:00Z' },
   ];
 
   function isDirectoryRequest(req: { url: string }): boolean {
-    return req.url === '/api/v1/members' || req.url === '/api/v1/unavailabilities/team';
+    return req.url === '/api/v1/members' || req.url === '/api/v1/candidate-checks';
   }
 
-  // Answers the members and who can't come, loaded when a supervisor opens a shift
+  function isCandidateCheck(req: { method: string; url: string }): boolean {
+    return req.method === 'POST' && req.url === '/api/v1/candidate-checks';
+  }
+
+  interface CheckBody {
+    startsAt: string;
+    endsAt: string;
+    role: string;
+    otherShifts: { memberId: string; startsAt: string; endsAt: string }[];
+  }
+
+  /**
+   * The eligibility worker's answer, as escala-api gives it (SCRUM-171), for every member with the role: RN01 off the
+   * active roster, RN05 on another shift of the week at the same time, RN06 said they can't come.
+   */
+  function workerAnswer(body: CheckBody) {
+    const start = Date.parse(body.startsAt);
+    const end = Date.parse(body.endsAt);
+    const during = (from: string, to: string) => Date.parse(from) < end && start < Date.parse(to);
+    return {
+      id: 'check-' + body.role,
+      status: 'DONE',
+      candidates: apiMembers
+        .filter((member) => member.functions.includes(body.role))
+        .map((member) => {
+          const rules: string[] = [];
+          if (!member.active || member.rosterStatus !== 'ACTIVE_ROSTER') {
+            rules.push('RN01');
+          }
+          if (body.otherShifts.some((other) => other.memberId === member.id && during(other.startsAt, other.endsAt))) {
+            rules.push('RN05');
+          }
+          if (teamUnavailability.some((period) => period.memberId === member.id && during(period.startsAt, period.endsAt))) {
+            rules.push('RN06');
+          }
+          return { memberId: member.id, result: rules.length > 0 ? 'INELIGIBLE' : 'ELIGIBLE', rules };
+        }),
+    };
+  }
+
+  // Answers the members and the worker's candidate checks, asked when a supervisor opens a shift
   function flushDirectory(fixture?: ComponentFixture<WeekSchedule>) {
     http()
       .match('/api/v1/members')
       .forEach((request) => request.flush(apiMembers));
     http()
-      .match((req) => req.url === '/api/v1/unavailabilities/team')
-      .forEach((request) => request.flush(request.request.params.get('week') === '2026-W49' ? teamUnavailability : []));
+      .match(isCandidateCheck)
+      .forEach((request) => request.flush(workerAnswer(request.request.body as CheckBody)));
     fixture?.detectChanges();
+  }
+
+  // A new shift on that day of the week shown, with one role, its panel open, the members loaded but nobody checked
+  async function addShiftUnchecked(fixture: ComponentFixture<WeekSchedule>, day: number, role = 'Crew chief') {
+    columns(fixture)[day].querySelector<HTMLButtonElement>('.add-slot')!.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    chooseInDialog(fixture, role);
+    press(fixture, 'Create shift');
+    await fixture.whenStable();
+    fixture.detectChanges();
+    http().match('/api/v1/members').forEach((request) => request.flush(apiMembers));
+    fixture.detectChanges();
   }
 
   function publishButton(fixture: ComponentFixture<WeekSchedule>) {
@@ -646,6 +699,67 @@ describe('WeekSchedule', () => {
       // Inactive members and members off the active roster are never candidates (RN01).
       expect(panel(fixture)?.textContent).not.toContain('Zé Inativo');
       expect(panel(fixture)?.textContent).not.toContain('Synthetic Admin');
+    });
+
+    it('shows "Checking who can come…" until the eligibility worker answers, then only who it found eligible (SCRUM-171)', async () => {
+      const fixture = await nextWeek();
+      await addShiftUnchecked(fixture, 1);
+
+      expect(panel(fixture)?.querySelector('[role="status"].candidate-check')?.textContent).toContain('Checking who can come…');
+      expect(panel(fixture)?.querySelector('[aria-label^="Assign "]')).toBeNull();
+      const check = http().expectOne(isCandidateCheck);
+      expect(check.request.body).toEqual({
+        startsAt: '2026-12-01T08:00:00Z',
+        endsAt: '2026-12-01T20:00:00Z',
+        role: 'CREW_CHIEF',
+        otherShifts: [],
+      });
+
+      check.flush(workerAnswer(check.request.body as CheckBody));
+      fixture.detectChanges();
+      expect(panel(fixture)?.textContent).not.toContain('Checking who can come…');
+      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
+      expect(element(fixture).querySelector('[aria-label="Assign Ana Costa as Crew chief"]')).toBeNull();
+    });
+
+    it('asks the worker with who is on the other shifts of the week, and offers nobody it refuses (RN05)', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+      click(fixture, '[aria-label="Assign Rui Almeida as Crew chief"]');
+
+      await addShiftUnchecked(fixture, 1);
+      const check = http().expectOne(isCandidateCheck);
+      expect(check.request.body.otherShifts).toEqual([
+        { memberId: 'm-rui', startsAt: '2026-11-30T08:00:00Z', endsAt: '2026-11-30T20:00:00Z' },
+      ]);
+      // The worker refuses Rui for this shift (as it would for one at the same time)
+      const answer = workerAnswer(check.request.body as CheckBody);
+      check.flush({
+        ...answer,
+        candidates: answer.candidates.map((candidate) =>
+          candidate.memberId === 'm-rui' ? { ...candidate, result: 'INELIGIBLE', rules: ['RN05'] } : candidate,
+        ),
+      });
+      fixture.detectChanges();
+      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).toBeNull();
+      expect(element(fixture).querySelector('[aria-label="Assign Carlos Gomes as Crew chief"]')).not.toBeNull();
+      // On another shift is not "can't come"
+      expect(panel(fixture)?.querySelector('[aria-labelledby="cant-come-title"]')?.textContent ?? '').not.toContain('Rui Almeida');
+    });
+
+    it('says so when the worker could not be asked, and asks again on "Check again"', async () => {
+      const fixture = await nextWeek();
+      await addShiftUnchecked(fixture, 2);
+
+      http().expectOne(isCandidateCheck).flush(null, { status: 503, statusText: 'Service Unavailable' });
+      fixture.detectChanges();
+      expect(panel(fixture)?.textContent).toContain("Couldn't check who can come.");
+      expect(panel(fixture)?.querySelector('[aria-label^="Assign "]')).toBeNull();
+
+      click(fixture, '[aria-label="Check again who can be Crew chief"]');
+      expect(panel(fixture)?.textContent).toContain('Checking who can come…');
+      flushDirectory(fixture);
+      expect(element(fixture).querySelector('[aria-label="Assign Rui Almeida as Crew chief"]')).not.toBeNull();
     });
 
     it('says so when the members cannot be loaded', async () => {

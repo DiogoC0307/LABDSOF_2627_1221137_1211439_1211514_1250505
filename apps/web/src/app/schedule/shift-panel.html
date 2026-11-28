@@ -76,7 +76,7 @@
       </fieldset>
     }
 
-    <!-- The members or who can't come could not be loaded -->
+    <!-- The members could not be loaded -->
     @if (directoryError(); as error) {
       <p class="error m-0" role="alert">{{ error }}</p>
     }
@@ -145,44 +145,61 @@
           }
         </div>
 
-        <!-- Candidates list -->
+        <!-- Candidates list: the members the eligibility worker found can take the role (SCRUM-171) -->
         @if (editable()) {
           <div class="flex flex-col gap-2">
             <h4 class="m-0 text-[14px] font-bold text-[#57554F]">Can be assigned</h4>
-            @for (candidate of section.shown; track candidate.member.id) {
-              <div
-                class="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-[#ECEBE7] px-3 py-1"
-              >
-                <div class="flex min-w-0 flex-col">
-                  <span class="text-[17px] text-[#1C1B19]">{{ candidate.member.name }}</span>
-                  <span class="text-[13px] text-[#57554F]">{{ candidate.functions }}</span>
-                  @if (candidate.alreadyOn) {
-                    <span class="text-[13px] text-[#6E4300]">Already on {{ candidate.alreadyOn }}</span>
-                  }
-                </div>
+            @if (section.check === 'checking') {
+              <p class="candidate-check m-0 text-[16px] text-[#57554F]" role="status">Checking who can come…</p>
+            } @else if (section.check === 'failed') {
+              <div class="flex flex-wrap items-center gap-2" role="alert">
+                <p class="error m-0">Couldn't check who can come.</p>
                 <button
-                  mat-stroked-button
+                  mat-button
                   type="button"
-                  class="btn-assign"
-                  [attr.aria-label]="'Assign ' + candidate.member.name + ' as ' + section.name"
-                  (click)="assign(section.role, candidate.member.id)"
+                  class="btn-more"
+                  [attr.aria-label]="'Check again who can be ' + section.name"
+                  (click)="checkAgain(section.role)"
                 >
-                  Assign
+                  Check again
                 </button>
               </div>
-            } @empty {
-              <p class="m-0 text-[16px] text-[#57554F]">Nobody else with this role is free.</p>
-            }
-            @if (section.hidden > 0) {
-              <button
-                mat-button
-                type="button"
-                class="btn-more self-start"
-                [attr.aria-label]="'Show ' + section.hidden + ' more who can be ' + section.name"
-                (click)="showAll(section.role)"
-              >
-                Show {{ section.hidden }} more
-              </button>
+            } @else {
+              @for (candidate of section.shown; track candidate.member.id) {
+                <div
+                  class="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-[#ECEBE7] px-3 py-1"
+                >
+                  <div class="flex min-w-0 flex-col">
+                    <span class="text-[17px] text-[#1C1B19]">{{ candidate.member.name }}</span>
+                    <span class="text-[13px] text-[#57554F]">{{ candidate.functions }}</span>
+                    @if (candidate.alreadyOn) {
+                      <span class="text-[13px] text-[#6E4300]">Already on {{ candidate.alreadyOn }}</span>
+                    }
+                  </div>
+                  <button
+                    mat-stroked-button
+                    type="button"
+                    class="btn-assign"
+                    [attr.aria-label]="'Assign ' + candidate.member.name + ' as ' + section.name"
+                    (click)="assign(section.role, candidate.member.id)"
+                  >
+                    Assign
+                  </button>
+                </div>
+              } @empty {
+                <p class="m-0 text-[16px] text-[#57554F]">Nobody else with this role is free.</p>
+              }
+              @if (section.hidden > 0) {
+                <button
+                  mat-button
+                  type="button"
+                  class="btn-more self-start"
+                  [attr.aria-label]="'Show ' + section.hidden + ' more who can be ' + section.name"
+                  (click)="showAll(section.role)"
+                >
+                  Show {{ section.hidden }} more
+                </button>
+              }
             }
           </div>
         }

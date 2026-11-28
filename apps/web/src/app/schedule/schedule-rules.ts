@@ -216,29 +216,22 @@ export interface Candidate {
   alreadyOn: string | null; // Another shift of theirs that day, which does not overlap this one
 }
 
-// Whether two shifts share any minute; one that starts exactly when the other ends does not (RN05)
-export function overlaps(a: DraftShift, b: DraftShift): boolean {
-  const offset = (Date.parse(b.dutyDate) - Date.parse(a.dutyDate)) / 60000;
-  return a.start < offset + b.end && offset + b.start < a.end;
-}
-
 /**
- * Who can be assigned to the shift in that role: members with the role who are not on it already,
- * can come (RN06) and are not on another shift at any of its time (RN05)
+ * Who can be assigned to the shift in that role: the members with the role the eligibility worker found ELIGIBLE
+ * (RN01, RN05, RN06; SCRUM-171), who are not on the shift already.
  */
 export function candidates(
   shift: DraftShift,
   role: SlotRole,
   members: ScheduleMember[],
   weekShifts: DraftShift[],
-  unavailable: ReadonlySet<string>,
+  eligible: ReadonlySet<string>,
 ): Candidate[] {
   const onShift = new Set(SLOT_ROLES.flatMap((each) => shift.assigned[each]));
 
   return members
     .filter(
-      (member) =>
-        member.roles.includes(role) && !onShift.has(member.id) && !unavailable.has(member.id),
+      (member) => member.roles.includes(role) && eligible.has(member.id) && !onShift.has(member.id),
     )
     .map((member) => ({
       member,
@@ -248,7 +241,6 @@ export function candidates(
           SLOT_ROLES.some((slot) => each.assigned[slot].includes(member.id)),
       ),
     }))
-    .filter(({ others }) => !others.some((other) => overlaps(shift, other)))
     .map(({ member, others }) => {
       const sameDay = others.find((other) => other.dutyDate === shift.dutyDate);
       return {

@@ -176,6 +176,25 @@ class ApiContractIT {
 	}
 
 	@Test
+	@DisplayName("SCRUM-171 the candidate checks answer as the spec says: 202, 200, 400, 401, 403 and 404")
+	void candidateChecks() throws Exception {
+		String checks = "/api/v1/candidate-checks";
+		String body = """
+				{"startsAt":"2026-12-09T08:00:00Z","endsAt":"2026-12-09T20:00:00Z","role":"CREW_CHIEF",
+				 "otherShifts":[{"memberId":"%s","startsAt":"2026-12-09T06:00:00Z","endsAt":"2026-12-09T10:00:00Z"}]}
+				""".formatted(MockTokens.ADMIN_ID);
+		HttpResponse<String> started = call("POST", checks, checks, MockTokens.supervisor(), body);
+		assertThat(started.statusCode()).isEqualTo(202);
+		assertThat(call("GET", checks + "/{id}", checks + "/" + id(started), MockTokens.supervisor(), null).statusCode())
+				.isEqualTo(200);
+		assertThat(call("POST", checks, checks, MockTokens.supervisor(), "{}", false).statusCode()).isEqualTo(400);
+		assertThat(call("POST", checks, checks, MockTokens.member(), body).statusCode()).isEqualTo(403);
+		assertThat(call("POST", checks, checks, null, body).statusCode()).isEqualTo(401);
+		assertThat(call("GET", checks + "/{id}", checks + "/" + UUID.randomUUID(), MockTokens.supervisor(), null)
+				.statusCode()).isEqualTo(404);
+	}
+
+	@Test
 	@DisplayName("TC-SCRUM-96-03 the members and certification types endpoints answer as the spec says")
 	void members() throws Exception {
 		String member = """

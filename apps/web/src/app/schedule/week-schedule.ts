@@ -163,11 +163,10 @@ export class WeekSchedule implements OnInit, OnDestroy {
   protected readonly editing = signal(false); // This week is read-only until "Edit schedule" is pressed
   protected readonly selectedId = signal<string | null>(null);
 
-  // The members and who can't come in the week, loaded for the supervisor when a shift is opened
+  // The members, loaded for the supervisor when a shift is opened; who can take a role is the worker's (SCRUM-171)
   private readonly loadDirectory = effect(() => {
     if (this.selectedId() !== null && this.auth.isSupervisor()) {
-      const monday = this.monday();
-      untracked(() => this.directory.load(monday));
+      untracked(() => this.directory.load());
     }
   });
 

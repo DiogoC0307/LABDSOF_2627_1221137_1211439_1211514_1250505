@@ -24,6 +24,7 @@ class SecurityConfig {
 	static final String MEMBERS = "/api/v1/members";
 	static final String UNAVAILABILITIES = "/api/v1/unavailabilities";
 	static final String UNAVAILABILITY_MESSAGES = "/api/v1/unavailability-messages";
+	static final String CANDIDATE_CHECKS = "/api/v1/candidate-checks";
 
 	private static final String MEMBER = "MEMBER";
 	private static final String SUPERVISOR = "SUPERVISOR";
@@ -60,6 +61,9 @@ class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, PIQUETES).hasRole(SUPERVISOR)
 						// SCRUM-65: only the supervisor changes a shift, as only they create one.
 						.requestMatchers(HttpMethod.PUT, PIQUETES + "/*").hasRole(SUPERVISOR)
+						// SCRUM-171: only the supervisor asks who can take a role on a shift, as only they build the week
+						.requestMatchers(HttpMethod.POST, CANDIDATE_CHECKS).hasRole(SUPERVISOR)
+						.requestMatchers(HttpMethod.GET, CANDIDATE_CHECKS + "/*").hasRole(SUPERVISOR)
 						// SCRUM-77: only the admin edits members (09); supervisor and admin read them; a member reads
 						// only themself (checked in MemberController); the contact only for the admin and the member.
 						.requestMatchers(HttpMethod.GET, MEMBERS, "/api/v1/certification-types").hasAnyRole(SUPERVISOR, ADMIN)
