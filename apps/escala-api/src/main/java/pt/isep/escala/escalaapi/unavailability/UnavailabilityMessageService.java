@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import pt.isep.escala.escalaapi.outbox.OutboxEvent;
 import pt.isep.escala.escalaapi.outbox.OutboxEventRepository;
+import pt.isep.escala.escalaapi.unavailability.MessageRefusals.AiOff;
 import pt.isep.escala.escalaapi.unavailability.MessageRefusals.NotConfirmable;
 import pt.isep.escala.escalaapi.unavailability.MessageRefusals.TooManyMessages;
 import pt.isep.escala.escalaapi.unavailability.PatternExpansion.Interval;
@@ -26,7 +27,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * "When I can't", in my own words (SCRUM-75). The member always comes from the token (T-03), and another member's
  * message is not found. The free text goes to the worker through the outbox and is deleted, with its outbox row, when
- * the member confirms or discards, or after 24 hours (RNF09). The free text is never logged.
+ * the member confirms or discards, or after 24 hours (RNF09). The free text is never logged. With AI off
+ * (AI_ENABLED, the same flag as the worker's), a text is refused before anything is stored (SCRUM-89).
  */
 @Service
 class UnavailabilityMessageService {
@@ -49,10 +51,12 @@ class UnavailabilityMessageService {
 	private final ObjectMapper objectMapper;
 	private final Clock clock;
 	private final int perHour;
+	private final boolean aiEnabled;
 
 	UnavailabilityMessageService(UnavailabilityMessageRepository messages, UnavailabilityService unavailability,
 			OutboxEventRepository outbox, ExtracaoPedidaFactory pedidos, ObjectMapper objectMapper, Clock clock,
-			@Value("${escala.unavailability-messages.per-hour:10}") int perHour) {
+			@Value("${escala.unavailability-messages.per-hour:10}") int perHour,
+			@Value("${escala.ai.enabled:false}") boolean aiEnabled) {
 		this.messages = messages;
 		this.unavailability = unavailability;
 		this.outbox = outbox;
@@ -60,10 +64,19 @@ class UnavailabilityMessageService {
 		this.objectMapper = objectMapper;
 		this.clock = clock;
 		this.perHour = perHour;
+		this.aiEnabled = aiEnabled;
+	}
+
+	boolean aiEnabled() {
+		return aiEnabled;
 	}
 
 	@Transactional
 	MessageResponse send(UUID memberId, MessageRequest request) {
+		if (!aiEnabled) {
+			log.info("unavailability message refused, AI off memberId={}", memberId);
+			throw new AiOff();
+		}
 		String text = request == null ? null : request.text();
 		if (text == null || text.isBlank()) {
 			throw new InvalidRequestException(List.of(new InvalidField(TEXT, "required")));

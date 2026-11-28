@@ -23,7 +23,8 @@
     "traceId": { "type": "string", "minLength": 1 },
     "purpose": {
       "type": "string",
-      "enum": ["SWAP", "COVER", "ASSIGNMENT"]
+      "enum": ["SWAP", "COVER", "ASSIGNMENT", "CANDIDATE"],
+      "description": "CANDIDATE: a member is checked for a shift the supervisor is building, before anyone is assigned (SCRUM-171); slot.slotId is then the ID of the check request, and no assignment exists."
     },
     "assignmentId": { "type": "string", "format": "uuid" },
     "slot": {

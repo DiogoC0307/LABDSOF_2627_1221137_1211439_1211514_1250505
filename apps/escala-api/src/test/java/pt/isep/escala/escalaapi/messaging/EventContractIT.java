@@ -35,8 +35,9 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * TC-SCRUM-96-07, 08, 17 and 18: the events of escala-api against {@code contracts/events/}, as the producer of
  * AvaliacaoPedida and ExtracaoPedida and as the consumer of AvaliacaoConcluida and ExtracaoConcluida v2.
+ * AI is on, so that free text is accepted and ExtracaoPedida is published (SCRUM-89).
  */
-@SpringBootTest(properties = "spring.rabbitmq.dynamic=true")
+@SpringBootTest(properties = { "spring.rabbitmq.dynamic=true", "escala.ai.enabled=true" })
 @AutoConfigureMockMvc
 @Testcontainers
 class EventContractIT {

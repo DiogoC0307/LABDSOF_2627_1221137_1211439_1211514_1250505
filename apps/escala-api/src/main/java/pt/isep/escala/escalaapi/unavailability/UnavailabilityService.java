@@ -2,6 +2,7 @@ package pt.isep.escala.escalaapi.unavailability;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import pt.isep.escala.escalaapi.piquete.IsoWeek;
 import pt.isep.escala.escalaapi.unavailability.PatternExpansion.Interval;
 import pt.isep.escala.escalaapi.validation.InvalidRequestException;
 import pt.isep.escala.escalaapi.validation.InvalidRequestException.InvalidField;
@@ -26,6 +28,8 @@ class UnavailabilityService {
 	static final int MONTHS_AHEAD = 6;
 
 	private static final Logger log = LoggerFactory.getLogger(UnavailabilityService.class);
+
+	private static final ZoneId LISBON = ZoneId.of("Europe/Lisbon");
 
 	private static final String STARTS_AT = "startsAt";
 	private static final String ENDS_AT = "endsAt";
@@ -71,6 +75,25 @@ class UnavailabilityService {
 	@Transactional(readOnly = true)
 	Optional<UnavailabilityResponse> mine(UUID memberId, UUID id) {
 		return periods.findByIdAndMemberId(id, memberId).map(UnavailabilityService::view);
+	}
+
+	/**
+	 * Every member's periods that overlap a week, for the supervisor building the schedule
+	 */
+	@Transactional(readOnly = true)
+	List<TeamUnavailabilityResponse> team(String week) {
+		IsoWeek isoWeek;
+		try {
+			isoWeek = IsoWeek.parse(week);
+		} catch (IllegalArgumentException e) {
+			throw new InvalidRequestException(List.of(new InvalidField("week", "invalid_week")));
+		}
+
+		Instant from = isoWeek.monday().atStartOfDay(LISBON).toInstant();
+		Instant to = isoWeek.monday().plusDays(8).atStartOfDay(LISBON).toInstant();
+		return periods.findByStartsAtBeforeAndEndsAtAfterOrderByStartsAt(to, from).stream()
+				.map(period -> new TeamUnavailabilityResponse(period.getMemberId(), period.getStartsAt(), period.getEndsAt()))
+				.toList();
 	}
 
 	/** Deletes the member's own period; false when there is none with that ID for this member. */

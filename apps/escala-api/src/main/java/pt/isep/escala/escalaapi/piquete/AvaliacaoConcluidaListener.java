@@ -3,6 +3,8 @@ package pt.isep.escala.escalaapi.piquete;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,11 +29,15 @@ class AvaliacaoConcluidaListener {
 	private final ProcessedEventRepository processed;
 	private final SlotRepository slots;
 	private final EvaluationMetrics metrics;
+	private final CandidateCheckService candidateChecks;
+	private final WeekPublicationService publications;
 
 	AvaliacaoConcluidaListener(
 			ObjectMapper objectMapper, ProcessedEventRepository processed, SlotRepository slots,
-			EvaluationMetrics metrics) {
+			EvaluationMetrics metrics, CandidateCheckService candidateChecks, WeekPublicationService publications) {
 		this.metrics = metrics;
+		this.candidateChecks = candidateChecks;
+		this.publications = publications;
 		this.objectMapper = objectMapper;
 		this.processed = processed;
 		this.slots = slots;
@@ -51,6 +57,7 @@ class AvaliacaoConcluidaListener {
 			}
 			UUID assignmentId = EventFields.uuid(body, "assignmentId");
 			String result = body.path("result").asText();
+			// A walking-skeleton check of a new slot, a member checked for a shift being built (SCRUM-171), or a member
 			boolean applied = slots.findByAssignmentId(assignmentId).map(slot -> {
 				boolean changed = switch (result) {
 					case "ELIGIBLE" -> slot.markEligible();
@@ -61,13 +68,31 @@ class AvaliacaoConcluidaListener {
 					slots.save(slot);
 				}
 				return changed;
-			}).orElse(false);
+			}).orElseGet(() -> answered(assignmentId, result, violatedRules(body),
+					body.path("engineVersion").asString("")));
 			processed.save(new ProcessedEvent(eventId, Instant.now()));
 			metrics.completed(requestEventId(body), result, applied, Instant.now());
 			log.info("AvaliacaoConcluida applied assignmentId={} result={} traceId={}", assignmentId, result, traceId);
 		} finally {
 			MDC.remove("trace_id");
 		}
+	}
+
+	// The answer for a candidate check, else for an assignment of a week being published
+	private boolean answered(UUID assignmentId, String result, List<String> violatedRules, String engineVersion) {
+		return candidateChecks.onEvaluated(assignmentId, result, violatedRules, engineVersion)
+				|| publications.onEvaluated(assignmentId, result, violatedRules, engineVersion);
+	}
+
+	// List of codes of the rules that were violated. Empty when ELIGIBLE.
+	private static List<String> violatedRules(JsonNode body) {
+		List<String> codes = new ArrayList<>();
+		body.path("violatedRules").forEach(code -> {
+			if (code.isString()) {
+				codes.add(code.asString());
+			}
+		});
+		return codes;
 	}
 
 	/** The AvaliacaoPedida this answers, for SLI 1; a missing or broken one only means no latency is recorded. */

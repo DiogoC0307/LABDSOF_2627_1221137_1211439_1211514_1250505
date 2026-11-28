@@ -1,0 +1,27 @@
+/*
+ * Icon sizes.
+ */
+.icon-26,
+.icon-28,
+.icon-30,
+.icon-32 {
+  width: var(--icon-size);
+  height: var(--icon-size);
+  font-size: var(--icon-size);
+}
+
+.icon-26 {
+  --icon-size: 26px;
+}
+
+.icon-28 {
+  --icon-size: 28px;
+}
+
+.icon-30 {
+  --icon-size: 30px;
+}
+
+.icon-32 {
+  --icon-size: 32px;
+}

@@ -30,4 +30,18 @@ class ContractsTest {
 				.contains("POST /assignments/{id}/confirm 409");
 		assertThat(Contracts.errorResponsesWithoutBody("GET", "/api/v1/piquetes")).isEmpty();
 	}
+
+	@Test
+	@DisplayName("A shift's crew is a count per role (SCRUM-65): a known role with a count passes, an unknown role does not")
+	void describesTheCrewOfAShift() {
+		String shift = """
+				{"dutyDate":"2026-12-01","period":"DAY","startsAt":"2026-12-01T08:00:00Z","endsAt":"2026-12-01T20:00:00Z",\
+				"crew":[%s]}""";
+		assertThat(Contracts.requestErrors("POST", "/api/v1/piquetes",
+				shift.formatted("{\"role\":\"CREW_CHIEF\",\"count\":1},{\"role\":\"CREW_MEMBER\",\"count\":3}"))).isEmpty();
+		assertThat(Contracts.requestErrors("POST", "/api/v1/piquetes",
+				shift.formatted("{\"role\":\"PILOT\",\"count\":1}"))).isNotEmpty();
+		assertThat(Contracts.requestErrors("POST", "/api/v1/piquetes",
+				shift.formatted("{\"role\":\"DRIVER\",\"count\":-1}"))).isNotEmpty();
+	}
 }

@@ -40,7 +40,7 @@ class AvaliacaoPedidaIT {
 	ObjectMapper objectMapper;
 
 	@Test
-	void sempreElegivelPublishesAvaliacaoConcluidaWithSharedTraceId() throws Exception {
+	void anEligibleCandidatePublishesAvaliacaoConcluidaWithSharedTraceId() throws Exception {
 		String traceId = UUID.randomUUID().toString();
 		UUID eventId = UUID.randomUUID();
 		UUID assignmentId = UUID.randomUUID();
@@ -87,6 +87,7 @@ class AvaliacaoPedidaIT {
 		assertThat(body.path("requestEventId").asText()).isEqualTo(eventId.toString());
 		assertThat(body.path("assignmentId").asText()).isEqualTo(assignmentId.toString());
 		assertThat(body.path("result").asText()).isEqualTo("ELIGIBLE");
-		assertThat(body.path("engineVersion").asText()).isEqualTo(Evaluation.ENGINE_SEMPRE_ELEGIVEL);
+		assertThat(body.path("engineVersion").asText()).isEqualTo(EligibilityRules.ENGINE_VERSION);
+		assertThat(body.path("violatedRules").isEmpty()).isTrue();
 	}
 }

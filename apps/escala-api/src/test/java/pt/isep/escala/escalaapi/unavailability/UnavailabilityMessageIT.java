@@ -56,9 +56,11 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * A member says in their own words when they cannot serve, sees what was read automatically and confirms it
  * (SCRUM-75, escala-api side: RF13, RF31 to RF33, RNF09, 09 T-11). The worker is replaced by ExtracaoConcluida
- * messages sent by the test. The clock is fixed and moved by the tests.
+ * messages sent by the test. The clock is fixed and moved by the tests. AI is on here; with it off, see
+ * {@link UnavailabilityMessageAiOffIT} (SCRUM-89).
  */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.rabbitmq.dynamic=true")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+		properties = { "spring.rabbitmq.dynamic=true", "escala.ai.enabled=true" })
 @AutoConfigureMockMvc
 @Testcontainers
 @ExtendWith(OutputCaptureExtension.class)
@@ -426,6 +428,63 @@ class UnavailabilityMessageIT {
 		postText(MockTokens.member(), "{\"text\": \"" + marker).andExpect(status().isBadRequest());
 		await().pollDelay(Duration.ofSeconds(1)).until(() -> true);
 		assertThat(output.getAll()).doesNotContain(marker).contains("unavailability message confirmed");
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-89-01 \"bom dia a todos\" has no unavailability: the answer has no periods, the PWA discards it, the text is deleted and nothing is saved")
+	void aTextWithNoDates() throws Exception {
+		UUID id = sendText(MockTokens.member(), "bom dia a todos");
+		answer(id, "[]", "MODEL");
+		mockMvc.perform(get(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("PROPOSED"))
+				.andExpect(jsonPath("$.periods.length()").value(0));
+
+		mockMvc.perform(delete(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(status().isNoContent());
+
+		assertThat(jdbc.queryForObject("SELECT status FROM unavailability_message WHERE id = ?", String.class, id))
+				.isEqualTo("DISCARDED");
+		assertThat(tablesContaining("bom dia a todos")).isEmpty();
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM unavailability", Integer.class)).isZero();
+		mockMvc.perform(get("/api/v1/unavailabilities").header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-89-02 with AI on, GET settings answers aiEnabled true to every role and 401 without a token; \"settings\" is not taken as a message ID by /{id}")
+	void settingsWithAiOn() throws Exception {
+		for (String token : List.of(MockTokens.member(), MockTokens.supervisor(), MockTokens.admin())) {
+			HttpResponse<String> response = server("GET", PATH + "/settings", token, null);
+			assertThat(response.statusCode()).isEqualTo(200);
+			JsonNode body = objectMapper.readTree(response.body());
+			assertThat(fieldNames(body)).containsExactly("aiEnabled");
+			assertThat(body.path("aiEnabled").asBoolean()).isTrue();
+		}
+		HttpResponse<String> anonymous = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + PATH + "/settings"))
+				.header(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE).GET().build(), HttpResponse.BodyHandlers.ofString());
+		assertThat(anonymous.statusCode()).isEqualTo(401);
+	}
+
+	@Test
+	@DisplayName("TC-SCRUM-89-03 the PWA discards a message still PENDING after 10 s; the late ExtracaoConcluida is ignored: no proposal, nothing saved, no text left")
+	void aLateAnswerIsDiscarded() throws Exception {
+		UUID id = sendText(MockTokens.member(), "MARKER-89-03 não posso sábado de manhã");
+		mockMvc.perform(delete(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(status().isNoContent());
+
+		UUID late = UUID.randomUUID();
+		sendConcluida(late, requestEventId(id), id, SATURDAY_MORNING, "MODEL");
+		await().atMost(Duration.ofSeconds(15)).until(() -> jdbc.queryForObject(
+				"SELECT count(*) FROM processed_event WHERE event_id = ?", Integer.class, late) == 1);
+
+		mockMvc.perform(get(PATH + "/" + id).header(HttpHeaders.AUTHORIZATION, MockTokens.member()))
+				.andExpect(jsonPath("$.status").value("DISCARDED"))
+				.andExpect(jsonPath("$.periods.length()").value(0));
+		confirm(MockTokens.member(), id, SATURDAY_MORNING).andExpect(status().isConflict());
+		assertThat(jdbc.queryForObject("SELECT count(*) FROM unavailability", Integer.class)).isZero();
+		assertThat(tablesContaining("MARKER-89-03")).isEmpty();
 	}
 
 	private UUID sendText(String token, String text) throws Exception {

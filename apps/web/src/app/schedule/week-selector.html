@@ -1,0 +1,133 @@
+<!-- Week bar (previous week arrow, week label that opens the calendar, next week arrow) -->
+<div>
+  <div
+    class="week-bar flex items-center gap-1 p-1.5 bg-white border border-[#D9D7D2] rounded-[18px]"
+    cdkOverlayOrigin
+    #bar="cdkOverlayOrigin"
+  >
+    <!-- Previous week arrow -->
+    <button type="button" class="week-arrow" aria-label="Previous week" (click)="previousWeek()">
+      <svg class="size-[26px]" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M15 5l-7 7 7 7" />
+      </svg>
+    </button>
+
+    <!-- Week label ("This week" over "23 – 29 November 2026"), opens the calendar below the whole bar -->
+    <h2 class="week-heading flex flex-1 min-w-0">
+      <button
+        #pickerToggle
+        type="button"
+        class="week-toggle flex flex-1 min-w-0 flex-col items-center justify-center"
+        [class.week-toggle--current]="isCurrentWeek()"
+        aria-haspopup="dialog"
+        [attr.aria-expanded]="pickerOpen()"
+        [attr.aria-label]="toggleLabel()"
+        (click)="togglePicker()"
+      >
+        <span class="week-relative flex items-center gap-1 text-[16px] font-bold leading-tight">
+          <span id="week-relative">{{ relativeLabel() }}</span>
+          <svg class="week-caret size-5" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </span>
+        <span
+          id="week-range"
+          class="text-[18px] font-bold leading-tight text-[#1C1B19] whitespace-nowrap"
+          >{{ range() }}</span
+        >
+      </button>
+    </h2>
+
+    <!-- Next week arrow -->
+    <button type="button" class="week-arrow" aria-label="Next week" (click)="nextWeek()">
+      <svg class="size-[26px]" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M9 5l7 7-7 7" />
+      </svg>
+    </button>
+  </div>
+</div>
+
+<!-- Calendar to choose a week -->
+<ng-template
+  cdkConnectedOverlay
+  [cdkConnectedOverlayOrigin]="bar"
+  [cdkConnectedOverlayOpen]="pickerOpen()"
+  [cdkConnectedOverlayPositions]="pickerPositions"
+  cdkConnectedOverlayHasBackdrop
+  cdkConnectedOverlayBackdropClass="cdk-overlay-transparent-backdrop"
+  (attach)="focusChosenWeek()"
+  (backdropClick)="closePicker()"
+  (overlayKeydown)="onPickerKeydown($event)"
+  (detach)="closePicker()"
+>
+  <!-- A dialog that is not modal, opened in place in the overlay: static and with no margin, not centred -->
+  <dialog
+    open
+    #calendar
+    id="week-calendar"
+    class="calendar static m-0 flex flex-col w-[18.5rem] max-w-[calc(100vw-2rem)] box-border p-3 bg-white border border-[#D9D7D2] rounded-[18px] shadow-[0_8px_24px_rgba(28,27,25,0.12)]"
+    aria-label="Choose a week"
+    cdkTrapFocus
+  >
+    <!-- Month and its arrows -->
+    <div class="flex items-center justify-between gap-2 mb-2">
+      <button
+        type="button"
+        class="calendar-arrow"
+        aria-label="Previous month"
+        (click)="previousMonth()"
+      >
+        <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+      </button>
+      <p
+        class="calendar-month m-0 text-[16px] font-semibold text-[#1C1B19] text-center"
+        aria-live="polite"
+      >
+        {{ pickerTitle() }}
+      </p>
+      <button type="button" class="calendar-arrow" aria-label="Next month" (click)="nextMonth()">
+        <svg class="size-5" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+      </button>
+    </div>
+
+    <!-- Days of the week -->
+    <div
+      class="grid grid-cols-7 items-center mb-1 text-center text-[12px] text-[#57554F]"
+      aria-hidden="true"
+    >
+      <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span
+      ><span>Sat</span><span>Sun</span>
+    </div>
+
+    <!-- Weeks of the month, each row is one button that chooses its week -->
+    @for (week of pickerWeeks(); track week.monday) {
+      <button
+        type="button"
+        class="calendar-week grid grid-cols-7 items-center w-full h-9"
+        [class.calendar-week--selected]="week.selected"
+        [attr.aria-pressed]="week.selected"
+        [attr.aria-label]="week.label"
+        (click)="chooseWeek(week.monday)"
+      >
+        @for (day of week.days; track day.date) {
+          <span
+            class="calendar-day text-center text-[14px]"
+            [class.calendar-day--outside]="day.outside"
+            [class.calendar-day--today]="day.today"
+            aria-hidden="true"
+            >{{ day.day }}</span
+          >
+        }
+      </button>
+    }
+
+    <!-- Go back to the week that holds today -->
+    <button
+      type="button"
+      class="calendar-this-week w-full h-10 mt-2"
+      (click)="chooseWeek(currentMonday())"
+    >
+      Go to this week
+    </button>
+  </dialog>
+</ng-template>

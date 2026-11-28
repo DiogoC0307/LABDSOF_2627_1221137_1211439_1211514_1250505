@@ -3,7 +3,8 @@ import { Router } from '@angular/router';
 import { SwUpdate, UnrecoverableStateEvent, VersionEvent } from '@angular/service-worker';
 import { Subject } from 'rxjs';
 import { App } from '../app';
-import { http, signInAs, testProviders } from '../testing/test-support';
+import { NOTIFICATIONS_EVERY_MS } from '../notifications/notification.service';
+import { flushNotificationRequests, flushWeekRequests, http, signInAs, testProviders } from '../testing/test-support';
 import { RELOAD_PAGE, UPDATE_CHECK_INTERVAL_MS } from './app-update';
 
 /** A simulated SwUpdate: the tests push its events and see what the app asks of it. */
@@ -35,9 +36,22 @@ describe('AppUpdate', () => {
     fixture.detectChanges();
     await TestBed.inject(Router).navigateByUrl('/');
     fixture.detectChanges();
-    http().expectOne('/api/v1/piquetes').flush([]);
+    flushWeekRequests();
+    flushNotificationRequests();
     fixture.detectChanges();
     return fixture;
+  }
+
+  /**
+   * Advances the fake clock in steps shorter than the navbar's notification checks (every 30 s), answering each check
+   * before the next one cancels it.
+   */
+  async function advance(ms: number) {
+    const step = NOTIFICATIONS_EVERY_MS / 3;
+    for (let left = ms; left > 0; left -= step) {
+      await vi.advanceTimersByTimeAsync(Math.min(left, step));
+      flushNotificationRequests();
+    }
   }
 
   function notice(page: HTMLElement): HTMLOutputElement | null {
@@ -56,6 +70,8 @@ describe('AppUpdate', () => {
   });
 
   afterEach(() => {
+    flushWeekRequests();
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
     vi.useRealTimers();
@@ -68,10 +84,10 @@ describe('AppUpdate', () => {
     const page = fixture.nativeElement as HTMLElement;
     expect(swUpdate.checkForUpdate).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS);
+    await advance(UPDATE_CHECK_INTERVAL_MS);
     expect(swUpdate.checkForUpdate).toHaveBeenCalledTimes(1);
     // the first check failed (offline); the next minute checks again
-    await vi.advanceTimersByTimeAsync(UPDATE_CHECK_INTERVAL_MS);
+    await advance(UPDATE_CHECK_INTERVAL_MS);
     expect(swUpdate.checkForUpdate).toHaveBeenCalledTimes(2);
 
     // a version found but not downloaded yet is not announced
@@ -121,17 +137,17 @@ describe('AppUpdate', () => {
     vi.useFakeTimers();
     swUpdate.isEnabled = false;
     const fixture = await start([{ provide: SwUpdate, useValue: swUpdate }]);
-    await vi.advanceTimersByTimeAsync(3 * UPDATE_CHECK_INTERVAL_MS);
+    await advance(3 * UPDATE_CHECK_INTERVAL_MS);
     swUpdate.versionUpdates.next(versionReady);
     fixture.detectChanges();
     expect(swUpdate.checkForUpdate).not.toHaveBeenCalled();
     expect(notice(fixture.nativeElement as HTMLElement)).toBeNull();
-    expect((fixture.nativeElement as HTMLElement).querySelector('nav.menu')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-navbar')).not.toBeNull();
   });
 
   it('TC-SCRUM-166-04 without SwUpdate at all (as in the other specs) the app starts and shows no message', async () => {
     const fixture = await start([]);
     expect(notice(fixture.nativeElement as HTMLElement)).toBeNull();
-    expect((fixture.nativeElement as HTMLElement).querySelector('nav.menu')).not.toBeNull();
+    expect((fixture.nativeElement as HTMLElement).querySelector('app-navbar')).not.toBeNull();
   });
 });
