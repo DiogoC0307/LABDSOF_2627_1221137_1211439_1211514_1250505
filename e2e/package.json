@@ -1,0 +1,13 @@
+{
+  "name": "escala-e2e",
+  "private": true,
+  "description": "End-to-end test of the principal journey, in a browser against the Docker Compose stack (SCRUM-100)",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "@types/node": "22.20.5"
+  }
+}

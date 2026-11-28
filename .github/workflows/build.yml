@@ -123,6 +123,60 @@ jobs:
       - name: Lint contracts/openapi.yaml
         run: npx --yes @redocly/cli@2.77.0 lint --config contracts/redocly.yaml contracts/openapi.yaml
 
+  e2e:
+    name: e2e (Playwright on Docker Compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Lisbon time for the runner too; the browser is set to Europe/Lisbon in e2e/playwright.config.ts (SCRUM-100)
+      TZ: Europe/Lisbon
+    steps:
+      - uses: actions/checkout@v7
+
+      # The whole stack from compose.yaml with its local defaults: the seeded synthetic users, AI off, no token.
+      - name: Start the Compose stack
+        run: docker compose up -d --build --wait --wait-timeout 300
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies and Chromium
+        working-directory: e2e
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Principal journey (TC-SCRUM-100-01 to 06)
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Upload the Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-report
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          if-no-files-found: ignore
+
+      - name: Collect the Compose logs
+        if: failure()
+        run: docker compose logs --no-color --timestamps > compose-logs.txt
+
+      - name: Upload the Compose logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-compose-logs
+          path: compose-logs.txt
+          if-no-files-found: ignore
+
+      - name: Stop the Compose stack
+        if: always()
+        run: docker compose down -v
+
   security:
     name: security (secrets, dependencies, sbom)
     runs-on: ubuntu-latest
