@@ -1,10 +1,19 @@
 @if (auth.session()) {
   <app-navbar [canInstall]="canInstall()" (install)="install()" (signOut)="signOut()" />
-  <main class="page">
-    <router-outlet />
-  </main>
-} @else {
-  <main class="page">
-    <app-sign-in (signedIn)="onSignedIn()" />
-  </main>
 }
+<main class="page">
+  @if (update.available()) {
+    <!-- A new deploy (SCRUM-166); an output is announced like role="status" -->
+    <output class="notice">
+      <span class="flex flex-wrap items-center gap-2">
+        A new version of Escala is available.
+        <button matButton type="button" class="reload" (click)="update.reload()">Reload</button>
+      </span>
+    </output>
+  }
+  @if (auth.session()) {
+    <router-outlet />
+  } @else {
+    <app-sign-in (signedIn)="onSignedIn()" />
+  }
+</main>
