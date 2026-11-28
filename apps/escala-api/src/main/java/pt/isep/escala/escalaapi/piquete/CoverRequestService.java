@@ -101,7 +101,7 @@ class CoverRequestService {
 		UUID vacated = held.isEmpty() ? null : held.get(0).getMemberId();
 		CoverRequest request = requests.saveAndFlush(new CoverRequest(UUID.randomUUID(), slot.getId(), piquete.getId(),
 				slot.getRole(), start, end, vacated, reason, openedAt));
-		tellSupervisors(request, NotificationType.SLOT_OPENED, null);
+		tellSupervisors(request, NotificationType.SLOT_OPENED, reason.name());
 
 		ServiceFunction function = ServiceFunction.valueOf(slot.getRole().name());
 		List<Member> candidates = members.findAll().stream()

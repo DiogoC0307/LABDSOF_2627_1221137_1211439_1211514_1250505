@@ -60,7 +60,8 @@ CREATE TABLE cover_offer (
 CREATE INDEX cover_offer_member_status_idx ON cover_offer (member_id, status);
 
 -- The notifications of a cover request: the member asked (COVER_REQUESTED), and the supervisor when the slot opens
--- (SLOT_OPENED) and when nobody covers it (COVER_ESCALATED, with its reason). The PWA writes the text from these fields.
+-- (SLOT_OPENED, with why the slot opened) and when nobody covers it (COVER_ESCALATED, with why). The PWA writes the text
+-- from these fields.
 ALTER TABLE notification
     ADD COLUMN cover_request_id uuid,
     ADD COLUMN role character varying(11),
@@ -70,6 +71,7 @@ ALTER TABLE notification
         'REMOVED_FROM_SHIFT', 'SHIFT_TIMES_CHANGED', 'SHIFT_CANCELLED', 'SLOT_OPENED', 'COVER_REQUESTED',
         'COVER_ESCALATED')),
     ADD CONSTRAINT notification_role_check CHECK (role IN ('CREW_CHIEF', 'DRIVER', 'CREW_MEMBER')),
-    ADD CONSTRAINT notification_reason_check CHECK (reason IN ('NO_CANDIDATES', 'NO_ACCEPTANCE'));
+    ADD CONSTRAINT notification_reason_check CHECK (reason IN ('CANNOT_COME', 'NO_ANSWER', 'NO_CANDIDATES',
+        'NO_ACCEPTANCE'));
 
 CREATE INDEX notification_cover_request_idx ON notification (cover_request_id);

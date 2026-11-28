@@ -15,6 +15,9 @@ export type NotificationType =
   | 'COVER_REQUESTED'
   | 'COVER_ESCALATED';
 
+/** Why a slot opened (SCRUM-71): its member can't come, or did not confirm in time. */
+export type SlotOpening = 'CANNOT_COME' | 'NO_ANSWER';
+
 /** Why nobody covers a slot yet (SCRUM-72): nobody is free and qualified, or nobody accepted in time. */
 export type CoverEscalation = 'NO_CANDIDATES' | 'NO_ACCEPTANCE';
 
@@ -31,7 +34,7 @@ export interface AppNotification {
   shiftCount?: number | null;
   coverRequestId?: string | null;
   role?: SlotRole | null;
-  reason?: CoverEscalation | null;
+  reason?: SlotOpening | CoverEscalation | null;
   createdAt: string;
   read: boolean;
 }

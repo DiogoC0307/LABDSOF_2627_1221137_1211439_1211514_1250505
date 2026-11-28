@@ -1706,9 +1706,12 @@ components:
           description: The slot's function (SlotRole)
         reason:
           type: string
-          enum: [NO_CANDIDATES, NO_ACCEPTANCE]
+          enum: [CANNOT_COME, NO_ANSWER, NO_CANDIDATES, NO_ACCEPTANCE]
           nullable: true
-          description: NO_CANDIDATES when nobody is free and qualified (AC3), NO_ACCEPTANCE when nobody accepted in time (AC4)
+          description: >-
+            Why. On SLOT_OPENED, why the slot opened: CANNOT_COME when the member said they can't come, NO_ANSWER when
+            they did not confirm in time (SCRUM-71). On COVER_ESCALATED, why nobody covers it: NO_CANDIDATES when nobody
+            is free and qualified (SCRUM-72 AC3), NO_ACCEPTANCE when nobody accepted in time (SCRUM-72 AC4)
         createdAt:
           type: string
           format: date-time

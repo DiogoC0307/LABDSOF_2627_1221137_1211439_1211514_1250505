@@ -81,7 +81,10 @@ export function notificationCopy(notification: AppNotification): NotificationCop
     case 'COVER_REQUESTED':
       return { title: 'Can you cover a shift?', detail: slotWords(notification) };
     case 'SLOT_OPENED':
-      return { title: 'A slot is open', detail: `${slotWords(notification)}. The member can't come; others are being asked.` };
+      return {
+        title: 'A slot is open',
+        detail: `${slotWords(notification)}. ${notification.reason === 'NO_ANSWER' ? "The member didn't confirm" : "The member can't come"}; others are being asked.`,
+      };
     case 'COVER_ESCALATED':
       return notification.reason === 'NO_ACCEPTANCE'
         ? { title: 'Nobody has covered yet', detail: `${slotWords(notification)}. Nobody accepted in time.` }
