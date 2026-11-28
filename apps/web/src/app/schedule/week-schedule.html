@@ -14,7 +14,7 @@
     <div class="flex flex-col items-center gap-3 lg:flex-row lg:flex-wrap">
       <!-- Status label (an output is announced like role="status") -->
       <output
-        class="week-status m-0 flex items-center gap-2 h-11 px-4 text-[16px] font-semibold rounded-full"
+        class="week-status text-[16px] font-semibold rounded-full"
         [class.week-status--green]="status().tone === 'green'"
         [class.week-status--amber]="status().tone === 'amber'"
       >
@@ -71,7 +71,7 @@
               [disabled]="!canPublish()"
               (click)="confirmPublish()"
             >
-              Publish schedule
+              {{ publishing() ? 'Publishing…' : 'Publish schedule' }}
             </button>
           }
         </div>
@@ -85,6 +85,10 @@
 
   @if (error()) {
     <p class="error mx-4 mb-2 lg:mx-6" role="alert">{{ error() }}</p>
+  }
+
+  @if (publishNote()) {
+    <p class="notice mx-4 mb-2 lg:mx-6" role="status">{{ publishNote() }}</p>
   }
 
   <!-- Page content (week grid and shift side panel; on a phone, the days as a list and the side panel as a drawer) -->

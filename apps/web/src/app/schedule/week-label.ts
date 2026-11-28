@@ -76,3 +76,26 @@ export function weekRange(monday: string): string {
 
   return `${s.day} – ${e.day} ${e.month} ${e.year}`;
 }
+
+/**
+ * The days of the week from Monday to Sunday in words, with full month names
+ *
+ * "from 23 to 29 November 2026", "from 30 November to 6 December 2026", "from 28 December 2026 to 3 January 2027".
+ */
+export function weekFromTo(monday: string): string {
+  const start = toUtc(monday);
+  const s = parts(start);
+  const e = parts(new Date(start.getTime() + WEEK_MS - 24 * 60 * 60 * 1000));
+
+  // The week is across two years
+  if (s.year !== e.year) {
+    return `from ${s.day} ${s.month} ${s.year} to ${e.day} ${e.month} ${e.year}`;
+  }
+
+  // The week is across two months
+  if (s.month !== e.month) {
+    return `from ${s.day} ${s.month} to ${e.day} ${e.month} ${e.year}`;
+  }
+
+  return `from ${s.day} to ${e.day} ${e.month} ${e.year}`;
+}

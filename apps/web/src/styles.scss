@@ -37,6 +37,14 @@ body {
   background: #f4f6f8;
 }
 
+/*
+ * The app's font on body, not only app-root: CDK overlays (menus, dialogs, the notifications list) are added to
+ * body outside app-root, and would otherwise show in the browser's default serif font.
+ */
+body {
+  font-family: system-ui, sans-serif;
+}
+
 /* Shared by every view (moved from app.scss with the router, SCRUM-77). */
 app-root {
   display: block;
@@ -267,6 +275,37 @@ app-root:has(app-week-schedule) {
 
   p {
     margin: 0;
+  }
+
+  // The conflicts that keep a week from being published, each with its "Show shift" button
+  .conflict-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 16px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .conflict {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    background: #fff0d1;
+    border: 1px solid #f0cf85;
+    border-left: 6px solid #c77700;
+    border-radius: 10px;
+  }
+
+  .conflict-text {
+    display: flex;
+    flex: 1 1 220px;
+    flex-direction: column;
+    gap: 2px;
+    color: #33312d;
   }
 }
 

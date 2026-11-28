@@ -24,7 +24,7 @@ record PiqueteRequest(
 record CrewNeed(SlotRole role, Integer count) {
 }
 
-record SlotResponse(UUID id, SlotRole role, SlotStatus status) {
+record SlotResponse(UUID id, SlotRole role, SlotStatus status, UUID memberId) {
 }
 
 /** period, startsAt, endsAt and minimumCrew are null on a piquete created without them. */

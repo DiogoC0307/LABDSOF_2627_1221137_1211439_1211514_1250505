@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from '../app';
-import { http, setValue, signInAs, testProviders } from '../testing/test-support';
+import { flushNotificationRequests, http, setValue, signInAs, testProviders } from '../testing/test-support';
 import { formatLisbon, lisbonToUtc } from './lisbon-time';
 
 const period = {
@@ -39,6 +39,7 @@ describe('Unavailability', () => {
   });
 
   afterEach(() => {
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
   });

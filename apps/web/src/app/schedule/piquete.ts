@@ -13,6 +13,7 @@ export interface Slot {
   id: string;
   role: string;
   status: string;
+  memberId?: string | null; // Who holds the slot once its week is published (SCRUM-66)
 }
 
 // How many people of a role for a shift

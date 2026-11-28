@@ -81,6 +81,11 @@ class Slot {
 		return true;
 	}
 
+	// Returns the state of a published slot in a shift: FILLED when a member holds it, OPEN otherwise.
+	void published(boolean held) {
+		this.status = held ? SlotStatus.FILLED : SlotStatus.OPEN;
+	}
+
 	void setPiquete(Piquete piquete) {
 		this.piquete = piquete;
 	}

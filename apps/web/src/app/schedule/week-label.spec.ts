@@ -1,4 +1,4 @@
-import { relativeWeekLabel, weekRange } from './week-label';
+import { relativeWeekLabel, weekFromTo, weekRange } from './week-label';
 
 // Week selector labels. This week starts on Monday 2026-11-23.
 describe('week-label', () => {
@@ -41,6 +41,20 @@ describe('week-label', () => {
 
     it('gives both years for a week across two years', () => {
       expect(weekRange('2026-12-28')).toBe('28 Dec 2026 – 3 Jan 2027');
+    });
+  });
+
+  describe('weekFromTo', () => {
+    it('gives the month once for a week inside one month', () => {
+      expect(weekFromTo('2026-11-23')).toBe('from 23 to 29 November 2026');
+    });
+
+    it('gives both full months for a week across two months', () => {
+      expect(weekFromTo('2026-11-30')).toBe('from 30 November to 6 December 2026');
+    });
+
+    it('gives both years for a week across two years', () => {
+      expect(weekFromTo('2026-12-28')).toBe('from 28 December 2026 to 3 January 2027');
     });
   });
 });

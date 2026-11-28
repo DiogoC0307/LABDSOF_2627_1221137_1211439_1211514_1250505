@@ -811,7 +811,18 @@ describe('WeekSchedule', () => {
       expect(status(fixture)).toBe('No shifts yet');
     });
 
-    it('asks before publishing, then shows the week as published', async () => {
+    // Publish schedule, then Publish in its dialog: the week goes to the API
+    async function confirmPublish(fixture: ComponentFixture<WeekSchedule>) {
+      publishButton(fixture).click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      press(fixture, 'Publish');
+      await fixture.whenStable();
+      fixture.detectChanges();
+      return http().expectOne('/api/v1/schedule-publications');
+    }
+
+    it('TC-SCRUM-66-01 asks before publishing, sends the whole week, then shows it as members now see it', async () => {
       const fixture = await nextWeek();
       await addShift(fixture, 0);
       await addShift(fixture, 1);
@@ -826,9 +837,93 @@ describe('WeekSchedule', () => {
       press(fixture, 'Publish');
       await fixture.whenStable();
       fixture.detectChanges();
+      const publish = http().expectOne('/api/v1/schedule-publications');
+      expect(publish.request.method).toBe('POST');
+      expect(publish.request.body.week).toBe('2026-W49');
+      expect(publish.request.body.shifts).toEqual([
+        expect.objectContaining({ key: 'new-1', id: null, dutyDate: '2026-11-30', assigned: [] }),
+        expect.objectContaining({ key: 'new-2', id: null, dutyDate: '2026-12-01', assigned: [] }),
+      ]);
+      expect(publish.request.body.shifts[0].crew).toContainEqual({ role: 'CREW_CHIEF', count: 1 });
+      expect(status(fixture)).toBe('Publishing · checking members');
+
+      // Every member was checked and the week is published: it is loaded again, as the API now has it
+      publish.flush({ id: 'pub-1', week: '2026-W49', status: 'PUBLISHED', conflicts: [] });
+      fixture.detectChanges();
+      flushWeek(fixture, '2026-W49', [
+        {
+          id: 'p-new',
+          dutyDate: '2026-11-30',
+          period: 'DAY',
+          startsAt: '2026-11-30T08:00:00Z',
+          endsAt: '2026-11-30T20:00:00Z',
+          minimumCrew: 1,
+          slots: [{ id: 's-new', role: 'CREW_CHIEF', status: 'FILLED', memberId: 'm-ana' }],
+        },
+      ]);
       expect(status(fixture)).toBe('Published');
       expect(publishButton(fixture).disabled).toBe(true);
       expect(element(fixture).querySelector('.tag--change')).toBeNull();
+      expect(columns(fixture)[0].querySelector('.shift-card')?.textContent).toContain('1 of 1 firefighter');
+    });
+
+    it('TC-SCRUM-66-02 lists the conflicts when the week cannot be published, keeps the draft, and shows the shift of one', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+      await addShift(fixture, 1);
+
+      const publish = await confirmPublish(fixture);
+      flushDirectory(fixture);
+      publish.flush({
+        id: 'pub-2',
+        week: '2026-W49',
+        status: 'BLOCKED',
+        conflicts: [
+          { type: 'EMPTY_SHIFT', shiftKey: 'new-1', shiftId: 'x-1', dutyDate: '2026-11-30' },
+          {
+            type: 'INELIGIBLE',
+            shiftKey: 'new-2',
+            shiftId: 'x-2',
+            dutyDate: '2026-12-01',
+            memberId: 'm-ana',
+            role: 'CREW_CHIEF',
+            rules: ['RN06'],
+          },
+        ],
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const dialog = document.querySelector<HTMLElement>('mat-dialog-container')!;
+      expect(dialog.querySelector('[mat-dialog-title]')?.textContent?.trim()).toBe('The schedule has conflicts');
+      expect(dialog.querySelectorAll('.conflict').length).toBe(2);
+      const conflicts = Array.from(dialog.querySelectorAll('.conflict')).map((each) => each.textContent!.replace(/\s+/g, ' ').trim());
+      expect(conflicts[0]).toContain('Monday 30 November');
+      expect(conflicts[0]).toContain('Nobody is on this shift.');
+      expect(conflicts[1]).toContain('Tuesday 1 December');
+      expect(conflicts[1]).toContain("Ana Costa (Crew chief) said they can't come during this shift.");
+      expect(status(fixture)).toBe('2 unpublished changes');
+
+      buttonByText(dialog.querySelectorAll('.conflict')[1], 'Show shift')!.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(document.querySelector('mat-dialog-container')).toBeNull();
+      expect(panel(fixture)).not.toBeNull();
+      expect(element(fixture).querySelector('.shift-card--selected')?.getAttribute('data-shift-id')).toBe('new-2');
+    });
+
+    it('says so when the week could not be sent, and keeps the draft', async () => {
+      const fixture = await nextWeek();
+      await addShift(fixture, 0);
+
+      const publish = await confirmPublish(fixture);
+      publish.flush('', { status: 503, statusText: 'Service Unavailable' });
+      fixture.detectChanges();
+
+      expect(element(fixture).textContent).toContain('Could not publish the week. Nothing was published; try again.');
+      expect(status(fixture)).toBe('1 unpublished change');
+      expect(publishButton(fixture).disabled).toBe(false);
     });
 
     it('keeps the changes when the supervisor looks at another week and comes back', async () => {

@@ -3,6 +3,7 @@ import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AccessRole, AuthService } from '../auth/auth.service';
+import { NotificationBell } from '../notifications/notification-bell';
 
 interface NavLink {
   path: string;
@@ -19,7 +20,7 @@ const LINKS: readonly NavLink[] = [
 
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink, RouterLinkActive, MatButton, MatIcon],
+  imports: [RouterLink, RouterLinkActive, MatButton, MatIcon, NotificationBell],
   templateUrl: './navbar.html',
   styleUrl: './navbar.css',
   changeDetection: ChangeDetectionStrategy.Eager,

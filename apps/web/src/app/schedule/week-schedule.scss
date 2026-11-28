@@ -8,8 +8,14 @@ $blue: #0b5cab;
   margin-left: calc(50% - 50vw);
 }
 
-// Status label ("Published", "2 unpublished changes"), in the colour of its dot
+// Week schedule status label
 .week-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 14px;
+  line-height: 1.25;
   color: #33312d;
   background: #fff;
   border: 1px solid #d9d7d2;

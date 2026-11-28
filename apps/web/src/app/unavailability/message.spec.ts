@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { App } from '../app';
-import { http, setValue, signInAs, testProviders } from '../testing/test-support';
+import { flushNotificationRequests, http, setValue, signInAs, testProviders } from '../testing/test-support';
 
 const MESSAGES = '/api/v1/unavailability-messages';
 const SETTINGS = `${MESSAGES}/settings`;
@@ -24,6 +24,7 @@ describe('Unavailability in my own words', () => {
   });
 
   afterEach(() => {
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
   });

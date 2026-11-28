@@ -126,13 +126,18 @@ export class ScheduleDraftService {
   }
 
   /**
-   * MOCKUP: marks the week's draft as published on the client only. This is where the week's changes (new, edited
-   * and deleted shifts, with their crew and members) will be sent to the API in one call.
+   * The week as the API now has it, once it is published
    */
-  publish(monday: string): void {
-    this.edit(monday, (draft) => {
-      const published = draft.shifts.map((shift) => ({ ...shift, change: 'published' as const }));
-      return { published, shifts: published, deleted: [] };
+  replace(monday: string, published: DraftShift[]): void {
+    this.set(monday, { published, shifts: published, deleted: [] });
+  }
+
+  /** Drops the week, so the next load reads it from the API again. */
+  forget(monday: string): void {
+    this.store.update((store) => {
+      const weeks = { ...store.weeks };
+      delete weeks[monday];
+      return { ...store, weeks };
     });
   }
 

@@ -1,0 +1,311 @@
+/*
+ * The notifications bell and its dropdown list. Sized for senior members: big text, 44px+ targets, 4.5:1 contrast.
+ * "Primary" is the app's brand blue (--color-brand in tailwind.css).
+ */
+:host {
+  display: inline-flex;
+}
+
+/* The panel lives in the CDK overlay, outside :host, so it needs the colours too */
+:host,
+.panel {
+  --brand: var(--color-brand, #0b5cab);
+  --ink: #1c1b19;
+  --ink-soft: #33312d;
+  --ink-muted: #57554f;
+  --divider: #ecebe7;
+}
+
+/* The bell: 48x48, 12px corners, a light blue background while its list is open */
+.bell {
+  position: relative;
+  border-radius: 12px;
+  --mat-icon-button-state-layer-size: 48px;
+  --mat-icon-button-container-shape: 12px;
+  --mat-icon-button-icon-size: 26px;
+  --mat-icon-button-icon-color: #1c1b19;
+}
+
+/* Every icon here is as wide and tall as its font size */
+mat-icon {
+  width: 1em;
+  height: 1em;
+}
+
+.bell mat-icon {
+  font-size: 26px;
+}
+
+.bell--open {
+  background: #eef5fc;
+}
+
+.bell:focus-visible,
+.text-action:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* How many are unread: red, white number, white ring */
+.badge {
+  position: absolute;
+  top: 4px;
+  right: 2px;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 22px;
+  color: #fff;
+  text-align: center;
+  background: #b3261e;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+/*
+ * The dropdown: full width less 8px a side on a phone, 420px from md up. It never runs past the bottom of the
+ * screen: the navbar's height (68px + 1px border on a phone, 72px + 1px from md up) and 24px are left out.
+ */
+.panel {
+  --navbar-height: calc(69px + env(safe-area-inset-top));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: calc(100vw - 16px);
+  max-height: calc(100dvh - var(--navbar-height) - 24px);
+  overflow: hidden;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #d9d7d2;
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgb(28 27 25 / 16%);
+}
+
+@media (width >= 48rem) {
+  .panel {
+    --navbar-height: 73px;
+    width: 420px;
+  }
+}
+
+.panel-header {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 14px 12px 12px 20px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.panel-title {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.panel-title:focus {
+  outline: none;
+}
+
+/* "Mark all as read" and "Try again": blue text buttons, 16px bold, 44px tall */
+.text-action {
+  --mat-button-text-container-height: 44px;
+  --mat-button-text-label-text-color: var(--brand);
+  --mat-button-text-label-text-size: 16px;
+  --mat-button-text-label-text-weight: 700;
+  --mat-button-text-state-layer-color: var(--brand);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+/* The scrollbar's room is kept from the start, so rows measured before it shows do not wrap again after */
+.notification-list {
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  padding: 6px 0;
+  overflow-y: auto;
+}
+
+.group-label {
+  margin: 0;
+  padding: 12px 20px 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One notification: the whole row is the button */
+.row {
+  box-sizing: border-box;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 12px 20px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: #fff;
+  border: 0;
+}
+
+.row:hover {
+  background: #f6f5f2;
+}
+
+.row--unread {
+  background: #f3f8fd;
+}
+
+.row--unread:hover {
+  background: #e6f0fa;
+}
+
+.row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* The icon circle, coloured by the kind of notification */
+.row-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.row-icon mat-icon {
+  font-size: 22px;
+}
+
+.row-icon[data-kind='published'] {
+  color: var(--brand);
+  background: #eef5fc;
+}
+
+.row-icon[data-kind='changed'] {
+  color: #6e4300;
+  background: #fff0d1;
+}
+
+.row-icon[data-kind='assigned'] {
+  color: #1d5b2a;
+  background: #e3f4e6;
+}
+
+.row-icon[data-kind='removed'] {
+  color: #57554f;
+  background: #f1f0ec;
+}
+
+.row-icon[data-kind='cancelled'] {
+  color: #8c1d18;
+  background: #fce8e6;
+}
+
+.row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.row-title {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--ink);
+}
+
+.row--unread .row-title {
+  font-weight: 700;
+}
+
+.row-detail {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.row-time {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+
+/* The unread dot, on the right */
+.dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-top: 6px;
+  background: var(--brand);
+  border-radius: 50%;
+}
+
+/* Loading: grey rows of the same shape (bars and pulse are Tailwind utilities in the template) */
+.row--skeleton,
+.row--skeleton:hover {
+  cursor: default;
+  background: #fff;
+}
+
+/* The list failed to load, or there are no notifications at all */
+.failed,
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 36px 28px 40px;
+  text-align: center;
+}
+
+.failed p,
+.empty p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.empty-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: var(--brand);
+  background: #eef5fc;
+  border-radius: 50%;
+}
+
+.empty-icon mat-icon {
+  font-size: 32px;
+}
+
+.empty .empty-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--ink);
+}

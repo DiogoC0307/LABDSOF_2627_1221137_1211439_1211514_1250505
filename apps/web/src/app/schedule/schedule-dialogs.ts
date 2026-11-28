@@ -81,3 +81,49 @@ export interface PublishData {
 export class PublishDialog {
   protected readonly data = inject<PublishData>(MAT_DIALOG_DATA);
 }
+
+// One conflict as the dialog lists it: which shift, what is wrong, and the draft shift to show
+export interface ConflictLine {
+  shiftKey: string;
+  shift: string; // "Wednesday 2 December, 08:00 – 20:00"
+  problem: string; // "Ana Silva (Crew chief) is on another shift at the same time."
+}
+
+export interface ConflictsData {
+  lines: ConflictLine[];
+}
+
+/**
+ * Weekly schedule publication conflicts dialog.
+ * 
+ * List all conflicts that prevent the schedule from being published, with a button to show each conflicting shift.
+ */
+@Component({
+  selector: 'app-conflicts-dialog',
+  imports: [MatButton, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <h2 mat-dialog-title>The schedule has conflicts</h2>
+    <mat-dialog-content>
+      <ul class="conflict-list">
+        @for (line of data.lines; track $index) {
+          <li class="conflict">
+            <span class="conflict-text">
+              <strong>{{ line.shift }}</strong>
+              <span>{{ line.problem }}</span>
+            </span>
+            <button mat-stroked-button type="button" class="dialog-secondary" [mat-dialog-close]="line.shiftKey">
+              Show shift
+            </button>
+          </li>
+        }
+      </ul>
+    </mat-dialog-content>
+    <mat-dialog-actions>
+      <button mat-flat-button type="button" [mat-dialog-close]="null">Go back and fix</button>
+    </mat-dialog-actions>
+  `,
+})
+export class ConflictsDialog {
+  protected readonly data = inject<ConflictsData>(MAT_DIALOG_DATA);
+}

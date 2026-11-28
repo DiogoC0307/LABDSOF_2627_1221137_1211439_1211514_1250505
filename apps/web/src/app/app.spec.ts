@@ -3,6 +3,7 @@ import { Router } from '@angular/router';
 import { App } from './app';
 import {
   SESSION_KEY,
+  flushNotificationRequests,
   flushWeekRequests,
   weekRequest,
   http,
@@ -25,6 +26,7 @@ describe('App', () => {
 
   afterEach(() => {
     flushWeekRequests();
+    flushNotificationRequests();
     http().verify();
     localStorage.clear();
   });

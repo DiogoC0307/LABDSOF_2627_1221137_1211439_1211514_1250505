@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,11 +62,13 @@ class PiqueteService {
 	private final OutboxEventRepository outbox;
 	private final AvaliacaoPedidaFactory pedidos;
 	private final EvaluationMetrics metrics;
+	private final AssignmentRepository assignments;
 	private final Clock clock;
 
 	PiqueteService(
 			PiqueteRepository piquetes, OutboxEventRepository outbox, AvaliacaoPedidaFactory pedidos,
-			EvaluationMetrics metrics, Clock clock) {
+			EvaluationMetrics metrics, AssignmentRepository assignments, Clock clock) {
+		this.assignments = assignments;
 		this.metrics = metrics;
 		this.piquetes = piquetes;
 		this.outbox = outbox;
@@ -94,13 +97,13 @@ class PiqueteService {
 		}
 		piquetes.save(piquete);
 		queueEvaluations(added, piquete.getDutyDate());
-		return toResponse(piquete);
+		return response(piquete);
 	}
 
 	/** One piquete, for the Location of POST (SCRUM-88). */
 	@Transactional(readOnly = true)
 	Optional<PiqueteResponse> get(UUID id) {
-		return piquetes.findById(id).map(PiqueteService::toResponse);
+		return piquetes.findById(id).map(this::response);
 	}
 
 	/**
@@ -138,12 +141,12 @@ class PiqueteService {
 		if (log.isInfoEnabled()) {
 			log.info("piquete changed id={} slots={} traceId={}", id, piquete.getSlots().size(), TraceId.current());
 		}
-		return Optional.of(toResponse(piquete));
+		return Optional.of(response(piquete));
 	}
 
 	@Transactional(readOnly = true)
 	List<PiqueteResponse> list() {
-		return piquetes.findAll().stream().map(PiqueteService::toResponse).toList();
+		return responses(piquetes.findAll());
 	}
 
 	/**
@@ -162,49 +165,55 @@ class PiqueteService {
 			throw new InvalidRequestException(List.of(new InvalidField("week", "invalid_week")));
 		}
 
-		return piquetes.findByDutyDateBetweenOrderByDutyDateAsc(isoWeek.monday(), isoWeek.sunday()).stream()
-				.map(PiqueteService::toResponse)
-				.toList();
+		return responses(piquetes.findByDutyDateBetweenOrderByDutyDateAsc(isoWeek.monday(), isoWeek.sunday()));
 	}
 
-	private LocalDate today() {
+	LocalDate today() {
 		return LocalDate.now(clock.withZone(LISBON));
 	}
 
 	/** Every field is required; the shift starts on its day (in Lisbon), not before today, ends after it starts. */
 	private void checkShift(PiqueteRequest request) {
+		List<InvalidField> errors = shiftErrors(request, "", today());
+		if (!errors.isEmpty()) {
+			throw new InvalidRequestException(errors);
+		}
+	}
+
+	/**
+	 * How a published shift is checked and what is wrong with it
+	 */
+	static List<InvalidField> shiftErrors(PiqueteRequest request, String prefix, LocalDate today) {
 		List<InvalidField> errors = new ArrayList<>();
 		if (request.dutyDate() == null) {
-			errors.add(new InvalidField(DUTY_DATE, REQUIRED));
-		} else if (request.dutyDate().isBefore(today())) {
-			errors.add(new InvalidField(DUTY_DATE, "in_the_past"));
+			errors.add(new InvalidField(prefix + DUTY_DATE, REQUIRED));
+		} else if (request.dutyDate().isBefore(today)) {
+			errors.add(new InvalidField(prefix + DUTY_DATE, "in_the_past"));
 		}
 		if (request.period() == null) {
-			errors.add(new InvalidField("period", REQUIRED));
+			errors.add(new InvalidField(prefix + "period", REQUIRED));
 		}
 		if (request.startsAt() == null) {
-			errors.add(new InvalidField("startsAt", REQUIRED));
+			errors.add(new InvalidField(prefix + "startsAt", REQUIRED));
 		} else if (request.dutyDate() != null
 				&& !request.startsAt().atZoneSameInstant(LISBON).toLocalDate().equals(request.dutyDate())) {
-			errors.add(new InvalidField("startsAt", "not_on_duty_date"));
+			errors.add(new InvalidField(prefix + "startsAt", "not_on_duty_date"));
 		}
 		if (request.endsAt() == null) {
-			errors.add(new InvalidField(ENDS_AT, REQUIRED));
+			errors.add(new InvalidField(prefix + ENDS_AT, REQUIRED));
 		} else if (request.startsAt() != null) {
 			Duration length = Duration.between(request.startsAt(), request.endsAt());
 			if (length.isZero() || length.isNegative()) {
-				errors.add(new InvalidField(ENDS_AT, "ends_before_start"));
+				errors.add(new InvalidField(prefix + ENDS_AT, "ends_before_start"));
 			} else if (length.compareTo(LONGEST_SHIFT) > 0) {
-				errors.add(new InvalidField(ENDS_AT, "too_long"));
+				errors.add(new InvalidField(prefix + ENDS_AT, "too_long"));
 			}
 		}
 		String crewError = crewError(request.crew());
 		if (crewError != null) {
-			errors.add(new InvalidField("crew", crewError));
+			errors.add(new InvalidField(prefix + "crew", crewError));
 		}
-		if (!errors.isEmpty()) {
-			throw new InvalidRequestException(errors);
-		}
+		return errors;
 	}
 
 	/**
@@ -233,7 +242,7 @@ class PiqueteService {
 	}
 
 	/** The crew, already checked, as a count per role in the order of SlotRole; roles that need nobody are left out. */
-	private static Map<SlotRole, Integer> crew(PiqueteRequest request) {
+	static Map<SlotRole, Integer> crew(PiqueteRequest request) {
 		Map<SlotRole, Integer> crew = new EnumMap<>(SlotRole.class);
 		request.crew().stream().filter(need -> need.count() > 0).forEach(need -> crew.put(need.role(), need.count()));
 		return crew;
@@ -279,9 +288,24 @@ class PiqueteService {
 				request.endsAt().toInstant(), size);
 	}
 
-	private static PiqueteResponse toResponse(Piquete piquete) {
+	private PiqueteResponse response(Piquete piquete) {
+		return responses(List.of(piquete)).getFirst();
+	}
+
+	// The piquetes with who holds each slot
+	private List<PiqueteResponse> responses(List<Piquete> list) {
+		List<UUID> ids = list.stream().map(Piquete::getId).toList();
+		Map<UUID, UUID> memberOfSlot = new HashMap<>();
+		if (!ids.isEmpty()) {
+			assignments.findByPiqueteIdInAndStatus(ids, Assignment.Status.CONFIRMED)
+					.forEach(assignment -> memberOfSlot.put(assignment.getSlotId(), assignment.getMemberId()));
+		}
+		return list.stream().map(piquete -> toResponse(piquete, memberOfSlot)).toList();
+	}
+
+	private static PiqueteResponse toResponse(Piquete piquete, Map<UUID, UUID> memberOfSlot) {
 		List<SlotResponse> slots = piquete.getSlots().stream()
-				.map(slot -> new SlotResponse(slot.getId(), slot.getRole(), slot.getStatus()))
+				.map(slot -> new SlotResponse(slot.getId(), slot.getRole(), slot.getStatus(), memberOfSlot.get(slot.getId())))
 				.toList();
 		return new PiqueteResponse(piquete.getId(), piquete.getDutyDate(), piquete.getPeriod(), piquete.getStartsAt(),
 				piquete.getEndsAt(), piquete.getMinimumCrew(), slots);
