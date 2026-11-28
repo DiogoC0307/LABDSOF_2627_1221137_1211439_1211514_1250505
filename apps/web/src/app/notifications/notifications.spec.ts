@@ -59,6 +59,36 @@ describe('Notifications', () => {
       ).toBe('Wed 30 Jun, 08:00 – 20:00');
     });
 
+    it('TC-SCRUM-72-05 asks a member to cover a slot, with its function and times, on the Lisbon clock', () => {
+      expect(
+        notificationCopy(
+          notification({
+            type: 'COVER_REQUESTED',
+            role: 'DRIVER',
+            coverRequestId: 'c-1',
+            startsAt: '2026-12-05T20:00:00Z',
+            endsAt: '2026-12-06T08:00:00Z',
+          }),
+        ),
+      ).toEqual({ title: 'Can you cover a shift?', detail: 'Driver, Sat 5 Dec, 20:00 – 08:00 (next day)' });
+    });
+
+    it('TC-SCRUM-72-06 tells the supervisor a slot opened, and why nobody covers it yet', () => {
+      const slot = { role: 'CREW_CHIEF' as const, startsAt: '2026-12-05T20:00:00Z', endsAt: '2026-12-06T08:00:00Z' };
+      expect(notificationCopy(notification({ type: 'SLOT_OPENED', ...slot }))).toEqual({
+        title: 'A slot is open',
+        detail: "Crew chief, Sat 5 Dec, 20:00 – 08:00 (next day). The member can't come; others are being asked.",
+      });
+      expect(notificationCopy(notification({ type: 'COVER_ESCALATED', reason: 'NO_CANDIDATES', ...slot }))).toEqual({
+        title: 'Nobody can cover',
+        detail: 'Crew chief, Sat 5 Dec, 20:00 – 08:00 (next day). No member is free and qualified.',
+      });
+      expect(notificationCopy(notification({ type: 'COVER_ESCALATED', reason: 'NO_ACCEPTANCE', ...slot }))).toEqual({
+        title: 'Nobody has covered yet',
+        detail: 'Crew chief, Sat 5 Dec, 20:00 – 08:00 (next day). Nobody accepted in time.',
+      });
+    });
+
     it('finds the Monday of an ISO week, across years', () => {
       expect(mondayOfIsoWeek('2026-W49')).toBe('2026-11-30');
       expect(mondayOfIsoWeek('2026-W53')).toBe('2026-12-28');
